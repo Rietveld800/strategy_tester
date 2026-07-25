@@ -50,7 +50,13 @@ part). Adding strategy 3 means one entry in `strategies.py`; nothing else. `venv
 pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
 
 Each strategy gets its own page `output/equity_<strategy>.html`, and every page carries a
-strategy-switcher button row generated from the registry.
+strategy-switcher button row generated from the registry, plus a **risk per trade** input
+(0-100%) that re-runs the whole shared-account simulation client-side and redraws every
+figure. That is possible because the trades are capital-independent: risk changes the dollar
+sizing only, never the R multiples, so the page replays `run_portfolio.py`'s loop over the
+trade list it already has. It self-checks against the server's figure at the default risk
+(console warning on drift) — if you change the money management in `run_portfolio.py`, change
+`simulate()` in `build_equity_html.py` to match. Nothing is persisted and no file changes.
 
 Obsolete markets (last daily bar > `OBSOLETE_AFTER_DAYS` behind the newest across all
 markets) have stopped being collected, so a position open on their last bar can never

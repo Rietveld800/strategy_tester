@@ -243,7 +243,23 @@ def _streaks_and_avgs(raw):
 
 
 def _trade_rows(raw):
-    """Per-trade records for the sortable table on the page."""
+    """Per-trade records for the sortable table on the page.
+
+    Three of these fields exist so the PAGE can re-run this whole money-management
+    simulation client-side at a different risk %, without a rebuild (the risk input on the
+    equity page). They are what the replay needs beyond the visible columns:
+
+      xd  the day the trade RELEASES its risk. Normally the exit date, but an open-at-end
+          trade releases on its market's last bar, which is not shown anywhere else.
+      gr  gross R (before slippage) -- needed to replay the gross curve alongside the net one.
+      cr  cost R (the slippage charge). Both are risk-INDEPENDENT, which is exactly why the
+          replay works: only the dollar sizing changes with risk, never the R multiples.
+
+    PRECISION MATTERS HERE. These three carry 6 decimals, not the 3 the table displays:
+    the replay compounds them across ~80 trades, and rounding R to 3 dp put the page $13.56
+    away from the server's own final figure (measured 2026-07-25). The display formats to
+    2 dp regardless, so the extra digits cost nothing visible.
+    """
     rows = []
     for t in sorted(raw, key=lambda x: (x["entry_d"], x["market"])):
         b, pnl = t.get("base_at_entry", 0), t.get("pnl_dollars", 0.0)
@@ -252,8 +268,9 @@ def _trade_rows(raw):
         rows.append(dict(
             market=t["market"], side=t["side"], din=t["entry_date"],
             dout=(t["exit_date"] if reason != "open_at_end" else None),
+            xd=str(t["exit_d"]), gr=round(t["gross_r"], 6), cr=round(t["cost_r"], 6),
             bars=t["bars_in_trade"], pin=t["entry"], pout=pout, sl=t["stop"],
-            tgt=t["target"], r=round(t["r"], 3),
+            tgt=t["target"], r=round(t["r"], 6),
             pnl=round(pnl, 2), pnlpct=round(pnl / b * 100.0, 3) if b else 0.0,
             reason=reason))
     return rows
@@ -265,6 +282,7 @@ def _write_json(strategy, raw, timeline, stats):
                 markets=t["open_markets"], dd=round(t["dd"], 2),
                 entries=t["entries"], exits=t["exits"]) for t in timeline]
     out = dict(strategy=strategy.key, title=strategy.title, rule4=strategy.rule4,
+               risk_pct=RISK_PCT,          # the page's replay starts from this
                points=pts, trades=_trade_rows(raw), start=START_CAP,
                final=round(stats["final"], 2),
                ret=round(stats["ret"] / 100.0, 4), maxdd=round(-stats["max_dd"], 2),

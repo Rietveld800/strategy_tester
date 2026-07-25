@@ -225,7 +225,43 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
   per-market breakdown. **Every page opens with the strategy switcher** — one button per
   registered strategy, current one filled, so you click straight from quickfix to slowfix.
   The buttons are generated from the registry, so a new strategy appears on every page as
-  soon as the pages are rebuilt.
+  soon as the pages are rebuilt. It also carries the **risk dial** (below).
+
+### The risk input on the equity pages
+
+Each page has a **risk per trade** control (number box + slider, 0–100%) that re-runs the
+entire shared-account simulation **in the browser** and redraws everything: equity curve,
+drawdown, KPIs, per-trade stats, the blotter's P&L columns and the per-market table.
+
+This works because **the trades are capital-independent**. Which trades fire, their entry
+and exit prices, their R multiples and even their slippage cost *in R* are fixed by price
+and reversals — risk changes the dollar sizing and nothing else. So the page can replay
+`run_portfolio.py`'s loop over the trade list it already carries, with no rebuild and no
+Python round-trip. The replay mirrors that loop exactly, including the same-day
+entries-before-exits ordering and the market-name sizing order.
+
+- Nothing is persisted: the page always opens at the documented default (1%) so it agrees
+  with the workbook, and **Reset** returns to it after exploring.
+- Risk-**independent** figures stay put as you move the dial — trade count, win rate, R
+  multiples, average hold, time in market, max concurrent. Only the money moves.
+- The page self-checks on load: at the default risk the replay must reproduce
+  `run_portfolio.py`'s own final capital, and it logs a console warning if it ever does not.
+  That is the guard against the JS port drifting from the Python.
+- `charter_trades_*.json` is unaffected — the risk dial is a display-side exploration, it
+  never changes the trades or any file on disk.
+
+Two things to read carefully at high risk. **Above ~5% the model stops describing anything
+tradeable** (the page says so in red): it assumes any position size fills at these prices,
+and it has no margin, no liquidity limit and no ruin — a losing run just shrinks the base
+forever instead of ending the account. And **return/drawdown is only comparable at equal
+risk**: return compounds exponentially with risk while drawdown is bounded near 100%, so the
+ratio inflates absurdly (quickfix reads 29.3x at 1% and ~2000x at 10%). Compare strategies
+at the *same* setting, not across settings.
+
+Why `xd`, `gr` and `cr` are in `_equity_<strategy>.json` at 6 decimals: the replay needs the
+risk-release day, the gross R and the cost R, and it compounds them across ~80 trades.
+Rounding R to 3 decimals put the page $13.56 away from the server's figure (measured
+2026-07-25); at 6 it agrees to the cent.
 - **`_equity_<strategy>.json`** — the data behind that page (intermediate).
 - **`charter_trades_<strategy>.json`** — the charter hand-off (below).
 

@@ -100,14 +100,16 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
   border-radius:12px;}
 .riskbar .lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink3);font-weight:600;}
-.riskbar input[type=number]{width:74px;padding:5px 7px;font-size:14px;font-weight:600;
+.riskbar input[type=number]{width:92px;padding:5px 7px;font-size:14px;font-weight:600;
   color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;
   font-variant-numeric:tabular-nums;}
-.riskbar input[type=range]{flex:1 1 190px;min-width:130px;accent-color:var(--accent);}
+/* The up/down buttons ARE the control here, so they must always be visible. Chrome renders
+   the spinners only while the field is hovered or focused; forcing the appearance and
+   opacity keeps them on permanently. */
+.riskbar input[type=number]::-webkit-outer-spin-button,
+.riskbar input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance:inner-spin-button;opacity:1;margin:0;height:26px;}
 .riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
-.riskbar button{padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink2);
-  background:var(--bg);border:1px solid var(--border);border-radius:7px;cursor:pointer;}
-.riskbar button:hover{border-color:var(--accent);color:var(--ink);}
 .riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
 .riskbar .warn:empty{display:none}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
@@ -181,9 +183,6 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     <input id="riskin" type="number" min="0" max="100" step="0.1" value="1"
            aria-label="Risk per trade, percent of liquid capital">
     <span class="unit">% of liquid capital</span>
-    <input id="riskrange" type="range" min="0" max="100" step="0.1" value="1"
-           aria-label="Risk per trade slider">
-    <button id="riskreset" type="button">Reset to __RISKDEF__%</button>
     <span class="warn" id="riskwarn"></span>
   </section>
 
@@ -497,22 +496,20 @@ function mRows(){
   }).join("")+"</tr>").join("");
 }
 // ---- risk control: re-run the simulation and redraw everything -------------------
-// The number box is authoritative; the slider mirrors it. Both clamp to 0..100. Nothing is
-// persisted: the page always opens on the documented default so it matches the workbook,
-// and Reset puts it back after exploring.
-const riskIn = document.getElementById("riskin"), riskRange = document.getElementById("riskrange");
-const riskReset = document.getElementById("riskreset"), riskWarn = document.getElementById("riskwarn");
+// One number box, stepped by its own up/down buttons, clamped to 0..100. Nothing is
+// persisted: the page always opens on the documented default so it matches the workbook.
+const riskIn = document.getElementById("riskin"), riskWarn = document.getElementById("riskwarn");
 function renderAll(){
   renderKpis(); renderDaily(); renderTradeStats();
   document.getElementById("tcount").textContent = T.length+" trades";
   renderHead(); renderRows(); mBuild(); mHead(); mRows(); render();
 }
-function setRisk(v, from){
+function setRisk(v, typed){
   let r = Number(v);
   if (!isFinite(r)) r = RISK_DEFAULT;
   r = Math.min(100, Math.max(0, r));
-  if (from !== "num") riskIn.value = String(r);
-  if (from !== "range") riskRange.value = String(r);
+  // Do not rewrite the field while it is being typed into -- that would fight the caret.
+  if (!typed) riskIn.value = String(r);
   SIM = simulate(r); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
   // Above a few percent the sizing model stops describing anything tradeable: it assumes
   // any position size fills at these prices, and it has no margin, no liquidity limit and
@@ -525,9 +522,11 @@ function setRisk(v, from){
   document.querySelectorAll(".riskecho").forEach(e => { e.textContent = r + "%"; });
   renderAll();
 }
-riskIn.addEventListener("input", () => setRisk(riskIn.value, "num"));
-riskRange.addEventListener("input", () => setRisk(riskRange.value, "range"));
-riskReset.addEventListener("click", () => setRisk(RISK_DEFAULT));
+// An empty field mid-edit (select-all then retype) is left alone rather than treated as 0 --
+// otherwise the whole page would flash to a flat curve between keystrokes.
+riskIn.addEventListener("input", () => {
+  if (riskIn.value !== "") setRisk(riskIn.value, true);
+});
 
 function niceTicks(min,max,n){
   const raw=(max-min)/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), norm=raw/mag;
@@ -724,7 +723,6 @@ def build(strategy):
     html = (TEMPLATE
             .replace("__TITLE__", f"{strategy.title} &mdash; portfolio equity curve")
             .replace("__NAV__", nav_html(strategy))
-            .replace("__RISKDEF__", f"{eng.RISK_PCT:g}")
             .replace("__EYEBROW__", eyebrow)
             .replace("__LEDE__", lede)
             .replace("__NOTE__", note)

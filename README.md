@@ -184,6 +184,7 @@ slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are o
 | Net return | +171.28% | +205.66% |
 | Gross return | +179.95% | +215.13% |
 | Max drawdown | 5.85% | 12.66% |
+| **Return / drawdown** | **29.3x** | 16.2x |
 | Closed trades | 79 | 76 |
 | Win rate | 41.8% | 27.6% |
 | Average hold | 2.2 bars | 3.8 bars |
@@ -192,6 +193,19 @@ slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are o
 
 Same entries, different exits: slowfix wins less often but its winners are far larger, and
 it pays for that with a drawdown roughly twice as deep.
+
+**Return / drawdown is the ranking metric**, not total return. Risk per trade is a dial, so
+a shallower edge can be levered up to meet a given drawdown, while the reverse conversion
+does not exist — a bigger total return bought with a deeper hole is not automatically the
+better strategy. On that measure quickfix extracts nearly twice as much return per point of
+pain. Its deeper-drawdown profile is structural rather than bad luck: removing the 5R cap
+makes slowfix hold longer (87% vs 74% time in market, 8 vs 5 concurrent positions) and win
+less often (27.6% vs 41.8%), which mechanically produces longer losing runs — its longest
+was 13 straight losers against quickfix's 6.
+
+Caveat on both drawdown figures: ~7 months and 79/76 trades. Max drawdown is a single
+worst-path observation and the most sample-dependent statistic here. The structural reasons
+above will hold; the specific 5.85% will not — expect it to deepen as the sample grows.
 
 ---
 

@@ -334,6 +334,11 @@ def _sheet_summary(ws, strategy, s):
         ("final capital (gross)", f"{s['gross_final']:,.0f}  ({s['gross_ret']:+.2f}%)"),
         ("slippage paid", f"{s['total_cost']:,.0f}  ({s['gross_ret'] - s['ret']:.1f} pts of return)"),
         ("max drawdown", f"{s['max_dd']:.2f}%"),
+        # Return per point of drawdown: the ranking metric between strategies. Risk per trade
+        # is a dial, so a shallower edge can be levered up to a given drawdown -- a bigger
+        # total return bought with a deeper hole is not automatically the better strategy.
+        ("return / drawdown",
+         f"{s['ret'] / s['max_dd']:.1f}x" if s["max_dd"] > 0 else "n/a"),
         ("closed trades", s["n_trades"]),
         ("win rate", f"{s['win_rate']:.1f}%"),
         ("average hold", f"{s['avg_bars']:.1f} bars"),

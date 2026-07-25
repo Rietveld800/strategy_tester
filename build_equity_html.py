@@ -83,14 +83,16 @@ header{margin-bottom:26px;}
 h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spacing:-.02em;
   text-wrap:balance;font-weight:650;}
 .lede{max-width:66ch;color:var(--ink2);font-size:15px;margin:0;}
-.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);
+/* auto-fit rather than a fixed 6 columns: the KPI row gained a 7th tile (return/drawdown)
+   and auto-fit reflows it at any width instead of orphaning one tile on its own line. */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+  background:var(--border);
   border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:28px 0 22px;}
 .kpi{background:var(--surface);padding:14px 16px 15px;display:flex;flex-direction:column;gap:5px;}
 .kpi .k{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:600;}
 .kpi .v{font-size:clamp(17px,2.2vw,21px);font-weight:600;letter-spacing:-.01em;}
 .kpi .v.pos{color:var(--pos)}.kpi .v.neg{color:var(--neg)}
 .kpi .sub{font-size:11px;color:var(--ink3);}
-@media(max-width:820px){.kpis{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:460px){.kpis{grid-template-columns:repeat(2,1fr)}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
   padding:16px clamp(10px,2vw,18px) 10px;}
@@ -215,10 +217,20 @@ const fmtK = v => "$" + (v/1000).toFixed(0) + "k";
 const pct = v => (v>=0?"+":"") + v.toFixed(1) + "%";
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// Return per point of drawdown: how much return the strategy extracted for the worst pain
+// it put the account through. The comparison that matters when ranking strategies -- a
+// bigger total return bought with a deeper hole is not automatically the better one, since
+// risk per trade is a dial and a shallower edge can be levered up to meet a given drawdown.
+// maxdd is stored NEGATIVE, hence the abs; guard the no-drawdown case rather than divide by 0.
+const ddAbs = Math.abs(DATA.maxdd);
+const rdd = ddAbs > 0 ? (DATA.ret*100)/ddAbs : null;
+
 const kpis = [
   ["Final capital", fmtUSD(DATA.final), "", "net, from $100k"],
   ["Total return", pct(DATA.ret*100), DATA.ret>=0?"pos":"neg", "gross "+pct(DATA.gross_ret*100)],
   ["Max drawdown", DATA.maxdd.toFixed(2)+"%", "neg", "peak to trough"],
+  ["Return / DD", rdd==null?"—":rdd.toFixed(1)+"x", (rdd!=null&&rdd>=0)?"pos":"",
+   "return per point of drawdown"],
   ["Time in market", DATA.time_in_market.toFixed(0)+"%", "", "of trading days"],
   ["Win rate", DATA.win_rate.toFixed(1)+"%", "", DATA.n_trades+" trades"],
   ["Max concurrent", String(DATA.max_open), "", "positions open"],

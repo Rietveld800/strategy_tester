@@ -220,12 +220,53 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
 - **`<strategy>_portfolio_daily.xlsx`** — `summary` (net/gross return, drawdown, streaks,
   averages, hold time, time in market, slippage), `equity_curve` (daily, with a chart),
   `trades` (gross/cost/net R, prices, P&L, running balance).
-- **`equity_<strategy>.html`** — standalone interactive report: equity + drawdown +
-  open-positions panels, KPI + per-trade stat tiles, a sortable trade blotter, and a
-  per-market breakdown. **Every page opens with the strategy switcher** — one button per
-  registered strategy, current one filled, so you click straight from quickfix to slowfix.
-  The buttons are generated from the registry, so a new strategy appears on every page as
-  soon as the pages are rebuilt. It also carries the **risk dial** (below).
+- **`equity_<strategy>.html`** — standalone interactive report: the **four rules** (1–3
+  shared, 4 this strategy's), equity + drawdown + open-positions panels, KPI + per-trade
+  stat tiles, a sortable trade blotter, and a per-market breakdown. **Every page opens with
+  the strategy switcher** — one button per registered strategy, current one filled, so you
+  click straight from quickfix to slowfix. The buttons are generated from the registry, so a
+  new strategy appears on every page as soon as the pages are rebuilt. It also carries the
+  **risk dial** and the **Export PDF** button (both below).
+- **`report.html`** — the print/PDF report, carrying **every** strategy (below).
+
+### The rules block
+
+Each page states the strategy in full before any figure: the four numbered rules as cards
+(1–3 identical everywhere, 4 the strategy's own), then how the trade is actually placed
+(entry fill, stop, 1R = 1%), then an explicit note that **entries use the reversal levels
+only — no timing, cycle or aggregate signal is involved**. That last line exists because the
+page used to describe "time-and-price reversal signals", which misled a first-time reader:
+the umbrella method is "time and price meet", but these strategies are the price half alone.
+
+The text lives in `strategies.py` (`SHARED_RULES`, `ENTRY_MECHANICS`, `PRICE_ONLY_NOTE`, and
+each strategy's `rule4_text`), so a new strategy writes only its own Rule 4 and gets the rest.
+All of it is phrased for the short side, with the long stated as the exact mirror.
+
+### PDF export
+
+The **Export PDF** button opens a picker (checkbox per strategy, current one pre-ticked,
+plus **Select all**) and opens `report.html` for the chosen ones — one strategy per printed
+page, at the risk currently set — which calls the browser's print dialog. Choose "Save as
+PDF" there.
+
+**No PDF library is bundled, deliberately.** The browser's own print-to-PDF produces
+selectable, searchable vector text and small files; an `html2canvas`/`jsPDF` approach
+rasterises the page into images, adds hundreds of KB to every page, and would make the trade
+tables unsearchable.
+
+`report.html` embeds every strategy and filters client-side from its query string —
+`report.html?s=quickfix,slowfix&risk=1.5&auto=1` (`auto=1` opens the print dialog on load).
+It is always built with **all** strategies even during a partial rebuild, so a
+`build_equity_html.py slowfix` run cannot silently shrink it. It carries one risk control
+driving every strategy on the page, so a multi-strategy PDF is always a like-for-like
+comparison. The print stylesheet forces the light palette (the dark theme would print as a
+solid ink-heavy background), opens the scrolling tables so nothing is cut off, keeps cards
+and rows from splitting across the fold, and drops the navigation, risk control and daily
+table.
+
+Both page types are generated from one stylesheet, one per-strategy markup section and one
+script whose renderer is a **factory** (`mountReport(root, DATA)`), so the report can mount
+several strategies on one page without a second renderer to keep in step.
 
 ### The risk input on the equity pages
 

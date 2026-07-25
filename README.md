@@ -271,6 +271,20 @@ selectable, searchable vector text and small files; an `html2canvas`/`jsPDF` app
 rasterises the page into images, adds hundreds of KB to every page, and would make the trade
 tables unsearchable.
 
+**Pick the right destination in the print dialog: "Save as PDF", not "Microsoft Print to
+PDF".** The Windows printer rasterises every page — a report came out 5.9 MB across 19
+pages, as 498 JPEGs with zero embedded fonts and no selectable text (measured 2026-07-25).
+Chrome's own "Save as PDF" keeps it vector. The report page says this above the print button.
+
+**Bug that produced a flat equity curve (fixed 2026-07-25).** `Number(null)` is `0`, not
+`NaN`, so reading the risk straight out of the query string —
+`const rp = Number(params.get("risk"))` — made a report opened **without** `?risk=` re-run
+the simulation at 0%: every position sized to nothing, no trade booking a cent, and an
+equity curve flat at exactly the starting capital. The Conclusions page's "Open report" link
+did exactly that. The parameter is now only applied when actually supplied, and everything
+that needs the live value reads `CURRENT_RISK` (the applied number) rather than the input's
+raw `.value`, which reads `""` mid-edit and would hit the same trap.
+
 ### Conclusions
 
 The **Conclusions** button (immediately left of Export PDF) opens `conclusions.html`: two

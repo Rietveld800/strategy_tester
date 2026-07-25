@@ -783,10 +783,15 @@ const INST = ROOTS.map((el,i) => mountReport(el, DATASETS[i]));
 // ---- risk control (one per page, drives every mounted strategy) -------------------
 const riskIn = document.querySelector('[data-el="riskin"]');
 const riskWarn = document.querySelector('[data-el="riskwarn"]');
+// The risk actually in force. Everything that needs the current value reads THIS, never the
+// input's raw .value -- an empty or half-typed field reads as "" and Number("") is 0, which
+// would silently mean "size every position to nothing" instead of "unchanged".
+let CURRENT_RISK = RISK_DEFAULT;
 function applyRisk(v, typed){
-  let r = Number(v);
-  if (!isFinite(r)) r = RISK_DEFAULT;
+  let r = (v === "" || v === null || v === undefined) ? NaN : Number(v);
+  if (!isFinite(r)) r = CURRENT_RISK;
   r = Math.min(100, Math.max(0, r));
+  CURRENT_RISK = r;
   // Do not rewrite the field while it is being typed into -- that would fight the caret.
   if (riskIn && !typed) riskIn.value = String(r);
   INST.forEach(inst => inst.setRisk(r));
@@ -851,7 +856,7 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
   function ok(){
     const keys = STRATS.map(s => s.key).filter(k => picked[k]);
     if (!keys.length) return;                       // nothing ticked: refuse rather than open a blank report
-    const risk = riskIn ? Number(riskIn.value) : RISK_DEFAULT;
+    const risk = CURRENT_RISK;                      // the applied value, not the raw field
     close();
     let url = "report.html?s=" + keys.join(",") + "&risk=" + risk + "&auto=1";
     // Carry the conclusions in the HASH as well as leaving them in localStorage. Opened from
@@ -890,7 +895,12 @@ if (want.length){
     if (want.indexOf(DATASETS[i].strategy) < 0) el.remove();
   });
 }
-const rp = Number(params.get("risk"));
+// Number(null) is 0, NOT NaN. Reading the parameter straight into Number() therefore made a
+// report opened WITHOUT ?risk= (e.g. the Conclusions page's "Open report" link) re-run the
+// whole simulation at 0% -- every position sized to nothing, so the equity curve came out
+// flat at exactly the starting capital. Only apply a risk when one was actually supplied.
+const rpRaw = params.get("risk");
+const rp = (rpRaw === null || rpRaw.trim() === "") ? NaN : Number(rpRaw);
 if (isFinite(rp) && rp >= 0){
   if (riskIn) riskIn.value = String(rp);
   applyRisk(rp);
@@ -1055,7 +1065,9 @@ def build_report(picked):
         '<div class="wrap">\n'
         '<nav class="nav noprint"><span class="lbl">Report</span>'
         '<span style="font-size:13px;color:var(--ink2)">'
-        '<span class="repcount"></span> &middot; print or save as PDF</span>'
+        '<span class="repcount"></span> &middot; in the print dialog choose destination '
+        '<b>Save as PDF</b> &mdash; not "Microsoft Print to PDF", which rasterises every '
+        'page into images (large file, no selectable text)</span>'
         '<span class="navbtns">'
         '<button class="pdfbtn" data-el="printnow" type="button">Print / Save as PDF</button>'
         '</span></nav>\n' + RISKBAR_HTML + "\n")
@@ -1131,7 +1143,8 @@ def build_conclusions():
         '<div class="wrap">\n'
         '<nav class="nav"><span class="lbl">Back to</span>' + back +
         '<span class="navbtns">'
-        '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
+        f'<a class="pdfbtn" href="report.html?risk={eng.RISK_PCT:g}" target="_blank">'
+        f'Open report</a>'
         '</span></nav>\n'
         '<header>\n'
         '  <div class="eyebrow">Report &middot; conclusions</div>\n'

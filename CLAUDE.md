@@ -54,7 +54,10 @@ Each strategy gets its own page `output/equity_<strategy>.html`, plus `output/re
 the **four rules** (1-3 shared text in `strategies.py`, 4 per strategy), a **risk per trade**
 number box (0-100%, spinners forced always-visible) that re-runs the whole shared-account
 simulation client-side, and **Export PDF** (picker -> `report.html?s=...&auto=1` -> the
-browser's own print-to-PDF; no PDF library is bundled, on purpose). Both page types come from
+browser's own print-to-PDF; no PDF library is bundled, on purpose). A **Conclusions** button
+beside it opens `conclusions.html` (two free-text fields kept in localStorage, also passed in
+the URL hash because file:// documents may not share storage) whose text prints at the END of
+the exported PDF. Both page types come from
 one stylesheet + one markup section + one renderer FACTORY (`mountReport(root, DATA)`), so
 the report mounts several strategies without a second renderer. Entries use reversal levels
 ONLY -- never describe these strategies as using a time/cycle signal. The per-market table

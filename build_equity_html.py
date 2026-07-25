@@ -78,16 +78,35 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .nav a:hover{border-color:var(--accent);color:var(--ink);}
 .nav a.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 .nav a.on .sub{color:rgba(255,255,255,.82);}
-.pdfbtn{margin-left:auto;padding:8px 14px;border-radius:9px;border:1px solid var(--border);
+.navbtns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+.pdfbtn{padding:8px 14px;border-radius:9px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink2);font-size:13px;font-weight:600;cursor:pointer;
   font-family:inherit;}
 .pdfbtn:hover{border-color:var(--accent);color:var(--ink);}
+/* conclusions editor */
+.cfield{margin-top:22px;}
+.cfield label{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin-bottom:7px;}
+.cfield textarea{width:100%;min-height:230px;padding:14px 16px;font:15px/1.6 inherit;
+  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  color:var(--ink);background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;resize:vertical;}
+.cfield textarea:focus{outline:none;border-color:var(--accent);}
+.cbar{display:flex;align-items:center;gap:12px;margin-top:18px;}
+.cbar .status{font-size:12px;color:var(--ink3);}
+/* conclusions as printed at the end of the report */
+.concl{margin-top:38px;padding-top:6px;}
+.conclbody{white-space:pre-wrap;font-size:14px;color:var(--ink2);line-height:1.65;
+  padding:14px 18px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;}
 header{margin-bottom:26px;}
 .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
   font-weight:600;margin-bottom:12px;}
 h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spacing:-.02em;
   text-wrap:balance;font-weight:650;}
-.lede{max-width:66ch;color:var(--ink2);font-size:15px;margin:0;}
+/* No max-width: the lede and the honesty note run the full column so their left and right
+   edges line up with the rule cards, KPI row and tables below them. */
+.lede{color:var(--ink2);font-size:15px;margin:0;}
 /* the four rules, so a first-time reader can follow the report */
 .rules{margin:24px 0 0;border:1px solid var(--border);border-radius:12px;
   background:var(--surface);overflow:hidden;}
@@ -152,7 +171,7 @@ text{font-family:"SF Mono",Consolas,ui-monospace,monospace;}
 .tip .ev{margin-top:7px;padding-top:7px;border-top:1px solid var(--border);font-size:11px;color:var(--ink2);}
 .tip .ev .in{color:var(--pos)}.tip .ev .out{color:var(--neg)}
 .tip .mk{margin-top:6px;font-size:11px;color:var(--ink3);line-height:1.35;}
-.note{max-width:72ch;margin:22px 2px 0;padding:14px 16px;background:var(--accent-soft);
+.note{margin:22px 0 0;padding:14px 18px;background:var(--accent-soft);
   border-left:3px solid var(--accent);border-radius:0 8px 8px 0;font-size:13.5px;color:var(--ink2);}
 .note b{color:var(--ink);font-weight:600;}
 details{margin-top:22px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);}
@@ -328,6 +347,12 @@ SCRIPT = r"""<script>
 const DATASETS = __DATASETS__;
 const STRATS = __STRATS__;
 const RISK_DEFAULT = __RISKDEF__;
+// Where the Conclusions page keeps its text. Read back by the report when printing.
+const CONCL_KEY = "strategy_conclusions";
+function readConclusions(){
+  try { return JSON.parse(localStorage.getItem(CONCL_KEY) || "null") || null; }
+  catch(e){ return null; }
+}
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtUSD = v => (v<0?"−$":"$") + Math.abs(Math.round(v)).toLocaleString("en-US");
 const fmtK = v => (v<0?"−$":"$") + Math.abs(v/1000).toFixed(0) + "k";
@@ -797,6 +822,9 @@ PDF_SCRIPT = r"""
 // No PDF library is bundled. The browser's own print-to-PDF gives selectable vector text at
 // a fraction of the size that an html2canvas-style rasteriser would produce, so the button
 // opens report.html for the chosen strategies and lets it call window.print().
+const conclBtn = document.querySelector('[data-el="concl"]');
+if (conclBtn) conclBtn.addEventListener("click", () => { location.href = "conclusions.html"; });
+
 const pdfBtn = document.querySelector('[data-el="pdfopen"]');
 if (pdfBtn) pdfBtn.addEventListener("click", () => {
   const here = document.body.dataset.strategy;
@@ -807,7 +835,8 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
   mask.innerHTML =
     '<div class="dlg"><h4>Export PDF</h4>' +
     '<p>Choose the strategies to include. They print one per page, in this order, at the ' +
-    'risk currently set on the page.</p><div class="dlglist">' +
+    'risk currently set on the page. Anything written on the Conclusions page is printed ' +
+    'at the end.</p><div class="dlglist">' +
     STRATS.map(s => '<label class="dlgrow"><input type="checkbox" data-s="' + s.key + '">' +
       '<span class="nm">' + s.title + '<span class="sb">' + s.rule4 + '</span></span></label>').join("") +
     '</div><div class="dlgbtns"><button data-a="all">Select all</button>' +
@@ -824,7 +853,16 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
     if (!keys.length) return;                       // nothing ticked: refuse rather than open a blank report
     const risk = riskIn ? Number(riskIn.value) : RISK_DEFAULT;
     close();
-    window.open("report.html?s=" + keys.join(",") + "&risk=" + risk + "&auto=1", "_blank");
+    let url = "report.html?s=" + keys.join(",") + "&risk=" + risk + "&auto=1";
+    // Carry the conclusions in the HASH as well as leaving them in localStorage. Opened from
+    // a file:// path, browsers do not reliably share storage between two local documents,
+    // and the text must survive the hop to the report either way. A hash is never sent
+    // anywhere -- it is read by the report itself.
+    const c = readConclusions();
+    if (c && ((c.general || "").trim() || (c.final || "").trim())){
+      url += "#c=" + encodeURIComponent(JSON.stringify(c));
+    }
+    window.open(url, "_blank");
   }
   function onKey(e){
     if (e.key === "Escape"){ e.stopPropagation(); close(); }
@@ -861,6 +899,31 @@ document.querySelectorAll(".repcount").forEach(e => {
   const n = document.querySelectorAll("[data-root]").length;
   e.textContent = n + (n === 1 ? " strategy" : " strategies");
 });
+// Conclusions: the hash wins (that is how Export PDF hands them over, and it survives
+// file:// documents not sharing storage); otherwise fall back to this browser's own copy.
+function conclusionsForReport(){
+  const m = (location.hash || "").match(/[#&]c=([^&]*)/);
+  if (m){ try { return JSON.parse(decodeURIComponent(m[1])); } catch(e){} }
+  return readConclusions();
+}
+(function renderConclusions(){
+  const c = conclusionsForReport() || {};
+  const g = (c.general || "").trim(), f = (c.final || "").trim();
+  const box = document.querySelector('[data-el="conclusions"]');
+  if (!box) return;
+  if (!g && !f){ box.remove(); return; }            // nothing written: no empty headings
+  const put = (key, text) => {
+    const wrap = box.querySelector('[data-el="'+key+'wrap"]');
+    if (!text){ wrap.remove(); return; }
+    // textContent, not innerHTML: this is typed prose, and CSS white-space:pre-wrap keeps
+    // the line breaks without needing any markup.
+    box.querySelector('[data-el="'+key+'"]').textContent = text;
+  };
+  put("cgeneral", g);
+  put("cfinal", f);
+  box.hidden = false;
+})();
+
 const printBtn = document.querySelector('[data-el="printnow"]');
 if (printBtn) printBtn.addEventListener("click", () => window.print());
 // Auto-open the print dialog when arrived at from the Export PDF button. Deferred a frame so
@@ -913,7 +976,7 @@ def load_data(strategy):
 def section_html(strategy, data, riskbar, daily):
     slip = data.get("slippage", {})
     eyebrow = (f"{strategy.title} strategy &middot; daily &middot; "
-               f"shared ${eng.STARTING_CAPITAL / 1000:.0f}k account")
+               f"${eng.STARTING_CAPITAL / 1000:.0f}k starting capital")
     # NOTE: no "time and price" here. These strategies read the reversal levels only; the
     # aggregate/timing side of the Socrates method is not involved, and saying otherwise
     # misled a first-time reader (user, 2026-07-25).
@@ -968,8 +1031,10 @@ def build(strategy):
     """One interactive page for `strategy`."""
     data = load_data(strategy)
     body = (f'<div class="wrap">\n<nav class="nav noprint"><span class="lbl">Strategy</span>'
-            f'{nav_html(strategy)}'
-            f'<button class="pdfbtn" data-el="pdfopen" type="button">Export PDF</button></nav>\n'
+            f'{nav_html(strategy)}<span class="navbtns">'
+            f'<button class="pdfbtn" data-el="concl" type="button">Conclusions</button>'
+            f'<button class="pdfbtn" data-el="pdfopen" type="button">Export PDF</button>'
+            f'</span></nav>\n'
             + section_html(strategy, data, RISKBAR_HTML, DAILY_HTML) + "\n</div>")
     html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
@@ -991,13 +1056,26 @@ def build_report(picked):
         '<nav class="nav noprint"><span class="lbl">Report</span>'
         '<span style="font-size:13px;color:var(--ink2)">'
         '<span class="repcount"></span> &middot; print or save as PDF</span>'
+        '<span class="navbtns">'
         '<button class="pdfbtn" data-el="printnow" type="button">Print / Save as PDF</button>'
-        '</nav>\n'
-        + RISKBAR_HTML.replace('class="riskbar noprint"', 'class="riskbar noprint"') + "\n")
+        '</span></nav>\n' + RISKBAR_HTML + "\n")
+    # Sits after every strategy, so it is the last thing in the PDF. Hidden until the script
+    # finds text; removed outright when there is none, so an unused field never prints.
+    conclusions = (
+        '\n<section class="concl" data-el="conclusions" hidden>\n'
+        '  <div data-el="cgeneralwrap">\n'
+        '    <h2 class="section-h">General conclusions</h2>\n'
+        '    <div class="conclbody" data-el="cgeneral"></div>\n'
+        '  </div>\n'
+        '  <div data-el="cfinalwrap">\n'
+        '    <h2 class="section-h">Final conclusions of the author</h2>\n'
+        '    <div class="conclbody" data-el="cfinal"></div>\n'
+        '  </div>\n'
+        '</section>\n')
     html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f'<title>Strategy report</title>\n{CSS}\n</head>\n<body>\n'
-            f'{head}{sections}\n</div>\n'
+            f'{head}{sections}\n{conclusions}</div>\n'
             f'{script_html(datasets, REPORT_SCRIPT)}\n</body>\n</html>\n')
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(html, encoding="utf-8")
@@ -1005,9 +1083,93 @@ def build_report(picked):
           f"({', '.join(s.key for s in picked)})")
 
 
+CONCLUSIONS_PATH = eng.OUT_DIR / "conclusions.html"
+
+CONCLUSIONS_SCRIPT = r"""<script>
+// Two free-text fields, kept in this browser and printed at the end of the exported PDF.
+// Nothing is sent anywhere and no file on disk is written -- the report reads them back when
+// it prints (via localStorage, or via the URL hash when opened from a file:// path, where
+// browsers do not reliably share storage between two local documents).
+const CONCL_KEY = "strategy_conclusions";
+const gEl = document.getElementById("cgeneral");
+const fEl = document.getElementById("cfinal");
+const status = document.getElementById("cstatus");
+function load(){
+  let c = null;
+  try { c = JSON.parse(localStorage.getItem(CONCL_KEY) || "null"); } catch(e){}
+  if (c){ gEl.value = c.general || ""; fEl.value = c.final || ""; }
+}
+let t = null;
+function save(quiet){
+  try {
+    localStorage.setItem(CONCL_KEY, JSON.stringify({general:gEl.value, final:fEl.value}));
+    status.textContent = quiet ? "Saved automatically." : "Saved.";
+  } catch(e){
+    status.textContent = "Could not save in this browser -- copy the text elsewhere before leaving.";
+  }
+}
+[gEl, fEl].forEach(el => el.addEventListener("input", () => {
+  status.textContent = "Typing...";
+  clearTimeout(t);
+  t = setTimeout(() => save(true), 500);        // autosave, so nothing is lost on navigation
+}));
+document.getElementById("csave").addEventListener("click", () => save(false));
+document.getElementById("cclear").addEventListener("click", () => {
+  if (!gEl.value && !fEl.value) return;
+  gEl.value = ""; fEl.value = ""; save(false);
+});
+load();
+status.textContent = (gEl.value || fEl.value) ? "Loaded your saved text." : "";
+</script>"""
+
+
+def build_conclusions():
+    """The Conclusions editor: two fields that print at the end of the exported PDF."""
+    back = "".join(
+        f'<a href="{page_path(s).name}">{s.title}</a>' for s in strategies.REGISTRY)
+    body = (
+        '<div class="wrap">\n'
+        '<nav class="nav"><span class="lbl">Back to</span>' + back +
+        '<span class="navbtns">'
+        '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
+        '</span></nav>\n'
+        '<header>\n'
+        '  <div class="eyebrow">Report &middot; conclusions</div>\n'
+        '  <h1>Conclusions</h1>\n'
+        '  <p class="lede">Whatever you write here is printed at the <b>end of the exported '
+        'PDF</b>, after the last strategy. Both fields are optional &mdash; an empty one is '
+        'left out of the report entirely. The text is saved in this browser as you type; it '
+        'is not written to any file and never leaves your machine.</p>\n'
+        '</header>\n'
+        '<div class="cfield">\n'
+        '  <label for="cgeneral">General conclusions</label>\n'
+        '  <textarea id="cgeneral" placeholder="What the results show across the '
+        'strategies..."></textarea>\n'
+        '</div>\n'
+        '<div class="cfield">\n'
+        '  <label for="cfinal">Final conclusions of the author</label>\n'
+        '  <textarea id="cfinal" placeholder="Your own reading, caveats and what you intend '
+        'to do next..."></textarea>\n'
+        '</div>\n'
+        '<div class="cbar">\n'
+        '  <button class="pdfbtn" id="csave" type="button">Save</button>\n'
+        '  <button class="pdfbtn" id="cclear" type="button">Clear both</button>\n'
+        '  <span class="status" id="cstatus"></span>\n'
+        '</div>\n'
+        '</div>')
+    html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+            f'<title>Conclusions</title>\n{CSS}\n</head>\n<body>\n{body}\n'
+            f'{CONCLUSIONS_SCRIPT}\n</body>\n</html>\n')
+    CONCLUSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONCLUSIONS_PATH.write_text(html, encoding="utf-8")
+    print(f"wrote {CONCLUSIONS_PATH.name}  {len(html):,} bytes")
+
+
 def main(argv):
     for s in strategies.selected(argv):
         build(s)
+    build_conclusions()
     # The report always carries EVERY strategy that has results, whichever pages were built:
     # the picker filters it client-side, so a partial rebuild must not shrink it.
     have = [s for s in strategies.REGISTRY

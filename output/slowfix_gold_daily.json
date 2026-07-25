@@ -2,7 +2,7 @@
   "meta": {
     "market": "Gold_Futures_COMEX",
     "timeframe": "daily",
-    "strategy": "quickfix",
+    "strategy": "slowfix",
     "start": "2025-12-05",
     "end": "2026-07-23",
     "starting_capital": 100000.0,
@@ -12,7 +12,7 @@
     "min_reversals": 3,
     "min_rr": 3.5,
     "target_rr": 5.0,
-    "rule4": "target = 5R, or an opposite reversal nearer than 5R"
+    "rule4": "target = the first opposite reversal beyond entry, no 5R cap"
   },
   "trades": [
     {
@@ -24,13 +24,13 @@
       "entry": 4393.0,
       "stop": 4409.6,
       "risk_per_unit": 16.6,
-      "target": 4310.0,
-      "exit_price": 4310.0,
-      "exit_reason": "target_5r",
-      "r_multiple": 5.0,
-      "pnl_pct": 5.0,
+      "target": 4162.0,
+      "exit_price": 4202.0,
+      "exit_reason": "bearish_reversal",
+      "r_multiple": 11.506,
+      "pnl_pct": 11.506,
       "equity_before": 100000.0,
-      "equity_after": 105000.0
+      "equity_after": 111506.02
     },
     {
       "id": 2,
@@ -41,13 +41,13 @@
       "entry": 4393.0,
       "stop": 4420.6,
       "risk_per_unit": 27.6,
-      "target": 4255.0,
+      "target": 4162.0,
       "exit_price": 4420.6,
       "exit_reason": "stop",
       "r_multiple": -1.0,
       "pnl_pct": -1.0,
-      "equity_before": 105000.0,
-      "equity_after": 103950.0
+      "equity_before": 111506.02,
+      "equity_after": 110390.96
     },
     {
       "id": 3,
@@ -58,30 +58,30 @@
       "entry": 5358.1,
       "stop": 5434.2,
       "risk_per_unit": 76.1,
-      "target": 4977.6,
+      "target": 4900.0,
       "exit_price": 5035.0,
       "exit_reason": "bearish_reversal",
       "r_multiple": 4.2457,
       "pnl_pct": 4.2457,
-      "equity_before": 103950.0,
-      "equity_after": 108363.44
+      "equity_before": 110390.96,
+      "equity_after": 115077.87
     },
     {
       "id": 4,
       "side": "long",
       "entry_date": "2026-03-24",
-      "exit_date": "2026-03-25",
-      "bars_in_trade": 1,
+      "exit_date": "2026-05-07",
+      "bars_in_trade": 29,
       "entry": 4335.0,
       "stop": 4306.2,
       "risk_per_unit": 28.8,
-      "target": 4479.0,
-      "exit_price": 4479.0,
-      "exit_reason": "target_5r",
-      "r_multiple": 5.0,
-      "pnl_pct": 5.0,
-      "equity_before": 108363.44,
-      "equity_after": 113781.61
+      "target": 5210.5,
+      "exit_price": 4758.0,
+      "exit_reason": "bullish_reversal",
+      "r_multiple": 14.6875,
+      "pnl_pct": 14.6875,
+      "equity_before": 115077.87,
+      "equity_after": 131979.93
     },
     {
       "id": 5,
@@ -92,13 +92,13 @@
       "entry": 4746.0,
       "stop": 4758.5,
       "risk_per_unit": 12.5,
-      "target": 4683.5,
-      "exit_price": null,
-      "exit_reason": "unknown_pl",
+      "target": 4500.0,
+      "exit_price": 4758.5,
+      "exit_reason": "stop",
       "r_multiple": -1.0,
       "pnl_pct": -1.0,
-      "equity_before": 113781.61,
-      "equity_after": 112643.79
+      "equity_before": 131979.93,
+      "equity_after": 130660.13
     },
     {
       "id": 6,
@@ -109,64 +109,47 @@
       "entry": 4347.0,
       "stop": 4292.9,
       "risk_per_unit": 54.1,
-      "target": 4617.5,
+      "target": 4674.0,
       "exit_price": 4292.9,
       "exit_reason": "stop",
       "r_multiple": -1.0,
       "pnl_pct": -1.0,
-      "equity_before": 112643.79,
-      "equity_after": 111517.35
+      "equity_before": 130660.13,
+      "equity_after": 129353.53
     },
     {
       "id": 7,
       "side": "long",
       "entry_date": "2026-06-11",
-      "exit_date": "2026-06-15",
-      "bars_in_trade": 2,
+      "exit_date": "2026-06-24",
+      "bars_in_trade": 8,
       "entry": 4103.0,
       "stop": 4046.1,
       "risk_per_unit": 56.9,
-      "target": 4387.5,
-      "exit_price": 4387.5,
-      "exit_reason": "target_5r",
-      "r_multiple": 5.0,
-      "pnl_pct": 5.0,
-      "equity_before": 111517.35,
-      "equity_after": 117093.22
+      "target": 4674.0,
+      "exit_price": 4046.1,
+      "exit_reason": "stop",
+      "r_multiple": -1.0,
+      "pnl_pct": -1.0,
+      "equity_before": 129353.53,
+      "equity_after": 128059.99
     },
     {
       "id": 8,
       "side": "long",
       "entry_date": "2026-06-30",
-      "exit_date": "2026-07-01",
-      "bars_in_trade": 1,
+      "exit_date": null,
+      "bars_in_trade": null,
       "entry": 3984.0,
       "stop": 3955.3,
       "risk_per_unit": 28.7,
-      "target": 4127.5,
-      "exit_price": 4127.5,
-      "exit_reason": "target_5r",
-      "r_multiple": 5.0,
-      "pnl_pct": 5.0,
-      "equity_before": 117093.22,
-      "equity_after": 122947.88
-    },
-    {
-      "id": 9,
-      "side": "long",
-      "entry_date": "2026-07-17",
-      "exit_date": "2026-07-21",
-      "bars_in_trade": 2,
-      "entry": 3984.0,
-      "stop": 3962.9,
-      "risk_per_unit": 21.1,
-      "target": 4089.5,
-      "exit_price": 4089.5,
-      "exit_reason": "target_5r",
-      "r_multiple": 5.0,
-      "pnl_pct": 5.0,
-      "equity_before": 122947.88,
-      "equity_after": 129095.28
+      "target": 4544.0,
+      "exit_price": null,
+      "exit_reason": "open_at_end",
+      "r_multiple": null,
+      "pnl_pct": null,
+      "equity_before": 128059.99,
+      "equity_after": 128059.99
     }
   ],
   "equity_curve": [
@@ -176,39 +159,31 @@
     },
     {
       "date": "2025-12-19",
-      "equity": 105000.0
+      "equity": 111506.02
     },
     {
       "date": "2026-01-05",
-      "equity": 103950.0
+      "equity": 110390.96
     },
     {
       "date": "2026-03-09",
-      "equity": 108363.44
+      "equity": 115077.87
     },
     {
-      "date": "2026-03-25",
-      "equity": 113781.61
+      "date": "2026-05-07",
+      "equity": 131979.93
     },
     {
       "date": "2026-05-12",
-      "equity": 112643.79
+      "equity": 130660.13
     },
     {
       "date": "2026-06-09",
-      "equity": 111517.35
+      "equity": 129353.53
     },
     {
-      "date": "2026-06-15",
-      "equity": 117093.22
-    },
-    {
-      "date": "2026-07-01",
-      "equity": 122947.88
-    },
-    {
-      "date": "2026-07-21",
-      "equity": 129095.28
+      "date": "2026-06-24",
+      "equity": 128059.99
     }
   ]
 }

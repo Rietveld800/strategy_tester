@@ -1,15 +1,33 @@
 # build_equity_html.py
-# Generate a self-contained, interactive equity-curve page from the portfolio results.
-# Reads output/_equity_data.json (written by quickfix_portfolio.py) and injects it into an
-# HTML template -> output/equity_curve.html.
+#
+# Generate a self-contained, interactive equity-curve page PER STRATEGY. Reads
+# output/_equity_<strategy>.json (written by run_portfolio.py) and injects it into the
+# HTML template -> output/equity_<strategy>.html.
+#
+#   python build_equity_html.py            # every registered strategy
+#   python build_equity_html.py slowfix    # just one
+#
+# Every page carries the same navigation strip -- one button per registered strategy,
+# linking to that strategy's page, with the current one highlighted. The strip is built
+# from strategies.REGISTRY, so a new strategy appears on every existing page as soon as
+# its page is rebuilt; nothing here is hardcoded per strategy.
 
 import json
-from pathlib import Path
+import sys
 
-HERE = Path(__file__).resolve().parent
-data = json.loads((HERE / "output" / "_equity_data.json").read_text())
+import engine as eng
+import strategies
 
-TEMPLATE = r"""<style>
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
 :root{
   --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
   --grid:rgba(20,32,28,.09); --border:rgba(20,32,28,.11);
@@ -47,6 +65,18 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .mono{font-family:"SF Mono","JetBrains Mono","Cascadia Code",Consolas,"Roboto Mono",ui-monospace,monospace;
   font-variant-numeric:tabular-nums;}
 .wrap{max-width:1080px;margin:0 auto;padding:clamp(20px,4vw,44px) clamp(16px,4vw,32px) 56px;}
+/* strategy switcher: one button per strategy, current one filled */
+.nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:26px;
+  padding-bottom:18px;border-bottom:1px solid var(--border);}
+.nav .lbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin-right:4px;}
+.nav a{display:inline-flex;flex-direction:column;gap:1px;padding:7px 14px;border-radius:9px;
+  border:1px solid var(--border);background:var(--surface);color:var(--ink2);
+  text-decoration:none;font-size:13px;font-weight:600;transition:border-color .12s,color .12s;}
+.nav a .sub{font-size:10.5px;font-weight:500;color:var(--ink3);letter-spacing:0;}
+.nav a:hover{border-color:var(--accent);color:var(--ink);}
+.nav a.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.nav a.on .sub{color:rgba(255,255,255,.82);}
 header{margin-bottom:26px;}
 .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
   font-weight:600;margin-bottom:12px;}
@@ -96,7 +126,7 @@ th:first-child,td:first-child{text-align:left;}
 tbody tr:hover{background:var(--accent-soft);}
 td.neg{color:var(--neg)}td.pos{color:var(--pos)}
 .section-h{font-size:16px;font-weight:650;letter-spacing:-.01em;margin:34px 2px 12px;}
-.stats4{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);
+.stats4{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);
   border:1px solid var(--border);border-radius:12px;overflow:hidden;}
 @media(max-width:640px){.stats4{grid-template-columns:repeat(2,1fr)}}
 .tradecard{margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);}
@@ -117,14 +147,15 @@ table.trades td:last-child,table.trades th:last-child{white-space:normal;word-br
 footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
-
+</head>
+<body>
 <div class="wrap">
+  <nav class="nav"><span class="lbl">Strategy</span>__NAV__</nav>
+
   <header>
-    <div class="eyebrow">Quickfix strategy &middot; daily &middot; shared $100k account</div>
+    <div class="eyebrow">__EYEBROW__</div>
     <h1>Portfolio equity curve</h1>
-    <p class="lede">One account trading the Socrates time-and-price reversal signals across
-      41 markets, Dec 2025 &ndash; Jul 2026. Capital moves only when a trade closes; each new
-      trade risks 1% of liquid capital. Figures are net of realistic slippage.</p>
+    <p class="lede">__LEDE__</p>
   </header>
 
   <section class="kpis" id="kpis"></section>
@@ -140,12 +171,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     </div>
   </section>
 
-  <p class="note"><b>Backtest, net of slippage.</b> Costs are charged as tick slippage
-    &mdash; 1 tick on entry, 1 on a limit take-profit, 3 on a stop &mdash; converted to R
-    through each trade's own risk distance (about $5.1k of drag here, gross was
-    +164.1%). Still optimistic on the rest: the entry-day intraday path is assumed
-    favorable, a 5R target counts as hit whenever the day's range touches it, and there is
-    no commission or funding. Read it as evidence of a strong edge, not a return forecast.</p>
+  <p class="note">__NOTE__</p>
 
   <h2 class="section-h">Per-trade statistics</h2>
   <section class="stats4" id="tradestats"></section>
@@ -178,7 +204,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     </tr></thead><tbody id="tbody"></tbody></table></div>
   </details>
 
-  <footer class="mono">source: quickfix_portfolio_daily.xlsx &middot; 41 markets &middot; per-market one-position-at-a-time, portfolio-level concurrency</footer>
+  <footer class="mono">__FOOTER__</footer>
 </div>
 
 <script>
@@ -213,6 +239,9 @@ document.getElementById("tbody").innerHTML = P.map(p => {
 const TS=[
   ["Average win", fmtUSD(DATA.avg_win), "pos", "+"+DATA.avg_win_pct.toFixed(2)+"% per win"],
   ["Average loss", "−"+fmtUSD(Math.abs(DATA.avg_loss)), "neg", DATA.avg_loss_pct.toFixed(2)+"% per loss"],
+  ["Average winner", (DATA.avg_win_r>=0?"+":"")+DATA.avg_win_r.toFixed(2)+"R", "pos",
+   "best "+(DATA.best_r>=0?"+":"")+DATA.best_r.toFixed(2)+"R"],
+  ["Average hold", DATA.avg_bars.toFixed(1)+"d", "", "bars per closed trade"],
   ["Longest win streak", String(DATA.long_win), "pos", "consecutive wins"],
   ["Longest loss streak", String(DATA.long_loss), "neg", "consecutive losses"],
 ];
@@ -449,8 +478,76 @@ plot.addEventListener("pointerleave",leave);
 render();
 new ResizeObserver(render).observe(plot);
 </script>
+</body>
+</html>
 """
 
-html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
-(HERE / "output" / "equity_curve.html").write_text(html, encoding="utf-8")
-print("wrote output/equity_curve.html", len(html), "bytes")
+
+def page_path(strategy):
+    return eng.OUT_DIR / f"equity_{strategy.key}.html"
+
+
+def month_year(iso):
+    """2025-12-15 -> Dec 2025."""
+    y, m, _ = iso.split("-")
+    return f"{MONTHS[int(m) - 1]} {y}"
+
+
+def nav_html(current):
+    """The strategy switcher: one button per registered strategy, current one filled."""
+    out = []
+    for s in strategies.REGISTRY:
+        cls = " class=\"on\"" if s.key == current.key else ""
+        out.append(f'<a href="{page_path(s).name}"{cls}>{s.title}'
+                   f'<span class="sub">{s.rule4}</span></a>')
+    return "".join(out)
+
+
+def build(strategy):
+    src = eng.OUT_DIR / f"_equity_{strategy.key}.json"
+    if not src.exists():
+        raise SystemExit(f"missing {src} -- run: python run_portfolio.py {strategy.key}")
+    data = json.loads(src.read_text())
+
+    slip = data.get("slippage", {})
+    eyebrow = (f"{strategy.title} strategy &middot; daily &middot; "
+               f"shared ${eng.STARTING_CAPITAL / 1000:.0f}k account")
+    lede = (f"{strategy.lede} One account trading the Socrates time-and-price reversal "
+            f"signals across {data['n_markets']} markets, {month_year(data['first'])} "
+            f"&ndash; {month_year(data['last'])}. Capital moves only when a trade closes; "
+            f"each new trade risks {eng.RISK_PCT:g}% of liquid capital. Figures are net of "
+            f"realistic slippage.")
+    note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
+            f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
+            f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
+            f"through each trade's own risk distance (about "
+            f"${data['total_cost'] / 1000:,.1f}k of drag here, gross was "
+            f"{data['gross_ret'] * 100:+.1f}%). Still optimistic on the rest: the "
+            f"entry-day intraday path is assumed favorable, {strategy.caveat}, and there "
+            f"is no commission or funding. Read it as evidence of an edge, not a return "
+            f"forecast.")
+    footer = (f"source: {strategy.key}_portfolio_daily.xlsx &middot; "
+              f"{data['n_markets']} markets &middot; rule 4: {strategy.rule4} &middot; "
+              f"per-market one-position-at-a-time, portfolio-level concurrency")
+
+    html = (TEMPLATE
+            .replace("__TITLE__", f"{strategy.title} &mdash; portfolio equity curve")
+            .replace("__NAV__", nav_html(strategy))
+            .replace("__EYEBROW__", eyebrow)
+            .replace("__LEDE__", lede)
+            .replace("__NOTE__", note)
+            .replace("__FOOTER__", footer)
+            .replace("__DATA__", json.dumps(data, separators=(",", ":"))))
+    path = page_path(strategy)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+    print(f"wrote {path.name}  {len(html):,} bytes")
+
+
+def main(argv):
+    for s in strategies.selected(argv):
+        build(s)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

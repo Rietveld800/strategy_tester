@@ -1,15 +1,18 @@
-# quickfix.py
+# engine.py
 #
-# Backtest engine for the "quickfix" strategy on gold futures, daily timeframe.
+# The backtest engine shared by EVERY strategy in this project. The strategies themselves
+# live in strategies.py; they differ only in Rule 4 (which profit target is in force), so
+# everything else -- bar loading, signal detection, the stop, the exit resolution and the
+# per-market money model -- lives here and is written once.
 #
-# The strategy (Socrates "time and price meet", Erwin Pletsch) is intraday, but we
-# only have DAILY array files (one OHLC bar + one set of reversal levels per day).
-# So every intraday condition is inferred from the daily bar. That approximation is
-# accepted for now; it will be replaced with real intraday prices (IBKR API) later.
+# The Socrates "time and price meet" method (Erwin Pletsch) is intraday, but we only have
+# DAILY array files (one OHLC bar + one set of reversal levels per day). So every intraday
+# condition is inferred from the daily bar. That approximation is accepted for now; it will
+# be replaced with real intraday prices (IBKR API) later.
 #
-# SCOPE: this module READS the array (meta) xlsx files produced by hyperliquid_bot
-# (via charter's battle-tested parser) and WRITES a trade ledger + equity curve as
-# JSON for charter to render. It never scrapes data and never renders charts.
+# SCOPE: this module READS the array (meta) xlsx files produced by hyperliquid_bot (via
+# charter's battle-tested parser) and WRITES trade ledgers + equity curves as JSON for
+# charter to render. It never scrapes data and never renders charts.
 #
 # --- Short setup (the long setup is the exact mirror) -----------------------------
 # Reference for the day = the PREVIOUS bar's close. Price is assumed to rise from the
@@ -24,25 +27,33 @@
 #           reversal price. (Close at or above the first reversal -> no trade.)
 #   Stop: one tick above the entry bar's high. Risk = stop - entry. Sizing makes that
 #           risk exactly 1% of current equity, so 1R = 1% (pure percentage model, no
-#           contracts). A stop-out is -1%, the 5R target is +5%.
+#           contracts). A stop-out is -1%.
 #   Rule 3 (min reward): the nearest bearish reversal below entry must be at least
 #           3.5R below entry, else refuse.
-#   Rule 4 (target): 5R. But if a bearish reversal sits closer than 5R below entry,
-#           exit when price hits it instead. Recomputed each bar from that bar's file,
-#           so a newly appearing nearer bearish reversal moves the target up; a
-#           reversal that gets elected (breached) is the exit itself. Only bearish
-#           reversals close a short early -- never a bullish one.
+#   Rule 4 (target): STRATEGY-SPECIFIC -- the one rule that differs between strategies.
+#           Supplied by the strategy's `target` policy (see strategies.py) and recomputed
+#           on every bar from the levels known at that bar's start, so a newly appearing
+#           nearer reversal moves the target in and an elected one falls away. Only
+#           OPPOSITE-side reversals ever close a trade early (bearish for a short,
+#           bullish for a long) -- never a same-side one.
 #
-# One position at a time; a new signal while in a trade is ignored. After each close,
-# equity is recomputed and the next trade's 1% is taken on the new equity.
+# One position per market at a time; a new signal while in a trade is ignored. After each
+# close, equity is recomputed and the next trade's 1% is taken on the new equity.
+#
+# The LOOK-AHEAD RULE (critical). The array file dated D already reflects day D's own
+# intraday extremes and re-draws any levels D elected. So a bar is ALWAYS evaluated against
+# the levels known at its start = the PREVIOUS file's levels, and the reference close comes
+# from that same previous file. This holds for entry detection and for target recomputation
+# alike.
 #
 # Path-ambiguity rules on a daily bar (can't see intraday order):
-#   - stop and target both inside a later bar's range -> STOP wins (conservative).
+#   - stop and target both inside a later bar's range -> booked as 'unknown_pl' at -1R
+#     (the benefit of the doubt goes to the loss).
 #   - a gap past the stop still fills at the stop price (user's choice).
-#   - entry bar: only a same-bar TARGET hit is possible (the stop is above the high),
-#     and it counts as a win with bars_in_trade = 0. Stop/target checks otherwise
-#     start on the bar AFTER entry, since the entry bar's high/low are already spent
-#     by the time its close confirms the entry.
+#   - the entry bar NEVER exits: management starts on the bar AFTER entry. The entry
+#     bar's high/low are already spent by the time its close confirms the entry, and
+#     the stop sits one tick beyond that bar's own extreme, so neither side can trigger
+#     there.
 
 import json
 import sys
@@ -54,20 +65,20 @@ sys.path.insert(0, str(HERE / ".." / "charter" / "scripts"))
 import charting_core as cc  # noqa: E402
 
 # --- simulation inputs ------------------------------------------------------------
-MARKET = "Gold_Futures_COMEX"
 TIMEFRAME = "daily"
 ARRAY_ROOT = HERE / ".." / "hyperliquid_bot" / "data" / "array"
-OUT_PATH = HERE / "output" / "quickfix_gold_daily.json"
+OUT_DIR = HERE / "output"
+REFERENCE_MARKET = "Gold_Futures_COMEX"   # the market single-market runs use
 
-START_DATE = "2026-01-09"   # first day the reversal tables are in the current format
-END_DATE = "2026-07-20"     # last available gold daily file
+# No date window: it is data-driven. Entries start at the first bar whose PREVIOUS
+# file carries enough reversals, and run to the last available file.
 STARTING_CAPITAL = 100_000.0
 RISK_PCT = 1.0              # percent of equity risked per trade (1R)
 FEES = 0.0                  # per-trade cost, in equity percent; 0 for now
 
 MIN_REVERSALS = 3          # Rule 1: at least this many tested reversals
 MIN_RR = 3.5               # Rule 3: minimum reward-to-risk to take the trade
-TARGET_RR = 5.0            # Rule 4: profit target in R
+TARGET_RR = 5.0            # Rule 4 reference distance (quickfix's cap; see strategies.py)
 
 
 # --- bar loading ------------------------------------------------------------------
@@ -121,6 +132,17 @@ def infer_tick(bars):
     return 10.0 ** (-dp), dp
 
 
+def market_dirs():
+    """Every market directory that has daily array files (skip #Charts, _vps2, etc.)."""
+    out = []
+    for d in sorted(ARRAY_ROOT.iterdir()):
+        if not d.is_dir() or d.name.startswith(("#", "_")):
+            continue
+        if any(d.glob(f"*/{TIMEFRAME}/*_array.xlsx")):
+            out.append(d)
+    return out
+
+
 # --- signal detection -------------------------------------------------------------
 def detect_short(bar, prev_close, tick, bull, bear):
     """Return an entry dict for a short signal on `bar`, or None.
@@ -132,6 +154,9 @@ def detect_short(bar, prev_close, tick, bull, bear):
     tested bullish reversals = levels in (prev_close, high]; first = lowest, second
     = next. Rule 2: open < second. Trigger: close < first. Rule 3: nearest bearish
     reversal below entry >= 3.5R below entry.
+
+    Rules 1-3 are strategy-independent, so every strategy takes exactly the same trades;
+    only Rule 4 (where they are closed) differs.
     """
     tested = [lvl for lvl in bull if prev_close < lvl <= bar.high]
     if len(tested) < MIN_REVERSALS:
@@ -189,25 +214,7 @@ def detect_long(bar, prev_close, tick, bull, bear):
 
 
 # --- trade management -------------------------------------------------------------
-def effective_target(pos, bull, bear):
-    """The profit level in force on a bar: the nearest opposite reversal beyond entry
-    but nearer than 5R, else the 5R level. `bull`/`bear` are the levels known at the
-    bar's start (the previous file's set), so a newly appearing nearer reversal moves
-    the target and an elected one falls away, without look-ahead into the bar itself.
-    Returns (target_price, reason) where reason is 'reversal' or 'target_5r'.
-    """
-    if pos["side"] == "short":
-        below = [b for b in bear if b < pos["entry"] and b > pos["target_5r"]]
-        if below:
-            return max(below), "reversal"     # highest reversal above the 5R floor
-        return pos["target_5r"], "target_5r"
-    above = [b for b in bull if b > pos["entry"] and b < pos["target_5r"]]
-    if above:
-        return min(above), "reversal"         # lowest reversal below the 5R ceiling
-    return pos["target_5r"], "target_5r"
-
-
-def check_exit(pos, bar, bull, bear):
+def check_exit(strategy, pos, bar, bull, bear):
     """Does `pos` close on `bar`? Returns (exit_price, reason) or None.
 
     Only ever called on bars AFTER the entry bar: the profit target can never be reached
@@ -215,21 +222,24 @@ def check_exit(pos, bar, bull, bear):
     are already spent -- and by construction the stop is one tick beyond that bar's own
     extreme). Management therefore starts the day after entry.
 
-    `bull`/`bear` are the previous file's levels (known at the bar's start). On a later bar:
+    `bull`/`bear` are the previous file's levels (known at the bar's start). The target in
+    force comes from the STRATEGY (Rule 4) and is recomputed here on every bar. It may be
+    None -- slowfix has no target while no opposite reversal exists beyond entry -- in
+    which case only the stop can close the trade. On a later bar:
 
       - only the target in range   -> clean win at the target;
       - only the stop in range      -> clean stop (-1%);
       - BOTH in range on one bar     -> the intraday order is unknowable, so we give the
         benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1%.
     """
-    target, treason = effective_target(pos, bull, bear)
+    target, treason = strategy.target(pos, bull, bear)
     if pos["side"] == "short":
         stop_in = bar.high >= pos["stop"]
-        target_in = bar.low <= target
+        target_in = target is not None and bar.low <= target
         treason_name = "target_5r" if treason == "target_5r" else "bearish_reversal"
     else:
         stop_in = bar.low <= pos["stop"]
-        target_in = bar.high >= target
+        target_in = target is not None and bar.high >= target
         treason_name = "target_5r" if treason == "target_5r" else "bullish_reversal"
 
     if stop_in and target_in:
@@ -248,16 +258,14 @@ def r_multiple(pos, exit_price):
 
 
 # --- backtest loop ----------------------------------------------------------------
-def backtest(bars, tick, dp):
-    """Run the quickfix state machine over `bars` (oldest -> newest), fresh capital.
+def backtest(bars, tick, dp, strategy):
+    """Run `strategy` over `bars` (oldest -> newest) with fresh capital.
 
     Data-driven window: entries fire from the first bar whose PREVIOUS file carries
     enough reversals, and run to the last bar. Returns dict(trades, equity_curve,
     final_equity, first_trade_date). One position at a time; the entry bar never exits
     (management starts the next bar); an open position at the end is reported unrealized.
     """
-    global _DP
-    _DP = dp
     equity = STARTING_CAPITAL
     trades, equity_curve = [], []
     pos, tid = None, 0
@@ -270,11 +278,11 @@ def backtest(bars, tick, dp):
 
         # 1) manage an open position on this bar (never enter and manage same bar)
         if pos is not None:
-            hit = check_exit(pos, bar, sig_bull, sig_bear)
+            hit = check_exit(strategy, pos, bar, sig_bull, sig_bear)
             if hit is not None:
                 exit_price, reason = hit
                 equity = _close(pos, bar, i, exit_price, reason, equity,
-                                trades, equity_curve)
+                                trades, equity_curve, dp)
                 pos = None
             continue
 
@@ -290,6 +298,8 @@ def backtest(bars, tick, dp):
         risk_dollars = equity * RISK_PCT / 100.0
         pos = dict(id=tid, entry_index=i, entry_date=bar.date,
                    equity_before=equity, risk_dollars=risk_dollars, **entry)
+        # the Rule 4 level in force at entry, recorded for the ledger (it can move later)
+        pos["target"] = strategy.target(pos, sig_bull, sig_bear)[0]
         # the entry bar never exits: management starts on the next bar (loop continues)
 
     if pos is not None:                        # still open at the end -> reported, unrealized
@@ -298,7 +308,7 @@ def backtest(bars, tick, dp):
                            exit_date=None, bars_in_trade=None,
                            entry=_r(pos["entry"], dp), stop=_r(pos["stop"], dp),
                            risk_per_unit=_r(pos["risk"], dp),
-                           target_5r=_r(pos["target_5r"], dp),
+                           target=_r(pos["target"], dp) if pos["target"] is not None else None,
                            exit_price=None, exit_reason="open_at_end",
                            r_multiple=None, pnl_pct=None,
                            equity_before=round(pos["equity_before"], 2),
@@ -309,28 +319,7 @@ def backtest(bars, tick, dp):
                 first_trade_date=first_trade)
 
 
-def run():
-    """Single-market run for gold: write the JSON ledger and print a summary."""
-    bars = load_bars(ARRAY_ROOT / MARKET)
-    tick, dp = infer_tick(bars)
-    res = backtest(bars, tick, dp)
-    result = dict(
-        meta=dict(market=MARKET, timeframe=TIMEFRAME, strategy="quickfix",
-                  start=str(bars[0].date.date()), end=str(bars[-1].date.date()),
-                  starting_capital=STARTING_CAPITAL, risk_pct=RISK_PCT,
-                  tick=tick, fees=FEES, min_reversals=MIN_REVERSALS,
-                  min_rr=MIN_RR, target_rr=TARGET_RR),
-        trades=res["trades"],
-        equity_curve=[dict(date=str(bars[0].date.date()),
-                           equity=STARTING_CAPITAL)] + res["equity_curve"],
-    )
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    _summary(res["trades"], res["final_equity"])
-    return result
-
-
-def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve):
+def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve, dp):
     """Realize a closed trade, append it, update and record equity, return new equity.
 
     An 'unknown_pl' exit has no fill price: the path was ambiguous, so it is booked at
@@ -339,16 +328,16 @@ def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve):
     if reason == "unknown_pl":
         r, exit_out = -1.0, None
     else:
-        r, exit_out = r_multiple(pos, exit_price), _r(exit_price, _DP)
+        r, exit_out = r_multiple(pos, exit_price), _r(exit_price, dp)
     pnl_pct = r * RISK_PCT - FEES
     equity_after = equity * (1 + pnl_pct / 100.0)
-    dp = _DP
     trades.append(dict(
         id=pos["id"], side=pos["side"],
         entry_date=str(pos["entry_date"].date()), exit_date=str(bar.date.date()),
         bars_in_trade=i - pos["entry_index"],
         entry=_r(pos["entry"], dp), stop=_r(pos["stop"], dp),
-        risk_per_unit=_r(pos["risk"], dp), target_5r=_r(pos["target_5r"], dp),
+        risk_per_unit=_r(pos["risk"], dp),
+        target=_r(pos["target"], dp) if pos["target"] is not None else None,
         exit_price=exit_out, exit_reason=reason,
         r_multiple=round(r, 4), pnl_pct=round(pnl_pct, 4),
         equity_before=round(equity, 2), equity_after=round(equity_after, 2)))
@@ -361,11 +350,69 @@ def _r(x, dp):
     return round(x, dp)
 
 
-def _summary(trades, equity):
+# --- all markets, all strategies, one pass ----------------------------------------
+def run_markets(strategies, progress=True):
+    """Backtest EVERY market for EVERY strategy given, in one pass.
+
+    Reading and parsing the array xlsx files is by far the slow part, so each market's
+    bars are parsed ONCE and reused for all strategies -- which is also why the runners
+    take a precomputed result list: a full refresh loads the archive once, not once per
+    output file.
+
+    Returns a list of dicts: name, bars, tick, dp, res={strategy key -> backtest result}.
+    """
+    out = []
+    for d in market_dirs():
+        bars = load_bars(d)
+        if not bars:
+            continue
+        tick, dp = infer_tick(bars)
+        res = {s.key: backtest(bars, tick, dp, s) for s in strategies}
+        out.append(dict(name=d.name, bars=bars, tick=tick, dp=dp, res=res))
+        if progress:
+            parts = []
+            for s in strategies:
+                r = res[s.key]
+                closed = [t for t in r["trades"] if t["exit_reason"] != "open_at_end"]
+                parts.append(f"{s.key} {len(closed):>3}tr "
+                             f"{(r['final_equity'] / STARTING_CAPITAL - 1) * 100:+7.2f}%")
+            print(f"{d.name:38} bars={len(bars):>4}  " + "  |  ".join(parts))
+    return out
+
+
+# --- single-market run (the reference ledger) -------------------------------------
+def run_single(strategy, market=REFERENCE_MARKET):
+    """One market, fresh capital: write the JSON ledger and print a summary."""
+    bars = load_bars(ARRAY_ROOT / market)
+    tick, dp = infer_tick(bars)
+    res = backtest(bars, tick, dp, strategy)
+    result = dict(
+        meta=dict(market=market, timeframe=TIMEFRAME, strategy=strategy.key,
+                  start=str(bars[0].date.date()), end=str(bars[-1].date.date()),
+                  starting_capital=STARTING_CAPITAL, risk_pct=RISK_PCT,
+                  tick=tick, fees=FEES, min_reversals=MIN_REVERSALS,
+                  min_rr=MIN_RR, target_rr=TARGET_RR, rule4=strategy.rule4),
+        trades=res["trades"],
+        equity_curve=[dict(date=str(bars[0].date.date()),
+                           equity=STARTING_CAPITAL)] + res["equity_curve"],
+    )
+    out_path = OUT_DIR / f"{strategy.key}_{_short(market)}_{TIMEFRAME}.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    _summary(strategy, res["trades"], res["final_equity"], out_path)
+    return result
+
+
+def _short(market):
+    """First word of a market folder name, lowercased -- Gold_Futures_COMEX -> gold."""
+    return market.split("_")[0].lower()
+
+
+def _summary(strategy, trades, equity, out_path):
     closed = [t for t in trades if t["exit_reason"] != "open_at_end"]
     wins = [t for t in closed if t["pnl_pct"] > 0]
-    print(f"trades: {len(closed)} closed"
-          + (f" (+1 open at end)" if len(trades) > len(closed) else ""))
+    print(f"{strategy.key}: {len(closed)} closed"
+          + (" (+1 open at end)" if len(trades) > len(closed) else ""))
     if closed:
         wr = 100 * len(wins) / len(closed)
         print(f"wins: {len(wins)}  win rate: {wr:.1f}%")
@@ -376,11 +423,12 @@ def _summary(trades, equity):
                   f"pnl={t['pnl_pct']:+.2f}%")
     print(f"final equity: ${equity:,.2f}  "
           f"({(equity / STARTING_CAPITAL - 1) * 100:+.2f}%)")
-    print(f"written: {OUT_PATH}")
+    print(f"written: {out_path}")
 
-
-# module-level decimals, set once in run(); _close needs it without threading it through
-_DP = 1
 
 if __name__ == "__main__":
-    run()
+    import strategies
+
+    for _s in strategies.selected(sys.argv[1:]):
+        run_single(_s)
+        print()

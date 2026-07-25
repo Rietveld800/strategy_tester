@@ -1,4 +1,4 @@
-# strategy_tester — quickfix strategy, backtest, risk management
+# strategy_tester — strategies, backtest, risk management
 
 Strategy department of the trading system (see `../trading_system/README.md` for the
 umbrella contracts). Turns the Socrates "time and price meet" method into explicit,
@@ -7,15 +7,19 @@ resulting trades to `charter` for display.
 
 **Scope (firm): strategy_tester produces trade results. It never scrapes data and never
 renders charts.** It reads the array (meta) xlsx files from `hyperliquid_bot` (via
-`charter`'s parser) and writes trades + equity as JSON / xlsx / a standalone HTML report.
+`charter`'s parser) and writes trades + equity as JSON / xlsx / standalone HTML reports.
+
+Two strategies are built today — **quickfix** (strategy 1) and **slowfix** (strategy 2).
+They share every rule except Rule 4, so they take **exactly the same trades** and differ
+only in where those trades are closed.
 
 ---
 
-## The quickfix strategy (daily timeframe)
+## The strategy family (daily timeframe)
 
-A "quick", selective reversal strategy: trade when price probes a cluster of reversal
-levels and snaps back. It works long and short; the short is described first, the long is
-the exact mirror. All rules are evaluated per daily bar.
+A "quick", selective reversal method: trade when price probes a cluster of reversal levels
+and snaps back. It works long and short; the short is described first, the long is the exact
+mirror. All rules are evaluated per daily bar.
 
 **Reversal ladders.** For each day, bullish reversals (`bull_major` + `bull_minor`) and
 bearish reversals (`bear_major` + `bear_minor`) are each pooled into one sorted ladder.
@@ -24,7 +28,8 @@ Majors and minors count equally.
 **Look-ahead rule (critical).** The array file dated D already reflects day D's own
 intraday extremes and re-draws any levels that D elected. So a bar is always evaluated
 against the reversal levels **known at its start = the previous file's levels**, never its
-own file's. The reference "previous close" comes from that same previous file.
+own file's. The reference "previous close" comes from that same previous file. This holds
+for entry detection and for target recomputation alike.
 
 ### Short setup
 
@@ -39,18 +44,29 @@ own file's. The reference "previous close" comes from that same previous file.
    so that risk is exactly 1% of equity, so **1R = 1%**.
 5. **Reward filter (Rule 3).** The nearest bearish reversal below entry must be at least
    **3.5R** below entry, else refuse (not enough room).
-6. **Target (Rule 4).** 5R. But if a bearish reversal sits closer than 5R below entry, exit
-   when price hits it instead. Recomputed each bar from that bar's levels, so a newly
-   appearing nearer bearish reversal moves the target up; a reversal that is elected
-   (breached) is the exit itself. Only bearish reversals close a short early, never bullish.
+6. **Target (Rule 4).** **This is the only rule that differs per strategy** — see the table
+   below. Whatever the rule, the target is recomputed on **every** bar from the levels known
+   at that bar's start, so a newly appearing nearer reversal moves the target in and an
+   elected one falls away. Only **opposite-side** reversals ever close a trade early
+   (bearish for a short, bullish for a long), never a same-side one.
 
 ### Long setup (mirror)
 
 Bearish ladder for entry, bullish for targets. Tested bearish reversals in
 `[low, prev_close)`, ≥3; **first = highest** tested bearish level, second the next highest.
 Rule 2: refuse if `open <= second`. Trigger: **close above the first**. Stop = one tick
-below the entry bar's low. Rule 3: nearest bullish reversal above entry ≥ 3.5R up. Target:
-nearest bullish reversal above entry if nearer than 5R, else `entry + 5R`.
+below the entry bar's low. Rule 3: nearest bullish reversal above entry ≥ 3.5R up.
+
+### Rule 4 — what separates the strategies
+
+| Strategy | Rule 4 | Character |
+|---|---|---|
+| **quickfix** | Target = **5R**, or an opposite reversal that sits **closer** than 5R (then that reversal is the target). | Takes profit fast. 5R is a hard ceiling on every winner. |
+| **slowfix** | Target = **the first opposite reversal beyond entry**, however far away. **No 5R cap.** | Rides the move. Rule 3 keeps that level ≥ 3.5R away at entry, so a winner is at least 3.5R unless a nearer reversal appears later; a level 8R away is ridden to 8R. |
+
+slowfix corner case: if **no** opposite reversal exists beyond entry (they were all
+elected), no target is in force and the trade simply **waits, holding**, until one appears.
+The stop stays in place throughout, so a position can never be stranded forever.
 
 ### Daily-proxy assumptions
 
@@ -69,7 +85,9 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   (unrealized, no P&L).
 
 **One position per market at a time.** A new signal while in a trade in that market is
-ignored. Across markets, positions run concurrently (see the portfolio model below).
+ignored — which is why slowfix, holding longer, ends up with slightly **fewer** closed
+trades than quickfix despite identical entry rules. Across markets, positions run
+concurrently (see the portfolio model below).
 
 ### Data window
 
@@ -84,20 +102,35 @@ etc.). Gold futures on the COMEX is the reference market.
 
 | File | What it does |
 |---|---|
-| `quickfix.py` | The engine. `load_bars`, `infer_tick`, signal detection, trade management, and `backtest(bars, tick, dp)`. Run directly for a single-market (gold) JSON ledger. |
-| `quickfix_all.py` | Runs every market independently (each a fresh $100k) and writes `quickfix_all_markets_daily.xlsx` (per-market summary + all trades). |
-| `quickfix_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model, and writes the portfolio xlsx + `_equity_data.json`. |
-| `build_equity_html.py` | Renders `_equity_data.json` into the standalone interactive report `output/equity_curve.html`. |
-| `export_charter_trades.py` | Hand-off to charter: writes `output/charter_trades.json` (trade geometry keyed by market). |
+| `engine.py` | The engine, shared by every strategy: `load_bars`, `infer_tick`, `market_dirs`, signal detection, the stop, exit resolution, `backtest(bars, tick, dp, strategy)` and `run_markets` (all markets, all strategies, one pass). Run directly for a single-market (gold) JSON ledger. |
+| `strategies.py` | The **registry**. Each strategy is its Rule 4 target policy plus the text its outputs label themselves with. `QUICKFIX`, `SLOWFIX`, `REGISTRY`. |
+| `run_all.py` | Runs every market independently (each a fresh $100k) → `<strategy>_all_markets_daily.xlsx` (per-market summary + all trades). |
+| `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. |
+| `build_equity_html.py` | Renders `_equity_<strategy>.json` into the standalone interactive report `output/equity_<strategy>.html`, including the strategy-switcher buttons. |
+| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<strategy>.json` (trade geometry keyed by market). |
+| `run_pipeline.py` | All four writers in one pass over the array archive (the fast way to regenerate everything). |
 
 Parsing is imported from `../charter/scripts/charting_core.py` (`parse_array`); do not
 rewrite it here.
 
-## Portfolio money management (`quickfix_portfolio.py`)
+### Adding a strategy
 
-One shared account, starting $100,000, processed chronologically by date. A market's trades
-(which trades, their entries/exits, their R) are capital-independent, so they are reused
-verbatim and only the money management is re-run on the shared account.
+1. Write its Rule 4 target policy in `strategies.py` —
+   `policy(pos, bull, bear) -> (price_or_None, "target_5r" | "reversal")`, called on every
+   bar the trade is open.
+2. Add a `Strategy(...)` with its key, title, one-line `rule4`, page `lede` and `caveat`.
+3. Append it to `REGISTRY`.
+4. `venv\Scripts\python.exe run_pipeline.py`.
+
+Every runner, every output filename and the pages' navigation buttons follow from the
+registry — there is nothing else to edit.
+
+## Portfolio money management (`run_portfolio.py`)
+
+One shared account, starting $100,000, processed chronologically by date, run separately per
+strategy. A market's trades (which trades, their entries/exits, their R) are
+capital-independent, so they are reused verbatim and only the money management is re-run on
+the shared account.
 
 - **1% risk on liquid capital.** A new trade risks 1% of `cash − risk already tied up in
   open trades`. Each open trade ties up its own 1% until it closes.
@@ -111,29 +144,57 @@ verbatim and only the money management is re-run on the shared account.
 **Slippage** is charged as tick slippage — `SLIP_ENTRY_TICKS` (1) on entry, `SLIP_TARGET_TICKS`
 (1) on a limit take-profit, `SLIP_STOP_TICKS` (3) on a stop — converted to R through each
 trade's own risk distance. In dollars this equals ticks × tick × position size, the true
-slippage. Constants live at the top of `quickfix_portfolio.py`. Fees/commission are omitted
+slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are omitted
 (negligible for liquid futures relative to slippage).
+
+### Where they stand (2026-07-25 data, 28 markets with trades)
+
+| | quickfix | slowfix |
+|---|---|---|
+| Net return | +168.67% | +203.54% |
+| Gross return | +177.18% | +212.88% |
+| Max drawdown | 5.85% | 12.66% |
+| Closed trades | 78 | 75 |
+| Win rate | 41.0% | 26.7% |
+| Average hold | 2.3 bars | 3.9 bars |
+| Max concurrent | 5 | 8 |
+| Time in market | 74% | 87% |
+
+Same entries, different exits: slowfix wins less often but its winners are far larger, and
+it pays for that with a drawdown roughly twice as deep.
 
 ---
 
 ## Outputs (`output/`)
 
-- **`quickfix_gold_daily.json`** — single-market ledger: `meta`, `trades` (entry/exit,
-  bars, R, pnl%, equity), `equity_curve`.
-- **`quickfix_all_markets_daily.xlsx`** — `summary` (per-market: window, trades, win rate,
-  return, obsolete flag) + `trades` (all markets).
-- **`quickfix_portfolio_daily.xlsx`** — `summary` (net/gross return, drawdown, streaks,
-  averages, time in market, slippage), `equity_curve` (daily, with a chart), `trades`
-  (gross/cost/net R, prices, P&L, running balance).
-- **`equity_curve.html`** — standalone interactive report: equity + drawdown + open-positions
-  panels, KPI + per-trade stat tiles, a sortable trade blotter, and a per-market breakdown.
-- **`charter_trades.json`** — the charter hand-off (below).
+Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
 
-### Charter hand-off schema (`charter_trades.json`)
+- **`<strategy>_gold_daily.json`** — single-market ledger: `meta`, `trades` (entry/exit,
+  bars, R, pnl%, equity), `equity_curve`.
+- **`<strategy>_all_markets_daily.xlsx`** — `summary` (per-market: window, trades, win rate,
+  return, obsolete flag) + `trades` (all markets).
+- **`<strategy>_portfolio_daily.xlsx`** — `summary` (net/gross return, drawdown, streaks,
+  averages, hold time, time in market, slippage), `equity_curve` (daily, with a chart),
+  `trades` (gross/cost/net R, prices, P&L, running balance).
+- **`equity_<strategy>.html`** — standalone interactive report: equity + drawdown +
+  open-positions panels, KPI + per-trade stat tiles, a sortable trade blotter, and a
+  per-market breakdown. **Every page opens with the strategy switcher** — one button per
+  registered strategy, current one filled, so you click straight from quickfix to slowfix.
+  The buttons are generated from the registry, so a new strategy appears on every page as
+  soon as the pages are rebuilt.
+- **`_equity_<strategy>.json`** — the data behind that page (intermediate).
+- **`charter_trades_<strategy>.json`** — the charter hand-off (below).
+
+Ledger note: the per-trade `target` field records **the Rule 4 level in force at entry**
+(it can move later). It replaced the old quickfix-only `target_5r` column, which could only
+ever describe one strategy.
+
+### Charter hand-off schema (`charter_trades_<strategy>.json`)
 
 ```
 {
-  "meta": { "strategy": "quickfix", "timeframe": "daily", "n_markets": N, "n_trades": M, ... },
+  "meta": { "strategy": "quickfix", "title": "Quickfix", "rule4": "...",
+            "timeframe": "daily", "n_markets": N, "n_trades": M, ... },
   "markets": {
     "Gold_Futures_COMEX": {
       "tick": 0.1, "price_decimals": 1,
@@ -143,12 +204,16 @@ slippage. Constants live at the top of `quickfix_portfolio.py`. Fees/commission 
           "exit_date": "YYYY-MM-DD"|null, "exit": <price>|null,
           "stop": <price>, "target": <price>,
           "reason": "target_5r"|"stop"|"bullish_reversal"|"bearish_reversal"|"unknown_pl"|"open_at_end",
-          "r": <net_of_nothing R multiple>|null, "bars": <int>|null }
+          "r": <gross R multiple>|null, "bars": <int>|null }
       ]
     }, ...
   }
 }
 ```
+
+**One file per strategy, all in the same schema** — charter globs
+`charter_trades_*.json` and picks up a new strategy on its next build with no code change.
+(This replaced the single `charter_trades.json` when slowfix was added.)
 
 Trade geometry only — the entry plots at the first-reversal price on the entry bar, the exit
 at the fill level on the exit bar. `unknown_pl` exits at the stop; `open_at_end` has null
@@ -159,22 +224,37 @@ price pane behind a toggle. To refresh the overlay end to end:
 2. In `../charter`: `venv\Scripts\python.exe scripts\chart_all_markets_reference.py`
    (append a market substring, e.g. `... gold`, for a fast single-market rebuild).
 3. In `../charter`: `venv\Scripts\python.exe serve.py`, open the site, and click the **T**
-   button (green/red triangles) on the right rail to show/hide trades. Long entry =
-   up-triangle, short = down-triangle, exit = dot; the dotted entry→exit line is green for a
-   win, red for a stop, amber for an ambiguous (`unknown_pl`) outcome, blue for a still-open
-   trade. Daily timeframe only; markets with no trades show nothing.
+   button (green/red triangles) on the right rail. It opens the **Strategy trades box** —
+   one checkbox per strategy — so you can show quickfix, slowfix, both, or neither. Long
+   entry = up-triangle, short = down-triangle, exit = a marker on the exit bar; the
+   entry→exit line is green for a win, red for a stop, amber for an ambiguous (`unknown_pl`)
+   outcome, blue for a still-open trade. Daily timeframe only; markets with no trades show
+   nothing.
+
+**Colour is the outcome, in every strategy**, so charter separates strategies by **line dash
+and exit marker** (in file order: quickfix dotted/round, slowfix dashed/square). The box row
+carries that hint — it is the only legend. Because both strategies share entry rules, their
+entry triangles sit on exactly the same bar and price when both are shown; the exits and the
+lines are what differ.
 
 ---
 
 ## Running
 
 ```
-venv\Scripts\python.exe quickfix.py            # gold single-market ledger + summary
-venv\Scripts\python.exe quickfix_all.py        # per-market xlsx
-venv\Scripts\python.exe quickfix_portfolio.py  # shared-account xlsx + _equity_data.json
-venv\Scripts\python.exe build_equity_html.py   # -> output/equity_curve.html
-venv\Scripts\python.exe export_charter_trades.py  # -> output/charter_trades.json
+venv\Scripts\python.exe run_pipeline.py             # everything, every strategy (one pass)
+venv\Scripts\python.exe run_pipeline.py slowfix     # everything, one strategy
+
+venv\Scripts\python.exe engine.py                   # gold single-market ledger + summary
+venv\Scripts\python.exe run_all.py                  # per-market xlsx
+venv\Scripts\python.exe run_portfolio.py            # shared-account xlsx + _equity_<s>.json
+venv\Scripts\python.exe build_equity_html.py        # -> output/equity_<s>.html
+venv\Scripts\python.exe export_charter_trades.py    # -> output/charter_trades_<s>.json
 ```
+
+Every script takes optional strategy keys; with none it runs all of them. Reading the array
+archive is the slow part, so prefer `run_pipeline.py` for a full refresh — it parses the
+archive once and feeds all four writers.
 
 Requirements: `pandas`, `openpyxl` (see `requirements.txt`).
 

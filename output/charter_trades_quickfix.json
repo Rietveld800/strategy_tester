@@ -1,6 +1,8 @@
 {
  "meta": {
   "strategy": "quickfix",
+  "title": "Quickfix",
+  "rule4": "target = 5R, or an opposite reversal nearer than 5R",
   "timeframe": "daily",
   "source": "strategy_tester",
   "starting_capital": 100000.0,
@@ -128,7 +130,7 @@
      "exit_date": "2026-06-17",
      "exit": 610.0,
      "stop": 570.9,
-     "target": 610.5,
+     "target": 610.0,
      "reason": "bullish_reversal",
      "r": 4.924,
      "bars": 2
@@ -539,13 +541,13 @@
      "side": "long",
      "entry_date": "2026-07-17",
      "entry": 3984.0,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-07-21",
+     "exit": 4089.5,
      "stop": 3962.9,
      "target": 4089.5,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "target_5r",
+     "r": 5.0,
+     "bars": 2
     }
    ]
   },
@@ -560,7 +562,7 @@
      "exit_date": "2026-05-06",
      "exit": 0.006454,
      "stop": 0.006454,
-     "target": 0.006232,
+     "target": 0.006254,
      "reason": "stop",
      "r": -1.0,
      "bars": 3
@@ -662,7 +664,7 @@
      "exit_date": "2026-02-17",
      "exit": 5.6774,
      "stop": 5.6774,
-     "target": 6.2414,
+     "target": 6.116,
      "reason": "stop",
      "r": -1.0,
      "bars": 1
@@ -704,7 +706,7 @@
      "exit_date": "2026-06-26",
      "exit": 3.354,
      "stop": 3.354,
-     "target": 3.06,
+     "target": 3.095,
      "reason": "stop",
      "r": -1.0,
      "bars": 1
@@ -716,7 +718,7 @@
      "exit_date": "2026-07-09",
      "exit": 3.12,
      "stop": 3.356,
-     "target": 3.05,
+     "target": 3.12,
      "reason": "bearish_reversal",
      "r": 3.627,
      "bars": 1
@@ -1028,7 +1030,7 @@
      "exit_date": "2026-05-06",
      "exit": 97.569,
      "stop": 97.569,
-     "target": 99.039,
+     "target": 98.976,
      "reason": "stop",
      "r": -1.0,
      "bars": 3
@@ -1064,7 +1066,7 @@
      "exit_date": "2026-06-18",
      "exit": 100.361,
      "stop": 100.361,
-     "target": 98.591,
+     "target": 99.004,
      "reason": "stop",
      "r": -1.0,
      "bars": 1
@@ -1118,7 +1120,7 @@
      "exit_date": "2026-03-09",
      "exit": 0.8658,
      "stop": 0.8658,
-     "target": 0.8394,
+     "target": 0.8418,
      "reason": "stop",
      "r": -1.0,
      "bars": 1

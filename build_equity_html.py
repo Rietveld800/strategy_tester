@@ -94,6 +94,22 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
 .kpi .v.pos{color:var(--pos)}.kpi .v.neg{color:var(--neg)}
 .kpi .sub{font-size:11px;color:var(--ink3);}
 @media(max-width:460px){.kpis{grid-template-columns:repeat(2,1fr)}}
+/* risk control: re-runs the shared-account simulation in the browser at any risk % */
+.riskbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:22px 0 0;
+  padding:12px 16px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;}
+.riskbar .lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;}
+.riskbar input[type=number]{width:74px;padding:5px 7px;font-size:14px;font-weight:600;
+  color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-variant-numeric:tabular-nums;}
+.riskbar input[type=range]{flex:1 1 190px;min-width:130px;accent-color:var(--accent);}
+.riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
+.riskbar button{padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink2);
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;cursor:pointer;}
+.riskbar button:hover{border-color:var(--accent);color:var(--ink);}
+.riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
+.riskbar .warn:empty{display:none}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
   padding:16px clamp(10px,2vw,18px) 10px;}
 .charthead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2px 6px 10px;}
@@ -160,6 +176,17 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     <p class="lede">__LEDE__</p>
   </header>
 
+  <section class="riskbar">
+    <span class="lbl">Risk per trade</span>
+    <input id="riskin" type="number" min="0" max="100" step="0.1" value="1"
+           aria-label="Risk per trade, percent of liquid capital">
+    <span class="unit">% of liquid capital</span>
+    <input id="riskrange" type="range" min="0" max="100" step="0.1" value="1"
+           aria-label="Risk per trade slider">
+    <button id="riskreset" type="button">Reset to __RISKDEF__%</button>
+    <span class="warn" id="riskwarn"></span>
+  </section>
+
   <section class="kpis" id="kpis"></section>
 
   <section class="card">
@@ -211,58 +238,168 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 
 <script>
 const DATA = __DATA__;
-const P = DATA.points, N = P.length;
-const fmtUSD = v => "$" + Math.round(v).toLocaleString("en-US");
-const fmtK = v => "$" + (v/1000).toFixed(0) + "k";
+const START = DATA.start;
+const RISK_DEFAULT = (DATA.risk_pct != null) ? DATA.risk_pct : 1;
+// The days the server's timeline covers: every trading day across all markets from the
+// first entry onward. The replay below walks exactly these, in this order.
+const DAYS = DATA.points.map(p => p.date);
+const RAW = DATA.trades;
+const fmtUSD = v => (v<0?"−$":"$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const fmtK = v => (v<0?"−$":"$") + Math.abs(v/1000).toFixed(0) + "k";
 const pct = v => (v>=0?"+":"") + v.toFixed(1) + "%";
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-// Return per point of drawdown: how much return the strategy extracted for the worst pain
-// it put the account through. The comparison that matters when ranking strategies -- a
-// bigger total return bought with a deeper hole is not automatically the better one, since
-// risk per trade is a dial and a shallower edge can be levered up to meet a given drawdown.
-// maxdd is stored NEGATIVE, hence the abs; guard the no-drawdown case rather than divide by 0.
-const ddAbs = Math.abs(DATA.maxdd);
-const rdd = ddAbs > 0 ? (DATA.ret*100)/ddAbs : null;
+// ---- shared-account money management, replayed in the browser --------------------
+// A direct port of run_portfolio.py's loop. It is only possible because the trades are
+// CAPITAL-INDEPENDENT: which trades fire, their R multiples, and their slippage cost in R
+// are all fixed by price and reversals, so changing the risk % changes the dollar sizing
+// and nothing else. Rules mirrored exactly, and in this order:
+//   1) a new trade risks `risk`% of LIQUID capital = cash - risk tied up in open trades;
+//   2) cash moves ONLY when a trade closes; open trades are never marked to market;
+//   3) within a day ALL entries are sized first, THEN the exits book P&L;
+//   4) several entries on one day are sized in market-name order, each off the base the
+//      earlier ones left. Plain < > comparison, not localeCompare, to match Python's sort.
+// The gross curve is replayed alongside on its own cash/committed pair -- costs change the
+// sizing base as the run compounds, so it cannot be derived from the net one afterwards.
+function simulate(risk) {
+  const ent = {}, exi = {};
+  RAW.forEach((t, i) => {
+    (ent[t.din] || (ent[t.din] = [])).push(i);
+    (exi[t.xd] || (exi[t.xd] = [])).push(i);
+  });
+  const tr = RAW.map(t => Object.assign({}, t, {base:0, riskD:0, pnl:0, pnlpct:0}));
+  let cash = START, committed = 0, peak = START, maxdd = 0;
+  let gcash = START, gcommitted = 0;
+  const open = {}, gopen = {}, pts = [];
+  let maxOpen = 0, totalCost = 0, daysIn = 0;
 
-const kpis = [
-  ["Final capital", fmtUSD(DATA.final), "", "net, from $100k"],
-  ["Total return", pct(DATA.ret*100), DATA.ret>=0?"pos":"neg", "gross "+pct(DATA.gross_ret*100)],
-  ["Max drawdown", DATA.maxdd.toFixed(2)+"%", "neg", "peak to trough"],
-  ["Return / DD", rdd==null?"—":rdd.toFixed(1)+"x", (rdd!=null&&rdd>=0)?"pos":"",
-   "return per point of drawdown"],
-  ["Time in market", DATA.time_in_market.toFixed(0)+"%", "", "of trading days"],
-  ["Win rate", DATA.win_rate.toFixed(1)+"%", "", DATA.n_trades+" trades"],
-  ["Max concurrent", String(DATA.max_open), "", "positions open"],
-];
-document.getElementById("kpis").innerHTML = kpis.map(k =>
-  `<div class="kpi"><span class="k">${k[0]}</span><span class="v ${k[2]} mono">${k[1]}</span>`+
-  `<span class="sub">${k[3]}</span></div>`).join("");
+  for (const day of DAYS) {
+    const es = (ent[day] || []).slice().sort((a, b) =>
+      RAW[a].market < RAW[b].market ? -1 : RAW[a].market > RAW[b].market ? 1 : 0);
+    const enotes = [];
+    for (const i of es) {
+      const base = Math.max(cash - committed, 0), riskD = base * risk / 100;
+      tr[i].base = base; tr[i].riskD = riskD;
+      open[i] = riskD; committed += riskD;
+      const gbase = Math.max(gcash - gcommitted, 0);
+      gopen[i] = gbase * risk / 100; gcommitted += gopen[i];
+      enotes.push(RAW[i].market + " " + RAW[i].side + " (risk " +
+                  Math.round(riskD).toLocaleString("en-US") + ")");
+    }
+    const xnotes = [];
+    for (const i of (exi[day] || [])) {
+      const riskD = open[i]; delete open[i]; committed -= riskD;
+      const pnl = tr[i].r * riskD;
+      cash += pnl; totalCost += tr[i].cr * riskD;
+      tr[i].pnl = pnl;
+      tr[i].pnlpct = tr[i].base ? pnl / tr[i].base * 100 : 0;
+      const griskD = gopen[i]; delete gopen[i]; gcommitted -= griskD;
+      gcash += tr[i].gr * griskD;
+      xnotes.push(RAW[i].market + " " + RAW[i].reason + " (" +
+        (RAW[i].reason === "open_at_end" ? "open->closed 0"
+          : (pnl >= 0 ? "+" : "−") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
+    }
+    const nOpen = Object.keys(open).length;
+    if (cash > peak) peak = cash;
+    const dd = peak > 0 ? (cash - peak) / peak * 100 : 0;
+    if (-dd > maxdd) maxdd = -dd;
+    if (nOpen > maxOpen) maxOpen = nOpen;
+    if (nOpen > 0) daysIn++;
+    pts.push({date: day, cash: cash, open: nOpen, dd: dd,
+              markets: Object.keys(open).map(i => RAW[i].market).sort().join(", "),
+              entries: enotes.join("; "), exits: xnotes.join("; ")});
+  }
 
-document.getElementById("tbody").innerHTML = P.map(p => {
-  const act = [p.entries?`<span style="color:var(--pos)">${p.entries}</span>`:"",
-               p.exits?`<span style="color:var(--neg)">${p.exits}</span>`:""].filter(Boolean).join(" &nbsp; ");
-  return `<tr><td class="mono">${p.date}</td><td class="mono">${fmtUSD(p.cash)}</td>`+
-    `<td class="mono ${p.dd<0?'neg':''}">${p.dd.toFixed(2)}%</td>`+
-    `<td class="mono">${p.open}</td><td style="text-align:left;white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
-}).join("");
+  // Closed trades only, in EXIT order -- the streaks are "as they were lived".
+  const closed = tr.filter(t => t.reason !== "open_at_end");
+  const seq = closed.slice().sort((a, b) =>
+    a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
+    a.din < b.din ? -1 : a.din > b.din ? 1 :
+    a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
+  let lw = 0, ll = 0, cw = 0, cl = 0;
+  for (const t of seq) {
+    if (t.pnl > 0) { cw++; cl = 0; } else if (t.pnl < 0) { cl++; cw = 0; } else { cw = 0; cl = 0; }
+    if (cw > lw) lw = cw;
+    if (cl > ll) ll = cl;
+  }
+  const wins = closed.filter(t => t.pnl > 0), loss = closed.filter(t => t.pnl < 0);
+  const mean = (xs, f) => xs.length ? xs.reduce((s, x) => s + f(x), 0) / xs.length : 0;
+  // Win rate keys off R, not dollars, so it stays meaningful at risk = 0 (where every
+  // position is sized to nothing and no trade can book a dollar of profit or loss).
+  const rWins = closed.filter(t => t.r > 0).length;
+  const ddAbs = maxdd;
+
+  return {points: pts, trades: tr, stats: {
+    final: cash, ret: (cash / START - 1) * 100, maxdd: -maxdd,
+    rdd: ddAbs > 0 ? ((cash / START - 1) * 100) / ddAbs : null,
+    gross_final: gcash, gross_ret: (gcash / START - 1) * 100, total_cost: totalCost,
+    n_trades: closed.length,
+    win_rate: closed.length ? 100 * rWins / closed.length : 0,
+    max_open: maxOpen,
+    time_in_market: DAYS.length ? 100 * daysIn / DAYS.length : 0,
+    long_win: lw, long_loss: ll,
+    avg_win: mean(wins, t => t.pnl), avg_loss: mean(loss, t => t.pnl),
+    avg_win_pct: mean(wins, t => t.pnlpct), avg_loss_pct: mean(loss, t => t.pnlpct)
+  }};
+}
+
+let SIM = simulate(RISK_DEFAULT);
+let P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
+// Self-check: at the default risk the replay MUST reproduce the server's own figure. If it
+// ever does not, the JS port has drifted from run_portfolio.py -- say so in the console
+// rather than quietly showing different numbers from the workbook.
+if (Math.abs(ST.final - DATA.final) > 0.5) {
+  console.warn("risk replay mismatch at " + RISK_DEFAULT + "%: page " + ST.final.toFixed(2) +
+               " vs server " + DATA.final.toFixed(2) + " -- build_equity_html.py is out of " +
+               "step with run_portfolio.py");
+} else {
+  console.log("risk replay verified against run_portfolio.py at " + RISK_DEFAULT + "%");
+}
+
+// Every tile below reads the LIVE simulation (ST), not the baked-in server figures, so the
+// whole page follows the risk input. The three R-based tiles (average winner, best, average
+// hold) are risk-INDEPENDENT and still come straight from DATA.
+function renderKpis(){
+  const kpis = [
+    ["Final capital", fmtUSD(ST.final), "", "net, from "+fmtK(START)],
+    ["Total return", pct(ST.ret), ST.ret>=0?"pos":"neg", "gross "+pct(ST.gross_ret)],
+    ["Max drawdown", ST.maxdd.toFixed(2)+"%", "neg", "peak to trough"],
+    ["Return / DD", ST.rdd==null?"—":ST.rdd.toFixed(1)+"x", (ST.rdd!=null&&ST.rdd>=0)?"pos":"",
+     "return per point of drawdown"],
+    ["Time in market", ST.time_in_market.toFixed(0)+"%", "", "of trading days"],
+    ["Win rate", ST.win_rate.toFixed(1)+"%", "", ST.n_trades+" trades"],
+    ["Max concurrent", String(ST.max_open), "", "positions open"],
+  ];
+  document.getElementById("kpis").innerHTML = kpis.map(k =>
+    `<div class="kpi"><span class="k">${k[0]}</span><span class="v ${k[2]} mono">${k[1]}</span>`+
+    `<span class="sub">${k[3]}</span></div>`).join("");
+}
+
+function renderDaily(){
+  document.getElementById("tbody").innerHTML = P.map(p => {
+    const act = [p.entries?`<span style="color:var(--pos)">${p.entries}</span>`:"",
+                 p.exits?`<span style="color:var(--neg)">${p.exits}</span>`:""].filter(Boolean).join(" &nbsp; ");
+    return `<tr><td class="mono">${p.date}</td><td class="mono">${fmtUSD(p.cash)}</td>`+
+      `<td class="mono ${p.dd<0?'neg':''}">${p.dd.toFixed(2)}%</td>`+
+      `<td class="mono">${p.open}</td><td style="text-align:left;white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
+  }).join("");
+}
 
 // ---- per-trade statistics + sortable trades table -------------------------------
-const TS=[
-  ["Average win", fmtUSD(DATA.avg_win), "pos", "+"+DATA.avg_win_pct.toFixed(2)+"% per win"],
-  ["Average loss", "−"+fmtUSD(Math.abs(DATA.avg_loss)), "neg", DATA.avg_loss_pct.toFixed(2)+"% per loss"],
-  ["Average winner", (DATA.avg_win_r>=0?"+":"")+DATA.avg_win_r.toFixed(2)+"R", "pos",
-   "best "+(DATA.best_r>=0?"+":"")+DATA.best_r.toFixed(2)+"R"],
-  ["Average hold", DATA.avg_bars.toFixed(1)+"d", "", "bars per closed trade"],
-  ["Longest win streak", String(DATA.long_win), "pos", "consecutive wins"],
-  ["Longest loss streak", String(DATA.long_loss), "neg", "consecutive losses"],
-];
-document.getElementById("tradestats").innerHTML = TS.map(k=>
-  `<div class="kpi"><span class="k">${k[0]}</span><span class="v ${k[2]} mono">${k[1]}</span>`+
-  `<span class="sub">${k[3]}</span></div>`).join("");
-
-const T=DATA.trades;
-document.getElementById("tcount").textContent=T.length+" trades";
+function renderTradeStats(){
+  const TS=[
+    ["Average win", fmtUSD(ST.avg_win), "pos", "+"+ST.avg_win_pct.toFixed(2)+"% per win"],
+    ["Average loss", fmtUSD(ST.avg_loss), "neg", ST.avg_loss_pct.toFixed(2)+"% per loss"],
+    ["Average winner", (DATA.avg_win_r>=0?"+":"")+DATA.avg_win_r.toFixed(2)+"R", "pos",
+     "best "+(DATA.best_r>=0?"+":"")+DATA.best_r.toFixed(2)+"R"],
+    ["Average hold", DATA.avg_bars.toFixed(1)+"d", "", "bars per closed trade"],
+    ["Longest win streak", String(ST.long_win), "pos", "consecutive wins"],
+    ["Longest loss streak", String(ST.long_loss), "neg", "consecutive losses"],
+  ];
+  document.getElementById("tradestats").innerHTML = TS.map(k=>
+    `<div class="kpi"><span class="k">${k[0]}</span><span class="v ${k[2]} mono">${k[1]}</span>`+
+    `<span class="sub">${k[3]}</span></div>`).join("");
+}
 const fmtPrice=v=>{ if(v==null)return "—"; const a=Math.abs(v);
   const dp=a>=100?1:a>=1?2:a>=0.01?4:6;
   return v.toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp}); };
@@ -308,18 +445,21 @@ function renderRows(){
     return `<td class="${cls}">${disp}</td>`;
   }).join("")+"</tr>").join("");
 }
-renderHead(); renderRows();
-
 // ---- per-market analysis (aggregated from the trades, excluding open-at-end) -----
-const byM={};
-for(const t of T){ if(t.reason==="open_at_end") continue;
-  const m=byM[t.market]||(byM[t.market]={market:t.market,n:0,wins:0,pnl:0,totalr:0,best:-1e9,worst:1e9});
-  m.n++; if(t.pnl>0)m.wins++; m.pnl+=t.pnl; m.totalr+=t.r;
-  m.best=Math.max(m.best,t.r); m.worst=Math.min(m.worst,t.r);
+// Rebuilt on every risk change: the R columns are risk-independent but the P&L column and
+// its bar are not, so the table has to be re-aggregated rather than just re-sorted.
+let MK=[], maxAbsPnl=1;
+function mBuild(){
+  const byM={};
+  for(const t of T){ if(t.reason==="open_at_end") continue;
+    const m=byM[t.market]||(byM[t.market]={market:t.market,n:0,wins:0,pnl:0,totalr:0,best:-1e9,worst:1e9});
+    m.n++; if(t.pnl>0)m.wins++; m.pnl+=t.pnl; m.totalr+=t.r;
+    m.best=Math.max(m.best,t.r); m.worst=Math.min(m.worst,t.r);
+  }
+  MK=Object.values(byM).map(m=>Object.assign(m,{winrate:100*m.wins/m.n, avgr:m.totalr/m.n}));
+  maxAbsPnl=Math.max(1,...MK.map(m=>Math.abs(m.pnl)));
+  document.getElementById("mcount").textContent=MK.length+" markets";
 }
-const MK=Object.values(byM).map(m=>Object.assign(m,{winrate:100*m.wins/m.n, avgr:m.totalr/m.n}));
-const maxAbsPnl=Math.max(1,...MK.map(m=>Math.abs(m.pnl)));
-document.getElementById("mcount").textContent=MK.length+" markets";
 const MCOLS=[
   {k:"market",l:"Market",t:"s",w:22},{k:"n",l:"Trades",t:"n",w:9},
   {k:"winrate",l:"Win %",t:"n",f:v=>v.toFixed(0)+"%",w:10},
@@ -356,7 +496,38 @@ function mRows(){
     return `<td class="${cls}">${disp}</td>`;
   }).join("")+"</tr>").join("");
 }
-mHead(); mRows();
+// ---- risk control: re-run the simulation and redraw everything -------------------
+// The number box is authoritative; the slider mirrors it. Both clamp to 0..100. Nothing is
+// persisted: the page always opens on the documented default so it matches the workbook,
+// and Reset puts it back after exploring.
+const riskIn = document.getElementById("riskin"), riskRange = document.getElementById("riskrange");
+const riskReset = document.getElementById("riskreset"), riskWarn = document.getElementById("riskwarn");
+function renderAll(){
+  renderKpis(); renderDaily(); renderTradeStats();
+  document.getElementById("tcount").textContent = T.length+" trades";
+  renderHead(); renderRows(); mBuild(); mHead(); mRows(); render();
+}
+function setRisk(v, from){
+  let r = Number(v);
+  if (!isFinite(r)) r = RISK_DEFAULT;
+  r = Math.min(100, Math.max(0, r));
+  if (from !== "num") riskIn.value = String(r);
+  if (from !== "range") riskRange.value = String(r);
+  SIM = simulate(r); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
+  // Above a few percent the sizing model stops describing anything tradeable: it assumes
+  // any position size fills at these prices, and it has no margin, no liquidity limit and
+  // no ruin -- a losing streak just shrinks the base forever instead of ending the account.
+  riskWarn.textContent = r > 5
+    ? "At " + r + "% per trade the model ignores margin, liquidity and ruin: 1R = " + r +
+      "% of the account, and the " + ST.long_loss + "-trade losing streak below is survived " +
+      "only because positions shrink with the balance. Read as arithmetic, not a plan."
+    : "";
+  document.querySelectorAll(".riskecho").forEach(e => { e.textContent = r + "%"; });
+  renderAll();
+}
+riskIn.addEventListener("input", () => setRisk(riskIn.value, "num"));
+riskRange.addEventListener("input", () => setRisk(riskRange.value, "range"));
+riskReset.addEventListener("click", () => setRisk(RISK_DEFAULT));
 
 function niceTicks(min,max,n){
   const raw=(max-min)/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), norm=raw/mag;
@@ -368,7 +539,7 @@ function niceTicks(min,max,n){
 const svg=document.getElementById("svg"), plot=document.getElementById("plot"), tip=document.getElementById("tip");
 const NS="http://www.w3.org/2000/svg";
 const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
-let geom=null;
+let geom=null, firstDraw=true;
 
 function render(){
   const W=plot.clientWidth||880;
@@ -380,12 +551,14 @@ function render(){
   while(svg.firstChild) svg.removeChild(svg.firstChild);
 
   const cash=P.map(p=>p.cash);
-  const lo=Math.min(...cash,DATA.start), hi=Math.max(...cash), span=hi-lo;
+  const lo=Math.min(...cash,START), hi=Math.max(...cash);
+  // At risk = 0 nothing moves, so the range collapses and every y would divide by zero.
+  const span=(hi-lo) || Math.max(1, Math.abs(hi)*0.02);
   const yMin=lo-span*0.06, yMax=hi+span*0.10;
   const x=i=> mL + (N<=1?0:i/(N-1))*plotW;
   const y=v=> padT + mainH - (v-yMin)/(yMax-yMin)*mainH;
   const ddLo=Math.min(...P.map(p=>p.dd),-0.5), yd=v=> ddTop + (-v)/(-ddLo)*ddH;
-  const maxOpen=Math.max(DATA.max_open,1), yp=v=> posBot - (v/maxOpen)*posH;
+  const maxOpen=Math.max(ST.max_open,1), yp=v=> posBot - (v/maxOpen)*posH;
 
   // equity y-grid
   niceTicks(yMin,yMax,5).forEach(v=>{ if(v<yMin||v>yMax)return;
@@ -393,11 +566,11 @@ function render(){
     const t=mk("text",{x:mL-9,y:y(v)+3.5,"text-anchor":"end","font-size":11,fill:"var(--ink3)"});
     t.textContent=fmtK(v); svg.appendChild(t);
   });
-  // $100k start reference
-  svg.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(DATA.start),y2:y(DATA.start),stroke:"var(--ref)",
+  // starting-capital reference
+  svg.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(START),y2:y(START),stroke:"var(--ref)",
     "stroke-width":1.2,"stroke-dasharray":"3 4"}));
-  const rl=mk("text",{x:mL+4,y:y(DATA.start)-5,"font-size":10,fill:"var(--ink3)"});
-  rl.textContent="$100k start"; svg.appendChild(rl);
+  const rl=mk("text",{x:mL+4,y:y(START)-5,"font-size":10,fill:"var(--ink3)"});
+  rl.textContent=fmtK(START)+" start"; svg.appendChild(rl);
 
   // month gridlines + labels (span all panels)
   let lastM=-1;
@@ -445,10 +618,13 @@ function render(){
   const ddot=mk("circle",{r:3.5,fill:"var(--neg)",stroke:"var(--surface)","stroke-width":1.5,opacity:0});
   svg.appendChild(cross);svg.appendChild(dot);svg.appendChild(ddot);
 
-  if(!matchMedia("(prefers-reduced-motion:reduce)").matches){
+  // Draw-on animation only on the FIRST paint. Re-running it on every risk keystroke would
+  // make the curve flicker instead of letting you watch the shape change.
+  if(firstDraw && !matchMedia("(prefers-reduced-motion:reduce)").matches){
     const len=line.getTotalLength(); line.style.strokeDasharray=len; line.style.strokeDashoffset=len;
     line.animate([{strokeDashoffset:len},{strokeDashoffset:0}],{duration:900,easing:"cubic-bezier(.4,0,.1,1)",fill:"forwards"});
   }
+  firstDraw=false;
   geom={W,mL,plotW,x,y,yd,ex,ey,cross,dot,ddot};
 }
 
@@ -488,7 +664,7 @@ function leave(){ if(!geom)return;
 }
 plot.addEventListener("pointermove",move);
 plot.addEventListener("pointerleave",leave);
-render();
+setRisk(RISK_DEFAULT);          // first paint: simulate at the default, then draw everything
 new ResizeObserver(render).observe(plot);
 </script>
 </body>
@@ -525,20 +701,22 @@ def build(strategy):
     slip = data.get("slippage", {})
     eyebrow = (f"{strategy.title} strategy &middot; daily &middot; "
                f"shared ${eng.STARTING_CAPITAL / 1000:.0f}k account")
+    # `riskecho` spans are rewritten by the page whenever the risk input changes, so the
+    # prose never contradicts the figures above it.
     lede = (f"{strategy.lede} One account trading the Socrates time-and-price reversal "
             f"signals across {data['n_markets']} markets, {month_year(data['first'])} "
             f"&ndash; {month_year(data['last'])}. Capital moves only when a trade closes; "
-            f"each new trade risks {eng.RISK_PCT:g}% of liquid capital. Figures are net of "
-            f"realistic slippage.")
+            f"each new trade risks <span class=\"riskecho\">{eng.RISK_PCT:g}%</span> of "
+            f"liquid capital. Figures are net of realistic slippage.")
     note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
             f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
             f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
-            f"through each trade's own risk distance (about "
-            f"${data['total_cost'] / 1000:,.1f}k of drag here, gross was "
-            f"{data['gross_ret'] * 100:+.1f}%). Still optimistic on the rest: the "
+            f"through each trade's own risk distance. Still optimistic on the rest: the "
             f"entry-day intraday path is assumed favorable, {strategy.caveat}, and there "
             f"is no commission or funding. Read it as evidence of an edge, not a return "
-            f"forecast.")
+            f"forecast. The risk dial re-runs the shared-account simulation in your browser "
+            f"&mdash; the trades themselves never change, only how much capital each one "
+            f"is sized to.")
     footer = (f"source: {strategy.key}_portfolio_daily.xlsx &middot; "
               f"{data['n_markets']} markets &middot; rule 4: {strategy.rule4} &middot; "
               f"per-market one-position-at-a-time, portfolio-level concurrency")
@@ -546,6 +724,7 @@ def build(strategy):
     html = (TEMPLATE
             .replace("__TITLE__", f"{strategy.title} &mdash; portfolio equity curve")
             .replace("__NAV__", nav_html(strategy))
+            .replace("__RISKDEF__", f"{eng.RISK_PCT:g}")
             .replace("__EYEBROW__", eyebrow)
             .replace("__LEDE__", lede)
             .replace("__NOTE__", note)

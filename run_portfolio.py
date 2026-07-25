@@ -1,9 +1,12 @@
-# quickfix_portfolio.py
+# run_portfolio.py
 #
-# Combine every market's quickfix trades into ONE shared account and build a chronological
-# equity curve of the capital. The per-market trades themselves are unchanged (entries,
-# exits and R-multiples depend only on price/reversals, not capital); only the money
-# management is re-run on the shared account.
+# Combine every market's trades into ONE shared account and build a chronological equity
+# curve of the capital, per strategy. The per-market trades themselves are unchanged
+# (entries, exits and R-multiples depend only on price/reversals, not capital); only the
+# money management is re-run on the shared account.
+#
+#   python run_portfolio.py            # every registered strategy
+#   python run_portfolio.py slowfix    # just one
 #
 # Money management (confirmed with the user):
 #   - one account, starting STARTING_CAPITAL; cash balance changes ONLY when a trade closes.
@@ -17,8 +20,12 @@
 #
 # An "open at end" position (data ended while it was open) ties up its 1% from entry until
 # its market's last bar, then releases it with zero realised P&L -- its outcome is unknown.
+#
+# Outputs: output/<strategy>_portfolio_daily.xlsx  and  output/_equity_<strategy>.json
+# (the latter feeds build_equity_html.py).
 
 import json
+import sys
 from collections import defaultdict
 from datetime import date
 
@@ -27,13 +34,11 @@ from openpyxl.chart import LineChart, Reference
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-import quickfix as qf
-from quickfix_all import market_dirs
+import engine as eng
+import strategies
 
-OUT_XLSX = qf.HERE / "output" / "quickfix_portfolio_daily.xlsx"
-DATA_JSON = qf.HERE / "output" / "_equity_data.json"
-RISK_PCT = qf.RISK_PCT
-START_CAP = qf.STARTING_CAPITAL
+RISK_PCT = eng.RISK_PCT
+START_CAP = eng.STARTING_CAPITAL
 
 # --- transaction costs ------------------------------------------------------------
 # Realistic fills, charged as SLIPPAGE in ticks (the market's inferred price tick, the
@@ -45,6 +50,14 @@ START_CAP = qf.STARTING_CAPITAL
 SLIP_ENTRY_TICKS = 1       # entry fill one tick worse than the reversal price
 SLIP_TARGET_TICKS = 1      # limit take-profit / reversal exit
 SLIP_STOP_TICKS = 3        # stop-loss and unknown-outcome exits slip more (market/gap)
+
+
+def out_xlsx(strategy):
+    return eng.OUT_DIR / f"{strategy.key}_portfolio_daily.xlsx"
+
+
+def data_json(strategy):
+    return eng.OUT_DIR / f"_equity_{strategy.key}.json"
 
 
 def cost_in_r(trade):
@@ -62,24 +75,19 @@ def cost_in_r(trade):
     return (SLIP_ENTRY_TICKS + exit_ticks) * trade["tick"] / rpu
 
 
-def collect():
-    """Every market's trades tagged with market + last bar, plus the set of all trading days."""
+def collect(strategy, results):
+    """`strategy`'s trades tagged with market + last bar, plus the set of all trading days."""
     raw, all_days = [], set()
-    for d in market_dirs():
-        bars = qf.load_bars(d)
-        if not bars:
-            continue
-        tick, dp = qf.infer_tick(bars)
-        res = qf.backtest(bars, tick, dp)
-        last_bar = bars[-1].date.date()
-        all_days.update(b.date.date() for b in bars)
-        for t in res["trades"]:
-            raw.append({**t, "market": d.name, "last_bar": last_bar, "tick": tick})
+    for m in results:
+        last_bar = m["bars"][-1].date.date()
+        all_days.update(b.date.date() for b in m["bars"])
+        for t in m["res"][strategy.key]["trades"]:
+            raw.append({**t, "market": m["name"], "last_bar": last_bar, "tick": m["tick"]})
     return raw, sorted(all_days)
 
 
-def run_portfolio():
-    raw, all_days = collect()
+def run(strategy, results):
+    raw, all_days = collect(strategy, results)
 
     # normalise each trade to (entry day, exit day, gross R, cost, net R). An open-at-end
     # trade "exits" on its market's last bar with gross R = 0 (outcome unknown).
@@ -156,16 +164,26 @@ def run_portfolio():
                  first=first_day, last=all_days[-1] if all_days else None,
                  n_markets=len({t["market"] for t in raw}),
                  gross_final=gross_final, gross_ret=(gross_final / START_CAP - 1) * 100.0,
-                 total_cost=total_cost,
+                 total_cost=total_cost, avg_bars=_avg_bars(closed),
                  time_in_market=100 * days_in_mkt / n_days if n_days else 0.0)
     stats.update(_streaks_and_avgs(raw))
-    _write(raw, timeline, stats)
-    _write_json(raw, timeline, stats)
-    print(f"NET  ${cash:,.2f} ({stats['ret']:+.2f}%)   gross ${gross_final:,.0f} "
-          f"({stats['gross_ret']:+.2f}%)   cost drag ${total_cost:,.0f}")
-    print(f"maxDD {max_dd:.2f}%  trades {len(closed)} winrate {stats['win_rate']:.1f}%  "
-          f"max concurrent {max_open}  time in market {stats['time_in_market']:.0f}%")
-    print(f"written: {OUT_XLSX}")
+    _write(strategy, raw, timeline, stats)
+    _write_json(strategy, raw, timeline, stats)
+    print(f"{strategy.key}: NET  ${cash:,.2f} ({stats['ret']:+.2f}%)   "
+          f"gross ${gross_final:,.0f} ({stats['gross_ret']:+.2f}%)   "
+          f"cost drag ${total_cost:,.0f}")
+    print(f"  maxDD {max_dd:.2f}%  trades {len(closed)} winrate {stats['win_rate']:.1f}%  "
+          f"max concurrent {max_open}  time in market {stats['time_in_market']:.0f}%  "
+          f"avg hold {stats['avg_bars']:.1f}d")
+    print(f"  written: {out_xlsx(strategy)}")
+
+
+def main(argv):
+    picked = strategies.selected(argv)
+    results = eng.run_markets(picked)
+    print()
+    for s in picked:
+        run(s, results)
 
 
 def _replay(raw, all_days, first_day, rkey):
@@ -189,6 +207,12 @@ def _replay(raw, all_days, first_day, rkey):
     return cash
 
 
+def _avg_bars(closed):
+    """Average holding time in bars -- the number that separates a quick from a slow exit."""
+    vals = [t["bars_in_trade"] for t in closed if t.get("bars_in_trade") is not None]
+    return sum(vals) / len(vals) if vals else 0.0
+
+
 def _streaks_and_avgs(raw):
     """Longest win/loss run (in exit order) and average win/loss in $ and %.
 
@@ -207,10 +231,12 @@ def _streaks_and_avgs(raw):
     loss = [t for t in closed if t["pnl_dollars"] < 0]
     pct = lambda t: (t["pnl_dollars"] / t["base_at_entry"] * 100.0) if t.get("base_at_entry") else 0.0
     mean = lambda xs, f: (sum(f(x) for x in xs) / len(xs)) if xs else 0.0
-    return dict(long_win=lw, long_loss=ll,
+    best = max((t["r"] for t in closed), default=0.0)
+    return dict(long_win=lw, long_loss=ll, best_r=best,
                 avg_win=mean(wins, lambda t: t["pnl_dollars"]),
                 avg_loss=mean(loss, lambda t: t["pnl_dollars"]),
-                avg_win_pct=mean(wins, pct), avg_loss_pct=mean(loss, pct))
+                avg_win_pct=mean(wins, pct), avg_loss_pct=mean(loss, pct),
+                avg_win_r=mean(wins, lambda t: t["r"]))
 
 
 def _trade_rows(raw):
@@ -224,22 +250,24 @@ def _trade_rows(raw):
             market=t["market"], side=t["side"], din=t["entry_date"],
             dout=(t["exit_date"] if reason != "open_at_end" else None),
             bars=t["bars_in_trade"], pin=t["entry"], pout=pout, sl=t["stop"],
-            tgt=t["target_5r"], r=round(t["r"], 3),
+            tgt=t["target"], r=round(t["r"], 3),
             pnl=round(pnl, 2), pnlpct=round(pnl / b * 100.0, 3) if b else 0.0,
             reason=reason))
     return rows
 
 
-def _write_json(raw, timeline, stats):
+def _write_json(strategy, raw, timeline, stats):
     """Compact daily series, per-trade rows, and headline stats for the equity-curve page."""
     pts = [dict(date=str(t["date"]), cash=round(t["cash"], 2), open=t["open_count"],
                 markets=t["open_markets"], dd=round(t["dd"], 2),
                 entries=t["entries"], exits=t["exits"]) for t in timeline]
-    out = dict(points=pts, trades=_trade_rows(raw), start=START_CAP,
+    out = dict(strategy=strategy.key, title=strategy.title, rule4=strategy.rule4,
+               points=pts, trades=_trade_rows(raw), start=START_CAP,
                final=round(stats["final"], 2),
                ret=round(stats["ret"] / 100.0, 4), maxdd=round(-stats["max_dd"], 2),
                first=pts[0]["date"], last=pts[-1]["date"], n=len(pts),
                n_trades=stats["n_trades"], win_rate=stats["win_rate"],
+               n_markets=stats["n_markets"],
                max_open=stats["max_open"], time_in_market=round(stats["time_in_market"], 1),
                gross_final=round(stats["gross_final"], 2),
                gross_ret=round(stats["gross_ret"] / 100.0, 4),
@@ -247,8 +275,12 @@ def _write_json(raw, timeline, stats):
                long_win=stats["long_win"], long_loss=stats["long_loss"],
                avg_win=round(stats["avg_win"], 2), avg_loss=round(stats["avg_loss"], 2),
                avg_win_pct=round(stats["avg_win_pct"], 2),
-               avg_loss_pct=round(stats["avg_loss_pct"], 2))
-    DATA_JSON.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
+               avg_loss_pct=round(stats["avg_loss_pct"], 2),
+               avg_win_r=round(stats["avg_win_r"], 3), best_r=round(stats["best_r"], 3),
+               avg_bars=round(stats["avg_bars"], 2),
+               slippage=dict(entry=SLIP_ENTRY_TICKS, target=SLIP_TARGET_TICKS,
+                             stop=SLIP_STOP_TICKS))
+    data_json(strategy).write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
 
 
 # --- workbook ---------------------------------------------------------------------
@@ -277,20 +309,22 @@ def _autosize(ws, cols, cap=48):
         ws.column_dimensions[get_column_letter(c)].width = min(w + 2, cap)
 
 
-def _write(raw, timeline, stats):
+def _write(strategy, raw, timeline, stats):
     wb = Workbook()
-    _sheet_summary(wb.active, stats)
-    _sheet_equity(wb.create_sheet("equity_curve"), timeline)
+    _sheet_summary(wb.active, strategy, stats)
+    _sheet_equity(wb.create_sheet("equity_curve"), strategy, timeline)
     _sheet_trades(wb.create_sheet("trades"), raw)
-    OUT_XLSX.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(OUT_XLSX)
+    path = out_xlsx(strategy)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
 
 
-def _sheet_summary(ws, s):
+def _sheet_summary(ws, strategy, s):
     ws.title = "summary"
-    ws["A1"] = "quickfix portfolio -- one shared account, all markets"
+    ws["A1"] = f"{strategy.key} portfolio -- one shared account, all markets"
     ws["A1"].font = Font(bold=True, size=13)
     rows = [
+        ("rule 4", strategy.rule4),
         ("starting capital", f"{START_CAP:,.0f}"),
         ("final capital (net)", f"{s['final']:,.2f}"),
         ("total return (net)", f"{s['ret']:+.2f}%"),
@@ -299,6 +333,8 @@ def _sheet_summary(ws, s):
         ("max drawdown", f"{s['max_dd']:.2f}%"),
         ("closed trades", s["n_trades"]),
         ("win rate", f"{s['win_rate']:.1f}%"),
+        ("average hold", f"{s['avg_bars']:.1f} bars"),
+        ("average winner", f"{s['avg_win_r']:+.2f}R  (best {s['best_r']:+.2f}R)"),
         ("longest win streak", s["long_win"]),
         ("longest loss streak", s["long_loss"]),
         ("average win", f"{s['avg_win']:,.0f}  ({s['avg_win_pct']:+.2f}%)"),
@@ -316,10 +352,10 @@ def _sheet_summary(ws, s):
         ws.cell(i, 1, k).font = Font(bold=True)
         ws.cell(i, 2, v)
     ws.column_dimensions["A"].width = 26
-    ws.column_dimensions["B"].width = 30
+    ws.column_dimensions["B"].width = 46
 
 
-def _sheet_equity(ws, timeline):
+def _sheet_equity(ws, strategy, timeline):
     _head(ws, TL_COLS)
     for t in timeline:
         ws.append([t["date"], round(t["cash"], 2), round(t["committed"], 2),
@@ -331,7 +367,7 @@ def _sheet_equity(ws, timeline):
     _autosize(ws, TL_COLS)
     # equity chart: cash balance vs date
     chart = LineChart()
-    chart.title = "Portfolio capital (realized cash balance)"
+    chart.title = f"{strategy.title} portfolio capital (realized cash balance)"
     chart.y_axis.title, chart.x_axis.title = "capital", "date"
     chart.height, chart.width = 9, 32
     last = ws.max_row
@@ -363,4 +399,4 @@ def _sheet_trades(ws, raw):
 
 
 if __name__ == "__main__":
-    run_portfolio()
+    main(sys.argv[1:])

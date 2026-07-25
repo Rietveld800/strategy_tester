@@ -32,18 +32,32 @@ Strategy department of a four-part trading system. Read `README.md` and
 - Simulation inputs live here: position sizing, risk per trade, fees, starting
   capital.
 
-## Status (2026-07-24)
+## Status (2026-07-25)
 
-The "quickfix" strategy is built and documented — see `README.md` for the full rules,
-engine, money-management/slippage model, outputs, and the charter hand-off. Files:
-`quickfix.py` (engine), `quickfix_all.py` (per-market xlsx), `quickfix_portfolio.py`
-(shared-account xlsx + `_equity_data.json`), `build_equity_html.py` (interactive report),
-`export_charter_trades.py` (trades JSON for charter). `venv\` has pandas + openpyxl
-(`requirements.txt`). Reference market: gold futures.
+TWO strategies are built and documented — **quickfix** (strategy 1) and **slowfix**
+(strategy 2). They share every rule except Rule 4, so they take exactly the same trades and
+differ only in the exit: quickfix caps a winner at 5R (or an opposite reversal nearer than
+5R); slowfix has no cap and rides to the first opposite reversal beyond entry, whatever the
+distance. See `README.md` for the full rules, money-management/slippage model, outputs and
+the charter hand-off.
 
-Trades are handed to charter as `output/charter_trades.json`; charter overlays them on each
-market's daily price pane behind the **T** rail toggle (the overlay + toggle live in
-charter's `chart_all_markets_reference.py` and `shell_html.py`).
+Layout: one shared `engine.py`, and strategies are DATA in `strategies.py` (a registry;
+each strategy is its Rule 4 target policy plus its display text). Runners are
+strategy-parameterized and take optional strategy keys, defaulting to all: `run_all.py`,
+`run_portfolio.py`, `build_equity_html.py`, `export_charter_trades.py`, and
+`run_pipeline.py` (all four in one pass over the array archive — reading it is the slow
+part). Adding strategy 3 means one entry in `strategies.py`; nothing else. `venv\` has
+pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
+
+Each strategy gets its own page `output/equity_<strategy>.html`, and every page carries a
+strategy-switcher button row generated from the registry.
+
+Trades are handed to charter as `output/charter_trades_<strategy>.json`, one file per
+strategy in the same schema (this replaced the single `charter_trades.json`). Charter globs
+them, draws each as `trades_<key>`, and its **T** rail button opens a box with a checkbox per
+strategy — any combination can be shown at once. Colour still means the OUTCOME, so charter
+separates strategies by line dash + exit marker. A new strategy needs no charter change:
+export the file and rebuild the site.
 
 Not yet done: intraday price data (IBKR) to replace the daily-proxy fill assumptions.
 

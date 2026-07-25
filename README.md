@@ -81,8 +81,30 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   in range on one bar → `unknown_pl`**, booked as a **loss (−1R)** — without intraday data
   we cannot know which was hit first, so the doubt goes to the stop.
 - A gap through the stop still fills at the stop price.
-- A position still open when the market's data ends is reported as `open_at_end`
-  (unrealized, no P&L).
+- A position still open on the last bar is resolved by whether that market is still being
+  collected:
+  - **active market → `open_at_end`** (unrealized, no P&L). The trade is genuinely still
+    running; tomorrow's file will resolve it.
+  - **obsolete market → `data_end`**: flattened at that last bar's **close**, with a real
+    P&L. Collection has stopped for good, so the trade could never reach its target or its
+    stop — leaving it open would park an unresolvable position in the ledger forever and tie
+    up risk in the portfolio for an outcome that can never arrive. The last price the data
+    gives us is that close, so that is where we get out. Governed by
+    `CLOSE_OBSOLETE_AT_END` in `engine.py`; obsolete is the same relative rule charter uses
+    (`OBSOLETE_AFTER_DAYS`, default 30 — see the data window below).
+
+  **Known bias in `data_end`, accepted deliberately (user, 2026-07-25).** When the trade's
+  entry bar *is* the market's last bar, it is flattened the same day it opened, and that is
+  **always a winner**: the entry trigger requires the close to be beyond the entry level (a
+  long only fires when the close is above the first reversal, which is the entry price), so
+  marking out at that same close cannot lose. It is not a bug and should not be "fixed"
+  silently — it follows from the entry-fill assumption the model already makes (filled at the
+  reversal price intrabar), and that close is the only price the data offers. The effect is
+  bounded by the reversal-to-close distance and affects one trade today
+  (`USD_EUR_Cross_Rate`, +0.94R). Trades entered earlier and still open on the last bar carry
+  no such bias — their close can land either side of entry. The alternatives considered and
+  rejected were dropping the trade entirely (it never had a management day) and booking it
+  flat at entry.
 
 **One position per market at a time.** A new signal while in a trade in that market is
 ignored — which is why slowfix, holding longer, ends up with slightly **fewer** closed
@@ -95,6 +117,14 @@ Per market, trading starts the day after the market's reversals are **first repo
 (older array files carry no reversal block at all, so they produce no signals). Windows
 therefore differ per market (gold from 2025-12-15, several obsolete markets end 2026-04-17,
 etc.). Gold futures on the COMEX is the reference market.
+
+A market is **obsolete** when its newest daily bar lags the newest daily bar across *all*
+markets by more than `OBSOLETE_AFTER_DAYS` (30) — charter's rule, relative rather than a
+hardcoded date so it stays correct as the data moves on. Obsolete markets are still
+backtested and still reported; the only difference is that a position open on their last bar
+is flattened there (`data_end`) instead of left unresolved. Because obsolescence is measured
+across markets, `engine.run_markets` loads every market first and only then runs the
+backtests.
 
 ---
 
@@ -151,12 +181,12 @@ slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are o
 
 | | quickfix | slowfix |
 |---|---|---|
-| Net return | +168.67% | +203.54% |
-| Gross return | +177.18% | +212.88% |
+| Net return | +171.28% | +205.66% |
+| Gross return | +179.95% | +215.13% |
 | Max drawdown | 5.85% | 12.66% |
-| Closed trades | 78 | 75 |
-| Win rate | 41.0% | 26.7% |
-| Average hold | 2.3 bars | 3.9 bars |
+| Closed trades | 79 | 76 |
+| Win rate | 41.8% | 27.6% |
+| Average hold | 2.2 bars | 3.8 bars |
 | Max concurrent | 5 | 8 |
 | Time in market | 74% | 87% |
 
@@ -172,7 +202,7 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
 - **`<strategy>_gold_daily.json`** — single-market ledger: `meta`, `trades` (entry/exit,
   bars, R, pnl%, equity), `equity_curve`.
 - **`<strategy>_all_markets_daily.xlsx`** — `summary` (per-market: window, trades, win rate,
-  return, obsolete flag) + `trades` (all markets).
+  return, obsolete flag, and the `data_end` / `open_at_end` counts) + `trades` (all markets).
 - **`<strategy>_portfolio_daily.xlsx`** — `summary` (net/gross return, drawdown, streaks,
   averages, hold time, time in market, slippage), `equity_curve` (daily, with a chart),
   `trades` (gross/cost/net R, prices, P&L, running balance).
@@ -203,7 +233,8 @@ ever describe one strategy.
           "entry_date": "YYYY-MM-DD", "entry": <price>,
           "exit_date": "YYYY-MM-DD"|null, "exit": <price>|null,
           "stop": <price>, "target": <price>,
-          "reason": "target_5r"|"stop"|"bullish_reversal"|"bearish_reversal"|"unknown_pl"|"open_at_end",
+          "reason": "target_5r"|"stop"|"bullish_reversal"|"bearish_reversal"|"unknown_pl"
+                    |"data_end"|"open_at_end",
           "r": <gross R multiple>|null, "bars": <int>|null }
       ]
     }, ...
@@ -216,8 +247,8 @@ ever describe one strategy.
 (This replaced the single `charter_trades.json` when slowfix was added.)
 
 Trade geometry only — the entry plots at the first-reversal price on the entry bar, the exit
-at the fill level on the exit bar. `unknown_pl` exits at the stop; `open_at_end` has null
-exit. charter reads this at build time and overlays the trades on each market's **daily**
+at the fill level on the exit bar. `unknown_pl` exits at the stop; `data_end` exits at the
+last bar's close (drawn grey — it is not a rule exit); `open_at_end` has null exit. charter reads this at build time and overlays the trades on each market's **daily**
 price pane behind a toggle. To refresh the overlay end to end:
 
 1. Here: `venv\Scripts\python.exe export_charter_trades.py` (regenerate after a rule change).

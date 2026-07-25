@@ -80,6 +80,23 @@ MIN_REVERSALS = 3          # Rule 1: at least this many tested reversals
 MIN_RR = 3.5               # Rule 3: minimum reward-to-risk to take the trade
 TARGET_RR = 5.0            # Rule 4 reference distance (quickfix's cap; see strategies.py)
 
+# A market is OBSOLETE when its newest daily bar lags the newest daily bar across ALL markets
+# by more than this (charter's rule, and relative rather than a hardcoded date so it stays
+# correct as the data moves on). Defined here because the engine itself needs it -- see
+# CLOSE_OBSOLETE_AT_END.
+OBSOLETE_AFTER_DAYS = 30
+
+# Data collection for an obsolete market has stopped for good, so a position still open on
+# its last bar would never resolve: it can neither reach its target nor be stopped, and it
+# would sit in the ledger as 'open_at_end' forever, tying up risk in the portfolio for a
+# trade with no possible outcome. We therefore FLATTEN it at that last bar's CLOSE (exit
+# reason 'data_end') -- the last price the data actually gives us -- which books a real
+# P&L instead of a permanent unknown.
+#
+# This applies ONLY to obsolete markets. A position open on the last bar of an ACTIVE market
+# is genuinely still running and stays 'open_at_end': tomorrow's file will resolve it.
+CLOSE_OBSOLETE_AT_END = True
+
 
 # --- bar loading ------------------------------------------------------------------
 class Bar:
@@ -258,13 +275,21 @@ def r_multiple(pos, exit_price):
 
 
 # --- backtest loop ----------------------------------------------------------------
-def backtest(bars, tick, dp, strategy):
+def backtest(bars, tick, dp, strategy, close_at_end=False):
     """Run `strategy` over `bars` (oldest -> newest) with fresh capital.
 
     Data-driven window: entries fire from the first bar whose PREVIOUS file carries
     enough reversals, and run to the last bar. Returns dict(trades, equity_curve,
     final_equity, first_trade_date). One position at a time; the entry bar never exits
-    (management starts the next bar); an open position at the end is reported unrealized.
+    (management starts the next bar).
+
+    `close_at_end` decides what happens to a position still open on the LAST bar:
+      False (active market)   -> reported as 'open_at_end', unrealized, no P&L. The market
+                                 is still being collected, so the trade is genuinely running.
+      True  (obsolete market) -> flattened at that bar's CLOSE as 'data_end' with a real
+                                 P&L. The data has stopped, so the trade could never
+                                 resolve. Callers pass run_markets' obsolete flag; see
+                                 CLOSE_OBSOLETE_AT_END.
     """
     equity = STARTING_CAPITAL
     trades, equity_curve = [], []
@@ -302,7 +327,11 @@ def backtest(bars, tick, dp, strategy):
         pos["target"] = strategy.target(pos, sig_bull, sig_bear)[0]
         # the entry bar never exits: management starts on the next bar (loop continues)
 
-    if pos is not None:                        # still open at the end -> reported, unrealized
+    if pos is not None and close_at_end:       # obsolete market -> flatten at the last close
+        last = bars[-1]
+        equity = _close(pos, last, len(bars) - 1, last.close, "data_end", equity,
+                        trades, equity_curve, dp)
+    elif pos is not None:                      # still open at the end -> reported, unrealized
         trades.append(dict(id=pos["id"], side=pos["side"],
                            entry_date=str(pos["entry_date"].date()),
                            exit_date=None, bars_in_trade=None,
@@ -359,16 +388,29 @@ def run_markets(strategies, progress=True):
     take a precomputed result list: a full refresh loads the archive once, not once per
     output file.
 
-    Returns a list of dicts: name, bars, tick, dp, res={strategy key -> backtest result}.
+    Every market is loaded FIRST, because obsolescence is a cross-market property: it is
+    measured against the newest daily bar across all markets, and the backtest needs to know
+    it up front (an obsolete market's open position is flattened at its last close rather
+    than left unresolved -- see CLOSE_OBSOLETE_AT_END).
+
+    Returns a list of dicts: name, bars, tick, dp, obsolete, res={strategy key -> result}.
     """
-    out = []
+    loaded = []
     for d in market_dirs():
         bars = load_bars(d)
-        if not bars:
-            continue
+        if bars:
+            loaded.append((d.name, bars))
+    if not loaded:
+        return []
+    newest = max(b[-1].date for _, b in loaded)
+
+    out = []
+    for name, bars in loaded:
+        obsolete = (newest - bars[-1].date).days > OBSOLETE_AFTER_DAYS
         tick, dp = infer_tick(bars)
-        res = {s.key: backtest(bars, tick, dp, s) for s in strategies}
-        out.append(dict(name=d.name, bars=bars, tick=tick, dp=dp, res=res))
+        flatten = obsolete and CLOSE_OBSOLETE_AT_END
+        res = {s.key: backtest(bars, tick, dp, s, close_at_end=flatten) for s in strategies}
+        out.append(dict(name=name, bars=bars, tick=tick, dp=dp, obsolete=obsolete, res=res))
         if progress:
             parts = []
             for s in strategies:
@@ -376,7 +418,8 @@ def run_markets(strategies, progress=True):
                 closed = [t for t in r["trades"] if t["exit_reason"] != "open_at_end"]
                 parts.append(f"{s.key} {len(closed):>3}tr "
                              f"{(r['final_equity'] / STARTING_CAPITAL - 1) * 100:+7.2f}%")
-            print(f"{d.name:38} bars={len(bars):>4}  " + "  |  ".join(parts))
+            print(f"{'OBS ' if obsolete else '    '}{name:38} bars={len(bars):>4}  "
+                  + "  |  ".join(parts))
     return out
 
 

@@ -52,6 +52,12 @@ pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
 Each strategy gets its own page `output/equity_<strategy>.html`, and every page carries a
 strategy-switcher button row generated from the registry.
 
+Obsolete markets (last daily bar > `OBSOLETE_AFTER_DAYS` behind the newest across all
+markets) have stopped being collected, so a position open on their last bar can never
+resolve. Those are flattened at that bar's CLOSE with exit reason `data_end`
+(`CLOSE_OBSOLETE_AT_END` in `engine.py`); only ACTIVE markets still report `open_at_end`.
+Obsolescence is cross-market, so `run_markets` loads every market before backtesting any.
+
 Trades are handed to charter as `output/charter_trades_<strategy>.json`, one file per
 strategy in the same schema (this replaced the single `charter_trades.json`). Charter globs
 them, draws each as `trades_<key>`, and its **T** rail button opens a box with a checkbox per

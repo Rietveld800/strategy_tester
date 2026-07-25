@@ -229,8 +229,9 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
 
 ### The risk input on the equity pages
 
-Each page has a **risk per trade** control (number box + slider, 0–100%) that re-runs the
-entire shared-account simulation **in the browser** and redraws everything: equity curve,
+Each page has a **risk per trade** number box (0–100%, stepped 0.1 by its own up/down
+buttons, which are forced permanently visible rather than appearing on hover) that re-runs
+the entire shared-account simulation **in the browser** and redraws everything: equity curve,
 drawdown, KPIs, per-trade stats, the blotter's P&L columns and the per-market table.
 
 This works because **the trades are capital-independent**. Which trades fire, their entry
@@ -240,8 +241,8 @@ and reversals — risk changes the dollar sizing and nothing else. So the page c
 Python round-trip. The replay mirrors that loop exactly, including the same-day
 entries-before-exits ordering and the market-name sizing order.
 
-- Nothing is persisted: the page always opens at the documented default (1%) so it agrees
-  with the workbook, and **Reset** returns to it after exploring.
+- Nothing is persisted: the page always opens at the documented default (1%, from
+  `engine.RISK_PCT`) so it agrees with the workbook. Reload to get back to it.
 - Risk-**independent** figures stay put as you move the dial — trade count, win rate, R
   multiples, average hold, time in market, max concurrent. Only the money moves.
 - The page self-checks on load: at the default risk the replay must reproduce

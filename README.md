@@ -229,6 +229,21 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
   **risk dial** and the **Export PDF** button (both below).
 - **`report.html`** — the print/PDF report, carrying **every** strategy (below).
 
+### The market universe on the reports
+
+**Every market that was backtested appears under *By market*, including the ones that never
+produced a trade** — they show `0` trades and are tagged **obsolete** where that is why.
+Listing only the markets that traded made the research look far narrower than it was: 41
+markets are tested, the rules fire on 28, and "no setup ever qualified here" is itself a
+result worth seeing. The lede and footer now say both numbers.
+
+For an untraded row the sums are genuinely `0` (P&L, total R) while the ratios and extremes
+are **undefined**, so win rate, average R, best and worst print an em dash rather than a
+misleading `0%`. Those nulls always sort last, whichever way the column is pointed, so they
+never push the real rows off the top. The full list travels in
+`_equity_<strategy>.json` as `markets_all` (name + obsolete flag), written by
+`run_portfolio.py` from the backtest results.
+
 ### The rules block
 
 Each page states the strategy in full before any figure: the four numbered rules as cards

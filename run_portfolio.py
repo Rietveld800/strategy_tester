@@ -91,6 +91,10 @@ def collect(strategy, results):
 
 def run(strategy, results):
     raw, all_days = collect(strategy, results)
+    # EVERY market that was backtested, not just the ones that produced a trade. A market
+    # the rules never fired on is a real result and belongs in the per-market table as a
+    # zero, otherwise the report reads as though only 28 markets were ever researched.
+    universe = [dict(m=m["name"], obs=bool(m["obsolete"])) for m in results]
 
     # normalise each trade to (entry day, exit day, gross R, cost, net R). An open-at-end
     # trade "exits" on its market's last bar with gross R = 0 (outcome unknown).
@@ -165,13 +169,13 @@ def run(strategy, results):
                  win_rate=100 * wins / len(closed) if closed else 0.0,
                  max_open=max_open, max_committed_pct=max_committed_ratio,
                  first=first_day, last=all_days[-1] if all_days else None,
-                 n_markets=len({t["market"] for t in raw}),
+                 n_markets=len({t["market"] for t in raw}), n_markets_all=len(universe),
                  gross_final=gross_final, gross_ret=(gross_final / START_CAP - 1) * 100.0,
                  total_cost=total_cost, avg_bars=_avg_bars(closed),
                  time_in_market=100 * days_in_mkt / n_days if n_days else 0.0)
     stats.update(_streaks_and_avgs(raw))
     _write(strategy, raw, timeline, stats)
-    _write_json(strategy, raw, timeline, stats)
+    _write_json(strategy, raw, timeline, stats, universe)
     print(f"{strategy.key}: NET  ${cash:,.2f} ({stats['ret']:+.2f}%)   "
           f"gross ${gross_final:,.0f} ({stats['gross_ret']:+.2f}%)   "
           f"cost drag ${total_cost:,.0f}")
@@ -276,8 +280,12 @@ def _trade_rows(raw):
     return rows
 
 
-def _write_json(strategy, raw, timeline, stats):
-    """Compact daily series, per-trade rows, and headline stats for the equity-curve page."""
+def _write_json(strategy, raw, timeline, stats, universe):
+    """Compact daily series, per-trade rows, and headline stats for the equity-curve page.
+
+    `universe` is every market backtested, with its obsolete flag -- the page seeds the
+    per-market table from it so markets that produced no trade still show, as zeros.
+    """
     pts = [dict(date=str(t["date"]), cash=round(t["cash"], 2), open=t["open_count"],
                 markets=t["open_markets"], dd=round(t["dd"], 2),
                 entries=t["entries"], exits=t["exits"]) for t in timeline]
@@ -288,7 +296,8 @@ def _write_json(strategy, raw, timeline, stats):
                ret=round(stats["ret"] / 100.0, 4), maxdd=round(-stats["max_dd"], 2),
                first=pts[0]["date"], last=pts[-1]["date"], n=len(pts),
                n_trades=stats["n_trades"], win_rate=stats["win_rate"],
-               n_markets=stats["n_markets"],
+               n_markets=stats["n_markets"], n_markets_all=stats["n_markets_all"],
+               markets_all=universe,
                max_open=stats["max_open"], time_in_market=round(stats["time_in_market"], 1),
                gross_final=round(stats["gross_final"], 2),
                gross_ret=round(stats["gross_ret"] / 100.0, 4),
@@ -365,6 +374,7 @@ def _sheet_summary(ws, strategy, s):
         ("longest loss streak", s["long_loss"]),
         ("average win", f"{s['avg_win']:,.0f}  ({s['avg_win_pct']:+.2f}%)"),
         ("average loss", f"{s['avg_loss']:,.0f}  ({s['avg_loss_pct']:+.2f}%)"),
+        ("markets tested", s["n_markets_all"]),
         ("markets with trades", s["n_markets"]),
         ("max concurrent positions", s["max_open"]),
         ("time in market", f"{s['time_in_market']:.0f}% of trading days"),

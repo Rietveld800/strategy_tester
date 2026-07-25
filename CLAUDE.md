@@ -49,10 +49,15 @@ strategy-parameterized and take optional strategy keys, defaulting to all: `run_
 part). Adding strategy 3 means one entry in `strategies.py`; nothing else. `venv\` has
 pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
 
-Each strategy gets its own page `output/equity_<strategy>.html`, and every page carries a
-strategy-switcher button row generated from the registry, plus a **risk per trade** number
-box (0-100%, spinners forced always-visible) that re-runs the whole shared-account
-simulation client-side and redraws every figure. That is possible because the trades are capital-independent: risk changes the dollar
+Each strategy gets its own page `output/equity_<strategy>.html`, plus `output/report.html`
+(every strategy, print/PDF). Pages carry a strategy-switcher row generated from the registry,
+the **four rules** (1-3 shared text in `strategies.py`, 4 per strategy), a **risk per trade**
+number box (0-100%, spinners forced always-visible) that re-runs the whole shared-account
+simulation client-side, and **Export PDF** (picker -> `report.html?s=...&auto=1` -> the
+browser's own print-to-PDF; no PDF library is bundled, on purpose). Both page types come from
+one stylesheet + one markup section + one renderer FACTORY (`mountReport(root, DATA)`), so
+the report mounts several strategies without a second renderer. Entries use reversal levels
+ONLY -- never describe these strategies as using a time/cycle signal. That is possible because the trades are capital-independent: risk changes the dollar
 sizing only, never the R multiples, so the page replays `run_portfolio.py`'s loop over the
 trade list it already has. It self-checks against the server's figure at the default risk
 (console warning on drift) — if you change the money management in `run_portfolio.py`, change

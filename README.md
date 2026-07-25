@@ -228,6 +228,8 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
   new strategy appears on every page as soon as the pages are rebuilt. It also carries the
   **risk dial** and the **Export PDF** button (both below).
 - **`report.html`** — the print/PDF report, carrying **every** strategy (below).
+- **`conclusions.html`** — two free-text fields that print at the end of the exported PDF
+  (below).
 
 ### The market universe on the reports
 
@@ -268,6 +270,23 @@ PDF" there.
 selectable, searchable vector text and small files; an `html2canvas`/`jsPDF` approach
 rasterises the page into images, adds hundreds of KB to every page, and would make the trade
 tables unsearchable.
+
+### Conclusions
+
+The **Conclusions** button (immediately left of Export PDF) opens `conclusions.html`: two
+large fields, **General conclusions** and **Final conclusions of the author**, whose text is
+printed at the **end of the exported PDF**, after the last strategy. Both are optional — an
+empty one is left out of the report entirely rather than printing a bare heading.
+
+The text is saved in the browser as you type (`localStorage`, key `strategy_conclusions`);
+it is never written to a file and never leaves the machine. **Export PDF also passes it to
+the report in the URL hash**, because two `file://` documents do not reliably share storage
+in every browser and the text has to survive the hop either way; a hash is read by the page
+itself and sent nowhere. The report prefers the hash and falls back to storage, so opening
+`report.html` directly still picks up whatever is saved.
+
+Since the conclusions are report-level rather than per-strategy, there is one pair of fields
+regardless of how many strategies are selected.
 
 `report.html` embeds every strategy and filters client-side from its query string —
 `report.html?s=quickfix,slowfix&risk=1.5&auto=1` (`auto=1` opens the print dialog on load).

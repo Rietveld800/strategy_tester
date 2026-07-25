@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conclusions</title>
+<style>
+:root{
+  --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
+  --grid:rgba(20,32,28,.09); --border:rgba(20,32,28,.11);
+  --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
+  --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
+  --bars:#5C7D8A; --pos:#0F7B57;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0D1512; --surface:#121C18; --ink:#E9EFEB; --ink2:#9BAAA3; --ink3:#66756E;
+    --grid:rgba(233,239,235,.08); --border:rgba(233,239,235,.11);
+    --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
+    --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
+    --bars:#79A0B2; --pos:#3CC796;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
+  --grid:rgba(20,32,28,.09); --border:rgba(20,32,28,.11);
+  --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
+  --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
+  --bars:#5C7D8A; --pos:#0F7B57;
+}
+:root[data-theme="dark"]{
+  --bg:#0D1512; --surface:#121C18; --ink:#E9EFEB; --ink2:#9BAAA3; --ink3:#66756E;
+  --grid:rgba(233,239,235,.08); --border:rgba(233,239,235,.11);
+  --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
+  --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
+  --bars:#79A0B2; --pos:#3CC796;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.5;-webkit-font-smoothing:antialiased;}
+.mono{font-family:"SF Mono","JetBrains Mono","Cascadia Code",Consolas,"Roboto Mono",ui-monospace,monospace;
+  font-variant-numeric:tabular-nums;}
+.wrap{max-width:1080px;margin:0 auto;padding:clamp(20px,4vw,44px) clamp(16px,4vw,32px) 56px;}
+/* strategy switcher: one button per strategy, current one filled */
+.nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:26px;
+  padding-bottom:18px;border-bottom:1px solid var(--border);}
+.nav .lbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin-right:4px;}
+.nav a{display:inline-flex;flex-direction:column;gap:1px;padding:7px 14px;border-radius:9px;
+  border:1px solid var(--border);background:var(--surface);color:var(--ink2);
+  text-decoration:none;font-size:13px;font-weight:600;transition:border-color .12s,color .12s;}
+.nav a .sub{font-size:10.5px;font-weight:500;color:var(--ink3);letter-spacing:0;}
+.nav a:hover{border-color:var(--accent);color:var(--ink);}
+.nav a.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.nav a.on .sub{color:rgba(255,255,255,.82);}
+.navbtns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+.pdfbtn{padding:8px 14px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink2);font-size:13px;font-weight:600;cursor:pointer;
+  font-family:inherit;}
+.pdfbtn:hover{border-color:var(--accent);color:var(--ink);}
+/* conclusions editor */
+.cfield{margin-top:22px;}
+.cfield label{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin-bottom:7px;}
+.cfield textarea{width:100%;min-height:230px;padding:14px 16px;font:15px/1.6 inherit;
+  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  color:var(--ink);background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;resize:vertical;}
+.cfield textarea:focus{outline:none;border-color:var(--accent);}
+.cbar{display:flex;align-items:center;gap:12px;margin-top:18px;}
+.cbar .status{font-size:12px;color:var(--ink3);}
+/* conclusions as printed at the end of the report */
+.concl{margin-top:38px;padding-top:6px;}
+.conclbody{white-space:pre-wrap;font-size:14px;color:var(--ink2);line-height:1.65;
+  padding:14px 18px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;}
+header{margin-bottom:26px;}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:600;margin-bottom:12px;}
+h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spacing:-.02em;
+  text-wrap:balance;font-weight:650;}
+/* No max-width: the lede and the honesty note run the full column so their left and right
+   edges line up with the rule cards, KPI row and tables below them. */
+.lede{color:var(--ink2);font-size:15px;margin:0;}
+/* the four rules, so a first-time reader can follow the report */
+.rules{margin:24px 0 0;border:1px solid var(--border);border-radius:12px;
+  background:var(--surface);overflow:hidden;}
+.rules .rhead{padding:12px 16px 10px;border-bottom:1px solid var(--border);}
+.rules .rhead .t{font-weight:650;font-size:14px;letter-spacing:-.01em;}
+.rules .rhead .s{font-size:12px;color:var(--ink3);margin-top:2px;}
+.rulegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);}
+@media(max-width:720px){.rulegrid{grid-template-columns:1fr}}
+.rule{background:var(--surface);padding:12px 16px 14px;display:flex;gap:11px;}
+.rule .n{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);
+  color:var(--accent);font-size:11.5px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;margin-top:1px;}
+.rule .rn{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin-bottom:3px;}
+.rule .rt{font-size:13px;color:var(--ink2);line-height:1.5;}
+.rule b{color:var(--ink);font-weight:600;}
+.rulefoot{padding:12px 16px;border-top:1px solid var(--border);font-size:13px;
+  color:var(--ink2);line-height:1.5;}
+.rulefoot b{color:var(--ink);font-weight:600;}
+.rulefoot + .rulefoot{border-top:1px dashed var(--border);}
+/* risk control: re-runs the shared-account simulation in the browser */
+.riskbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:22px 0 0;
+  padding:12px 16px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;}
+.riskbar .lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;}
+.riskbar input[type=number]{width:92px;padding:5px 7px;font-size:14px;font-weight:600;
+  color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-variant-numeric:tabular-nums;}
+/* The up/down buttons ARE the control here, so they must always be visible. Chrome renders
+   the spinners only while the field is hovered or focused; forcing the appearance and
+   opacity keeps them on permanently. */
+.riskbar input[type=number]::-webkit-outer-spin-button,
+.riskbar input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance:inner-spin-button;opacity:1;margin:0;height:26px;}
+.riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
+.riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
+.riskbar .warn:empty{display:none}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:22px 0 22px;}
+.kpi{background:var(--surface);padding:14px 16px 15px;display:flex;flex-direction:column;gap:5px;}
+.kpi .k{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:600;}
+.kpi .v{font-size:clamp(17px,2.2vw,21px);font-weight:600;letter-spacing:-.01em;}
+.kpi .v.pos{color:var(--pos)}.kpi .v.neg{color:var(--neg)}
+.kpi .sub{font-size:11px;color:var(--ink3);}
+@media(max-width:460px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:16px clamp(10px,2vw,18px) 10px;}
+.charthead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2px 6px 10px;}
+.charthead .t{font-weight:600;font-size:14px;letter-spacing:-.01em;}
+.charthead .s{font-size:12px;color:var(--ink3);}
+.plot{position:relative;width:100%;touch-action:none;}
+.plot svg{display:block;width:100%;height:auto;}
+text{font-family:"SF Mono",Consolas,ui-monospace,monospace;}
+.tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:12px;min-width:180px;
+  max-width:260px;box-shadow:0 8px 26px rgba(0,0,0,.18);z-index:5;}
+.tip .d{font-weight:600;margin-bottom:6px;letter-spacing:-.01em;}
+.tip .row{display:flex;justify-content:space-between;gap:14px;color:var(--ink2);margin:2px 0;}
+.tip .row b{color:var(--ink);font-weight:600;}
+.tip .ev{margin-top:7px;padding-top:7px;border-top:1px solid var(--border);font-size:11px;color:var(--ink2);}
+.tip .ev .in{color:var(--pos)}.tip .ev .out{color:var(--neg)}
+.tip .mk{margin-top:6px;font-size:11px;color:var(--ink3);line-height:1.35;}
+.note{margin:22px 0 0;padding:14px 18px;background:var(--accent-soft);
+  border-left:3px solid var(--accent);border-radius:0 8px 8px 0;font-size:13.5px;color:var(--ink2);}
+.note b{color:var(--ink);font-weight:600;}
+details{margin-top:22px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);}
+summary{cursor:pointer;padding:13px 16px;font-weight:600;font-size:13px;list-style:none;color:var(--ink2);}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"\25B8  ";color:var(--accent);}
+details[open] summary::before{content:"\25BE  ";}
+.tscroll{max-height:340px;overflow:auto;border-top:1px solid var(--border);}
+table{border-collapse:collapse;width:100%;font-size:12px;}
+th,td{padding:6px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);}
+th{position:sticky;top:0;background:var(--surface);color:var(--ink3);font-weight:600;text-align:right;
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;}
+th:first-child,td:first-child{text-align:left;}
+tbody tr:hover{background:var(--accent-soft);}
+td.neg{color:var(--neg)}td.pos{color:var(--pos)}
+.section-h{font-size:16px;font-weight:650;letter-spacing:-.01em;margin:34px 2px 12px;}
+.stats4{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+@media(max-width:640px){.stats4{grid-template-columns:repeat(2,1fr)}}
+.tradecard{margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);}
+.tradescroll{max-height:470px;overflow-y:auto;overflow-x:hidden;}
+table.trades{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;table-layout:fixed;}
+table.trades th,table.trades td{padding:6px 7px;}
+table.trades th{position:sticky;top:0;background:var(--surface);cursor:pointer;user-select:none;z-index:1;}
+table.trades th:hover{color:var(--ink);}
+table.trades th.sorted{color:var(--accent);}
+table.trades .ar{font-size:9px;margin-left:2px;}
+table.trades td.l,table.trades th.l{text-align:left;}
+/* the two text columns (market, reason) wrap; the rest stay one line */
+table.trades td:first-child,table.trades th:first-child,
+table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
+.tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:20px;
+  background:var(--grid);color:var(--ink3);font-size:9.5px;letter-spacing:.04em;
+  text-transform:uppercase;font-weight:600;vertical-align:1px;}
+.dbar{position:relative;height:5px;margin-top:4px;border-radius:3px;background:var(--grid);}
+.dbar i{position:absolute;top:0;height:100%;border-radius:3px;}
+.dbar .z{position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:var(--border);}
+footer{margin-top:30px;font-size:12px;color:var(--ink3);}
+/* modal: strategy picker for the PDF export */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.34);z-index:40;display:flex;
+  align-items:center;justify-content:center;padding:20px;}
+.dlg{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px 16px;max-width:460px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3);}
+.dlg h4{margin:0 0 4px;font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.dlg p{margin:0 0 12px;font-size:12.5px;color:var(--ink3);}
+.dlglist{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.dlgrow{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;}
+.dlgrow + .dlgrow{border-top:1px solid var(--border);}
+.dlgrow:hover{background:var(--accent-soft);}
+.dlgrow input{margin:0;cursor:pointer;accent-color:var(--accent);}
+.dlgrow .nm{font-size:13.5px;font-weight:600;}
+.dlgrow .sb{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:1px;}
+.dlgbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+.dlgbtns button{padding:7px 14px;font-size:13px;font-weight:600;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg);color:var(--ink2);cursor:pointer;
+  font-family:inherit;}
+.dlgbtns button.pri{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dlgbtns button:hover{border-color:var(--accent);}
+.rep + .rep{margin-top:48px;padding-top:8px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---- print / PDF -------------------------------------------------------------
+   Forced to the LIGHT palette: the dark theme would print as a solid ink-heavy
+   background. print-color-adjust keeps the greens, reds and tints that carry meaning. */
+@media print{
+  :root, :root[data-theme="dark"]{
+    --bg:#FFFFFF; --surface:#FFFFFF; --ink:#16201C; --ink2:#3F4C47; --ink3:#6B7A74;
+    --grid:rgba(20,32,28,.10); --border:rgba(20,32,28,.22);
+    --accent:#0F7B57; --accent-soft:rgba(15,123,87,.10); --accent-line:#0F7B57;
+    --neg:#B4402A; --neg-soft:rgba(180,64,42,.12); --ref:rgba(20,32,28,.35);
+    --bars:#5C7D8A; --pos:#0F7B57;
+  }
+  @page{size:A4 portrait;margin:13mm 11mm;}
+  html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .noprint{display:none!important;}
+  .wrap{max-width:none;padding:0;}
+  /* scroll boxes must open up: a PDF cannot be scrolled */
+  .tradescroll,.tscroll{max-height:none!important;overflow:visible!important;}
+  table.trades th,table th{position:static;}
+  /* one strategy per page, and never split a block across the fold */
+  .rep{break-before:page;}
+  .rep:first-of-type{break-before:auto;}
+  .card,.kpis,.stats4,.rules,.note,.tradecard{break-inside:avoid;}
+  .section-h{break-after:avoid;}
+  tr{break-inside:avoid;}
+  a{text-decoration:none;color:inherit;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><span class="lbl">Back to</span><a href="equity_quickfix.html">Quickfix</a><a href="equity_slowfix.html">Slowfix</a><span class="navbtns"><a class="pdfbtn" href="report.html" target="_blank">Open report</a></span></nav>
+<header>
+  <div class="eyebrow">Report &middot; conclusions</div>
+  <h1>Conclusions</h1>
+  <p class="lede">Whatever you write here is printed at the <b>end of the exported PDF</b>, after the last strategy. Both fields are optional &mdash; an empty one is left out of the report entirely. The text is saved in this browser as you type; it is not written to any file and never leaves your machine.</p>
+</header>
+<div class="cfield">
+  <label for="cgeneral">General conclusions</label>
+  <textarea id="cgeneral" placeholder="What the results show across the strategies..."></textarea>
+</div>
+<div class="cfield">
+  <label for="cfinal">Final conclusions of the author</label>
+  <textarea id="cfinal" placeholder="Your own reading, caveats and what you intend to do next..."></textarea>
+</div>
+<div class="cbar">
+  <button class="pdfbtn" id="csave" type="button">Save</button>
+  <button class="pdfbtn" id="cclear" type="button">Clear both</button>
+  <span class="status" id="cstatus"></span>
+</div>
+</div>
+<script>
+// Two free-text fields, kept in this browser and printed at the end of the exported PDF.
+// Nothing is sent anywhere and no file on disk is written -- the report reads them back when
+// it prints (via localStorage, or via the URL hash when opened from a file:// path, where
+// browsers do not reliably share storage between two local documents).
+const CONCL_KEY = "strategy_conclusions";
+const gEl = document.getElementById("cgeneral");
+const fEl = document.getElementById("cfinal");
+const status = document.getElementById("cstatus");
+function load(){
+  let c = null;
+  try { c = JSON.parse(localStorage.getItem(CONCL_KEY) || "null"); } catch(e){}
+  if (c){ gEl.value = c.general || ""; fEl.value = c.final || ""; }
+}
+let t = null;
+function save(quiet){
+  try {
+    localStorage.setItem(CONCL_KEY, JSON.stringify({general:gEl.value, final:fEl.value}));
+    status.textContent = quiet ? "Saved automatically." : "Saved.";
+  } catch(e){
+    status.textContent = "Could not save in this browser -- copy the text elsewhere before leaving.";
+  }
+}
+[gEl, fEl].forEach(el => el.addEventListener("input", () => {
+  status.textContent = "Typing...";
+  clearTimeout(t);
+  t = setTimeout(() => save(true), 500);        // autosave, so nothing is lost on navigation
+}));
+document.getElementById("csave").addEventListener("click", () => save(false));
+document.getElementById("cclear").addEventListener("click", () => {
+  if (!gEl.value && !fEl.value) return;
+  gEl.value = ""; fEl.value = ""; save(false);
+});
+load();
+status.textContent = (gEl.value || fEl.value) ? "Loaded your saved text." : "";
+</script>
+</body>
+</html>

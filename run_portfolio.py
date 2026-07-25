@@ -71,6 +71,9 @@ def cost_in_r(trade):
     elif reason in ("stop", "unknown_pl"):
         exit_ticks = SLIP_STOP_TICKS
     else:
+        # Includes 'data_end' (an obsolete market flattened at its last close): that is an
+        # orderly close-out at the bell, not a stop triggered into a gap, so it is charged
+        # the limit/target rate rather than the stop rate.
         exit_ticks = SLIP_TARGET_TICKS
     return (SLIP_ENTRY_TICKS + exit_ticks) * trade["tick"] / rpu
 

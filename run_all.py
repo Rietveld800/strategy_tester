@@ -24,13 +24,11 @@ from openpyxl.utils import get_column_letter
 import engine as eng
 import strategies
 
-OBSOLETE_AFTER_DAYS = 30          # charter's rule: lagging the newest daily file by > 30d
-
 TRADE_COLS = ["market", "id", "side", "entry_date", "exit_date", "bars_in_trade",
               "entry", "stop", "target", "exit_price", "exit_reason",
               "r_multiple", "pnl_pct", "equity_before", "equity_after"]
 SUMMARY_COLS = ["market", "obsolete", "first_reversal", "last_bar", "bars", "trades",
-                "wins", "stops", "unknown", "open_at_end", "win_rate_%",
+                "wins", "stops", "unknown", "data_end", "open_at_end", "win_rate_%",
                 "return_%", "final_equity"]
 
 
@@ -51,11 +49,13 @@ def write(strategy, results):
     newest = max(m["bars"][-1].date for m in results)
     per_market = []
     for m in results:
-        last_bar = m["bars"][-1].date
+        # `obsolete` comes from run_markets, which already had to decide it before the
+        # backtest ran (an obsolete market's open trade is flattened at its last close).
+        # Recomputing it here would be a second definition waiting to drift.
         per_market.append(dict(
             name=m["name"], bars=m["bars"], res=m["res"][strategy.key],
-            first_rev=first_reversal_date(m["bars"]), last_bar=last_bar,
-            obsolete=(newest - last_bar).days > OBSOLETE_AFTER_DAYS))
+            first_rev=first_reversal_date(m["bars"]), last_bar=m["bars"][-1].date,
+            obsolete=m["obsolete"]))
 
     wb = Workbook()
     _sheet_summary(wb.active, strategy, per_market, newest)
@@ -80,6 +80,7 @@ def _summ_row(m):
     wins = sum(1 for t in closed if t["pnl_pct"] > 0)
     stops = sum(1 for t in closed if t["exit_reason"] == "stop")
     unknown = sum(1 for t in closed if t["exit_reason"] == "unknown_pl")
+    data_end = sum(1 for t in closed if t["exit_reason"] == "data_end")
     open_end = sum(1 for t in trades if t["exit_reason"] == "open_at_end")
     ret = (m["res"]["final_equity"] / eng.STARTING_CAPITAL - 1) * 100
     win_rate = (100 * wins / len(closed)) if closed else None
@@ -87,7 +88,7 @@ def _summ_row(m):
                 first_reversal=str(m["first_rev"].date()) if m["first_rev"] else "",
                 last_bar=str(m["last_bar"].date()), bars=len(m["bars"]),
                 trades=len(closed), wins=wins, stops=stops, unknown=unknown,
-                open_at_end=open_end,
+                data_end=data_end, open_at_end=open_end,
                 win_rate=round(win_rate, 1) if win_rate is not None else None,
                 ret=round(ret, 2), final_equity=round(m["res"]["final_equity"], 2))
 
@@ -124,8 +125,8 @@ def _sheet_summary(ws, strategy, per_market, newest):
     rows.sort(key=lambda r: (r["obsolete"] == "yes", -r["ret"]))
     for r in rows:
         vals = [r["market"], r["obsolete"], r["first_reversal"], r["last_bar"], r["bars"],
-                r["trades"], r["wins"], r["stops"], r["unknown"], r["open_at_end"],
-                r["win_rate"], r["ret"], r["final_equity"]]
+                r["trades"], r["wins"], r["stops"], r["unknown"], r["data_end"],
+                r["open_at_end"], r["win_rate"], r["ret"], r["final_equity"]]
         ws.append(vals)
         row = ws.max_row
         ret_cell = ws.cell(row, SUMMARY_COLS.index("return_%") + 1)
@@ -140,7 +141,9 @@ def _sheet_summary(ws, strategy, per_market, newest):
     note = (f"{strategy.key} daily ({strategy.rule4}), "
             f"starting capital {eng.STARTING_CAPITAL:,.0f}, "
             f"risk {eng.RISK_PCT}%/trade, fees {eng.FEES}. "
-            f"obsolete = last bar > {OBSOLETE_AFTER_DAYS}d before newest ({newest.date()}). "
+            f"obsolete = last bar > {eng.OBSOLETE_AFTER_DAYS}d before newest "
+            f"({newest.date()}); a position still open on an obsolete market's last bar is "
+            f"flattened at that bar's close (data_end). "
             f"generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}.")
     ws.append([])
     ws.append([note])

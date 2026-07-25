@@ -1105,13 +1105,13 @@
      "side": "long",
      "entry_date": "2026-04-17",
      "entry": 0.8467,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-04-17",
+     "exit": 0.8498,
      "stop": 0.8436,
      "target": 0.8693,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "data_end",
+     "r": 1.0,
+     "bars": 0
     }
    ]
   }

@@ -257,7 +257,8 @@ const fmtPrice=v=>{ if(v==null)return "—"; const a=Math.abs(v);
 const signFix=(v,d)=> v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
 const signUSD=v=> v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
 const prettyReason=r=>({target_5r:"5R target",stop:"stop",unknown_pl:"unknown P/L",
-  bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",open_at_end:"open at end"})[r]||r;
+  bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
+  data_end:"data ended",open_at_end:"open at end"})[r]||r;
 const COLS=[
   {k:"market",l:"Market",t:"s",w:15},{k:"side",l:"Side",t:"s",w:6},
   {k:"din",l:"In",t:"d",w:8.5},{k:"dout",l:"Out",t:"d",w:8.5},{k:"bars",l:"Bars",t:"n",w:5},

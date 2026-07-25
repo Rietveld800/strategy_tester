@@ -184,6 +184,9 @@ table.trades td.l,table.trades th.l{text-align:left;}
 /* the two text columns (market, reason) wrap; the rest stay one line */
 table.trades td:first-child,table.trades th:first-child,
 table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
+.tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:20px;
+  background:var(--grid);color:var(--ink3);font-size:9.5px;letter-spacing:.04em;
+  text-transform:uppercase;font-weight:600;vertical-align:1px;}
 .dbar{position:relative;height:5px;margin-top:4px;border-radius:3px;background:var(--grid);}
 .dbar i{position:absolute;top:0;height:100%;border-radius:3px;}
 .dbar .z{position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:var(--border);}
@@ -540,18 +543,33 @@ function mountReport(root, DATA){
   let MK=[], maxAbsPnl=1;
   function mBuild(){
     const byM={};
+    // Seed EVERY market that was backtested, so the ones the rules never fired on appear as
+    // zeros instead of vanishing. "No trade here" is a result, and a table listing only the
+    // markets that traded reads as though the others were never researched.
+    const blank = m => ({market:m, obs:false, n:0, wins:0, pnl:0, totalr:0, best:null, worst:null});
+    (DATA.markets_all || []).forEach(u => { byM[u.m] = Object.assign(blank(u.m), {obs:!!u.obs}); });
     for(const t of T){ if(t.reason==="open_at_end") continue;
-      const m=byM[t.market]||(byM[t.market]={market:t.market,n:0,wins:0,pnl:0,totalr:0,best:-1e9,worst:1e9});
+      const m = byM[t.market] || (byM[t.market] = blank(t.market));
       m.n++; if(t.pnl>0)m.wins++; m.pnl+=t.pnl; m.totalr+=t.r;
-      m.best=Math.max(m.best,t.r); m.worst=Math.min(m.worst,t.r);
+      m.best = m.best==null ? t.r : Math.max(m.best,t.r);
+      m.worst = m.worst==null ? t.r : Math.min(m.worst,t.r);
     }
-    MK=Object.values(byM).map(m=>Object.assign(m,{winrate:100*m.wins/m.n, avgr:m.totalr/m.n}));
+    // Sums stay 0 for an untraded market (truthfully nothing); ratios and extremes are
+    // UNDEFINED there, so they are null and print as an em dash rather than a fake 0%.
+    MK=Object.values(byM).map(m=>Object.assign(m,{
+      winrate: m.n ? 100*m.wins/m.n : null,
+      avgr: m.n ? m.totalr/m.n : null}));
     maxAbsPnl=Math.max(1,...MK.map(m=>Math.abs(m.pnl)));
-    $("mcount").textContent = MK.length+" markets";
+    const traded = MK.filter(m => m.n > 0).length;
+    $("mcount").textContent = MK.length+" markets · "+traded+" with trades";
   }
   const MCOLS = [
-    {k:"market",l:"Market",t:"s",w:22},{k:"n",l:"Trades",t:"n",w:9},
-    {k:"winrate",l:"Win %",t:"n",f:v=>v.toFixed(0)+"%",w:10},
+    // An obsolete market stopped being collected, which is usually WHY it has no trades --
+    // worth saying on the row rather than leaving the reader to wonder.
+    {k:"market",l:"Market",t:"s",w:22,
+     rowf:m => m.market + (m.obs ? '<span class="tag">obsolete</span>' : '')},
+    {k:"n",l:"Trades",t:"n",w:9},
+    {k:"winrate",l:"Win %",t:"n",f:v=>v==null?"—":v.toFixed(0)+"%",w:10},
     {k:"pnl",l:"P&L $",t:"n",f:signUSD,bar:1,w:22},
     {k:"totalr",l:"Total R",t:"n",f:v=>signFix(v,2),color:1,w:11},
     {k:"avgr",l:"Avg R",t:"n",f:v=>signFix(v,2),color:1,w:10},
@@ -577,10 +595,14 @@ function mountReport(root, DATA){
   }
   function mRows(){
     const col = MCOLS.find(c=>c.k===mKey);
+    // Untraded markets carry nulls in the ratio columns; they sort LAST whichever way the
+    // column is pointed, so they never push the real rows off the top.
     const rows = [...MK].sort((a,b)=>{ const x=a[mKey],y=b[mKey];
+      if(x==null&&y==null)return 0; if(x==null)return 1; if(y==null)return -1;
       return (col.t==="n"?(x-y):String(x).localeCompare(String(y)))*mDir; });
     $("mbody").innerHTML = rows.map(m=>"<tr>"+MCOLS.map(c=>{
-      const v=m[c.k]; const disp=c.bar?pnlBar(v):(c.f?c.f(v):v);
+      const v=m[c.k];
+      const disp = c.bar ? pnlBar(v) : (c.rowf ? c.rowf(m) : (c.f ? c.f(v) : v));
       let cls=(c.t==="n")?"mono":"l"; if(c.color&&v!=null) cls+=v>0?" pos":v<0?" neg":"";
       return `<td class="${cls}">${disp}</td>`;
     }).join("")+"</tr>").join("");
@@ -895,11 +917,16 @@ def section_html(strategy, data, riskbar, daily):
     # NOTE: no "time and price" here. These strategies read the reversal levels only; the
     # aggregate/timing side of the Socrates method is not involved, and saying otherwise
     # misled a first-time reader (user, 2026-07-25).
-    lede = (f"{strategy.lede} One shared account trading Socrates <b>reversal levels</b> "
-            f"across {data['n_markets']} markets, {month_year(data['first'])} "
-            f"&ndash; {month_year(data['last'])}. Capital moves only when a trade closes; "
-            f"each new trade risks <span class=\"riskecho\">{eng.RISK_PCT:g}%</span> of "
-            f"liquid capital. Figures are net of realistic slippage.")
+    # n_markets_all is the RESEARCHED universe; n_markets is how many produced a trade. The
+    # page used to print only the latter, which read as though the rest were never tested.
+    n_all = data.get("n_markets_all", data["n_markets"])
+    lede = (f"{strategy.lede} One shared account trading Socrates <b>reversal levels</b>. "
+            f"All <b>{n_all} markets</b> in the archive were tested, "
+            f"{month_year(data['first'])} &ndash; {month_year(data['last'])}; the rules "
+            f"fired on <b>{data['n_markets']}</b> of them, and the rest are listed with zero "
+            f"trades under <em>By market</em>. Capital moves only when a trade closes; each "
+            f"new trade risks <span class=\"riskecho\">{eng.RISK_PCT:g}%</span> of liquid "
+            f"capital. Figures are net of realistic slippage.")
     note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
             f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
             f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
@@ -908,7 +935,8 @@ def section_html(strategy, data, riskbar, daily):
             f"is no commission or funding. Read it as evidence of an edge, not a return "
             f"forecast.")
     footer = (f"source: {strategy.key}_portfolio_daily.xlsx &middot; "
-              f"{data['n_markets']} markets &middot; rule 4: {strategy.rule4} &middot; "
+              f"{n_all} markets tested, {data['n_markets']} traded &middot; "
+              f"rule 4: {strategy.rule4} &middot; "
               f"per-market one-position-at-a-time, portfolio-level concurrency")
     return (SECTION_HTML
             .replace("__EYEBROW__", eyebrow)

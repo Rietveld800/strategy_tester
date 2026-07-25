@@ -57,7 +57,10 @@ simulation client-side, and **Export PDF** (picker -> `report.html?s=...&auto=1`
 browser's own print-to-PDF; no PDF library is bundled, on purpose). Both page types come from
 one stylesheet + one markup section + one renderer FACTORY (`mountReport(root, DATA)`), so
 the report mounts several strategies without a second renderer. Entries use reversal levels
-ONLY -- never describe these strategies as using a time/cycle signal. That is possible because the trades are capital-independent: risk changes the dollar
+ONLY -- never describe these strategies as using a time/cycle signal. The per-market table
+lists EVERY tested market (41), not just the 28 that traded: a market with no setups is a
+result, so it shows 0 trades with an obsolete tag where applicable, and undefined ratios
+print an em dash rather than 0%. That is possible because the trades are capital-independent: risk changes the dollar
 sizing only, never the R multiples, so the page replays `run_portfolio.py`'s loop over the
 trade list it already has. It self-checks against the server's figure at the default risk
 (console warning on drift) — if you change the money management in `run_portfolio.py`, change

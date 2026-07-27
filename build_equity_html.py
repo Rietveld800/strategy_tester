@@ -360,6 +360,7 @@ __RISKBAR__
   </div>
 __DAILY__
 __CAPCHART__
+__FINECHART__
   <footer class="mono">__FOOTER__</footer>
 </section>"""
 
@@ -397,6 +398,31 @@ CAPCHART_HTML = r"""
       <div class="tip" data-el="nwtip"></div>
     </div>
     <div class="findings" data-el="capfindings"></div>
+  </section>
+"""
+
+# The zoomed companion to the chart above. Same method, same 6% budget, same plotter -- only
+# the grid differs (1R-3R at 0.1R instead of 2R-10R at 0.25R). It exists because the wide
+# chart's answer was "somewhere in 2R-3R", which its own axis is too coarse to refine, and
+# because everything below 2R was off the left edge entirely.
+FINECHART_HTML = r"""
+  <h2 class="section-h">Inside the hotspot &mdash; 1R to 3R</h2>
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">Final capital by profit cap, 1R&ndash;3R in 0.1R steps, at a constant 6% drawdown</span>
+      <span class="s">the chart above, zoomed &middot; does not follow the risk dial</span>
+    </div>
+    <p class="chartnote">The wide sweep puts the sweet spot in the <b>2R&ndash;3R</b> band but
+      resolves it at only five quarter-R points, and its axis <b>starts at 2R</b> &mdash; so
+      the left-hand side of the peak was never drawn. This is the same calculation on a
+      <b>tenth-R</b> grid running down to <b>1R</b>: every point a full backtest, each levered
+      to the same 6% maximum drawdown. Read it for the <b>shape</b> of the band; on 76&ndash;90
+      trades a single 0.1R step is well inside the noise.</p>
+    <div class="plot sweepplot" data-el="fwplot">
+      <svg data-el="fwsvg" role="img" aria-label="Final capital, risk needed, return over drawdown and win rate against the Rule 4 profit cap from 1R to 3R at a constant 6 percent drawdown"></svg>
+      <div class="tip" data-el="fwtip"></div>
+    </div>
+    <div class="findings" data-el="finefindings"></div>
   </section>
 """
 
@@ -950,7 +976,9 @@ function mountReport(root, DATA){
   // Each is {k, h, label, fmt, kind, color, fill, ref, none, zero}.
   function capPlotter(plotEl, svgEl, tipEl, tipRows){
     let g=null;
-    function draw(pts, none, panels, markTok){
+    // `tickStep` spaces the x-axis labels: 1R suits the 2R-10R sweep, 0.5R the 1R-3R zoom
+    // (whole-R ticks would give a detail chart three gridlines).
+    function draw(pts, none, panels, markTok, tickStep){
       if(!pts.length) return;
       const W=plotEl.clientWidth||880, mL=62, mR=18, plotW=W-mL-mR, padT=16, xAxisH=26, gap=15;
       const tops=[]; let H=padT;
@@ -1011,9 +1039,11 @@ function mountReport(root, DATA){
           fill:p.color,opacity:.55})));
       });
 
-      for(let c=Math.ceil(cLo); c<=cHi+1e-9; c++){
-        svgEl.appendChild(mk("line",{x1:x(c),x2:x(c),y1:padT,y2:H-xAxisH,stroke:"var(--grid)","stroke-width":1}));
-        svgEl.appendChild(txt(x(c),H-8,c+"R","middle",11,"var(--ink3)"));
+      const st=tickStep||1;
+      for(let c=Math.ceil(cLo/st)*st; c<=cHi+1e-9; c+=st){
+        const v=Math.round(c*100)/100;          // 1+0.5+0.5 is 2.0000000000000004 otherwise
+        svgEl.appendChild(mk("line",{x1:x(v),x2:x(v),y1:padT,y2:H-xAxisH,stroke:"var(--grid)","stroke-width":1}));
+        svgEl.appendChild(txt(x(v),H-8,v+"R","middle",11,"var(--ink3)"));
       }
 
       // where the dial is standing. An uncapped page has no point on this axis, so it says
@@ -1035,6 +1065,13 @@ function mountReport(root, DATA){
       } else if(markTok==="none"){
         svgEl.appendChild(txt(mL+4,padT+12,
           "this page is uncapped — the dashed line is where it sits","start",11,"var(--ink3)"));
+      } else {
+        // The dial is on a cap this axis does not cover -- true on the zoomed chart whenever
+        // the page is set above 3R. Say so; a chart with no marker and no explanation reads
+        // as though the marker had been forgotten.
+        svgEl.appendChild(txt(mL+4,padT+12,
+          "the dial is at "+VARIANTS.labels[markTok]+", outside this range","start",11,
+          "var(--ink3)"));
       }
 
       const cross=mk("line",{x1:0,x2:0,y1:padT,y2:H-xAxisH,stroke:"var(--ink2)","stroke-width":1,
@@ -1092,17 +1129,24 @@ function mountReport(root, DATA){
     }
     return (lo+hi)/2;
   }
-  let NORM=null;
-  function buildNorm(){
-    if(NORM) return NORM;
-    NORM = VARIANTS.caps.map(tok => {
-      const r = riskForDrawdown(tok);
-      return r==null ? {tok:tok, cap:capOf(tok), risk:null, final:null, ret:null, dd:null,
-                        rdd:null, n:null, wr:null}
-                     : statsAt(r, tok);
-    });
-    return NORM;
+  // Solved points, cached PER TOKEN rather than per chart: the wide grid and the zoomed one
+  // overlap at 2R, 2.5R and 3R, and a bisection is ~24 lite simulates -- solving those three
+  // twice would be pure waste, and worse, two caches could drift if either chart's inputs
+  // ever changed independently.
+  const LEVERED={};
+  function leveredAt(tok){
+    if(tok in LEVERED) return LEVERED[tok];
+    const r = riskForDrawdown(tok);
+    return LEVERED[tok] = (r==null
+      ? {tok:tok, cap:capOf(tok), risk:null, final:null, ret:null, dd:null,
+         rdd:null, n:null, wr:null}
+      : statsAt(r, tok));
   }
+  let NORM=null, FINE=null;
+  function buildNorm(){ return NORM || (NORM = VARIANTS.caps.map(leveredAt)); }
+  // `fine` is absent from a _variants.json written before the zoomed chart existed, so the
+  // page degrades to no chart rather than throwing.
+  function buildFine(){ return FINE || (FINE = (VARIANTS.fine || []).map(leveredAt)); }
   const drawNorm = !$("nwplot") ? function(){} :
     capPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
     `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
@@ -1209,6 +1253,89 @@ function mountReport(root, DATA){
         (here?` This page is set to <b>${VARIANTS.labels[CAP]}</b>`+
               (here.risk!=null?`, which would allow ${r2(here.risk)}% per trade and finish at `+
                                `${usd(here.final)}`:``)+`.`:``));
+  }
+
+  // ---- the zoomed chart: the same method over 1R-3R at 0.1R --------------------------
+  const drawFine = !$("fwplot") ? function(){} :
+    capPlotter($("fwplot"), $("fwsvg"), $("fwtip"), p =>
+      `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
+      (p.risk==null ? row("Risk needed","cannot reach "+TARGET_DD+"%") :
+        row("Risk per trade", p.risk.toFixed(2)+"%") + row("Final capital", fmtUSD(p.final)) +
+        row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
+        row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
+        row("Trades", p.n)));
+
+  // What the zoom says. Deliberately shorter than the wide chart's reading and about the
+  // SHAPE of the band, not the winning point -- 0.1R apart on 76-90 trades is noise, and a
+  // paragraph naming one tenth-R setting as "the answer" would be the exact mistake the
+  // wide chart's own text warns against. Every number is read out of the grid at render
+  // time, same as above, so it cannot go stale.
+  function renderFineFindings(S){
+    const el=$("finefindings"); if(!el) return;
+    const g=S.filter(p=>p.final!=null).sort((a,b)=>a.cap-b.cap);
+    if(!g.length){ el.innerHTML=""; return; }
+    const best=g.reduce((a,b)=>b.final>a.final?b:a);
+    const lo=g[0], hi=g[g.length-1];
+    const usd=fmtUSD, r1=v=>v.toFixed(1), r2=v=>v.toFixed(2);
+    const ns=g.map(p=>p.n);
+    const sample=Math.min.apply(null,ns)+"&ndash;"+Math.max.apply(null,ns)+" trades";
+    // The structure here is the SAME as the wide chart's: allowed risk holds flat over a
+    // stretch of caps and then falls off a cliff, and the capital line saws about inside the
+    // flat part. So describe the plateau the best point sits in, not the point -- and say
+    // when that plateau runs off the edge of the window, because then this chart has not
+    // actually found the left-hand end of the hotspot either.
+    const near=(a,b)=>Math.abs(a-b)<0.02;
+    let pa=g.indexOf(best), pb=pa;
+    while(pa>0 && near(g[pa-1].risk,best.risk)) pa--;
+    while(pb<g.length-1 && near(g[pb+1].risk,best.risk)) pb++;
+    const plat=g.slice(pa,pb+1);
+    const pMin=plat.reduce((a,b)=>b.final<a.final?b:a), pMax=plat.reduce((a,b)=>b.final>a.final?b:a);
+    const openLeft=pa===0, cliff=g[pb+1];
+    // Peak-vs-neighbours: how much of the peak is a spike between two lower points. If the
+    // best setting's neighbours are far below it, that is noise, not a plateau.
+    const i=g.indexOf(best), nb=[g[i-1],g[i+1]].filter(Boolean);
+    const nbAvg=nb.length?nb.reduce((s,p)=>s+p.final,0)/nb.length:best.final;
+    const spike=100*(best.final-nbAvg)/Math.max(nbAvg,1);
+    const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
+    el.innerHTML =
+      h("The hotspot is a plateau, not a peak",
+        `Across <b>${lo.cap}R&ndash;${hi.cap}R</b> the best single point is <b>${best.cap}R</b> `+
+        `at <b>${usd(best.final)}</b> &mdash; but it is not a peak. The risk a cap can carry `+
+        `inside 6% holds flat at <b>${r2(best.risk)}%</b> right across `+
+        `<b>${plat[0].cap}R&ndash;${plat[plat.length-1].cap}R</b>`+
+        (cliff ? `, then drops to ${r2(cliff.risk)}% at ${cliff.cap}R and the capital line `+
+                 `falls with it` : ``)+
+        `. Inside that stretch the same bet size is on every trade, so the line just saws `+
+        `&mdash; ${usd(pMin.final)} at ${pMin.cap}R to ${usd(pMax.final)} at ${pMax.cap}R, `+
+        `with no trend across it. <b>Everything on that plateau is the same bet at the same `+
+        `pain</b>; which tenth of an R tops it is decided by a handful of trades.`+
+        (openLeft
+          ? ` <b>And the plateau runs off the left edge of this chart</b>, so ${lo.cap}R is `+
+            `not its start &mdash; only the last point still on it. Extend the grid below `+
+            `${lo.cap}R to find where it really begins.`
+          : ` It begins at <b>${plat[0].cap}R</b>, which this grid can see and the `+
+            `quarter-R one could not.`)) +
+      h("Read the plateau, not the point",
+        `${best.cap}R sits <b>${spike>0?"+":""}${r1(spike)}%</b> above the average of its two `+
+        `neighbours. On ${sample} a gap that size between settings 0.1R apart is sample `+
+        `noise: the same handful of trades decide the worst path at every one of these caps, `+
+        `and one exit crossing a cap moves the whole curve. Take the <b>shape</b> from this `+
+        `chart &mdash; where the ground is high and where it falls away &mdash; and do not `+
+        `read ${best.cap}R as the answer to a tenth of an R.`);
+  }
+
+  function renderFine(){
+    if(!$("fwplot")) return;
+    const S=buildFine();
+    if(!S.length) return;
+    const off=S.filter(p=>p.dd!=null && Math.abs(Math.abs(p.dd)-TARGET_DD)>0.05);
+    if(off.length) console.warn(DATA.strategy+": zoomed chart missed the "+TARGET_DD+
+      "% target at cap "+off.map(p=>p.tok).join(", "));
+    // No uncapped reference line here: at $158k it sits far under a 1R-3R window and would
+    // flatten every curve on the chart to compress it in. The wide chart is where the
+    // uncapped run belongs.
+    drawFine(S.filter(p=>p.cap!=null).sort((a,b)=>a.cap-b.cap), null, NORM_PANELS(), CAP, 0.5);
+    renderFineFindings(S);
   }
 
   function renderNorm(){
@@ -1340,7 +1467,7 @@ function mountReport(root, DATA){
     CAP = tok;
     if (tok !== "none") lastNum = tok;
     RAW = unpackCap(tok);
-    applyCapText(); renderNorm();
+    applyCapText(); renderNorm(); renderFine();      // both cap markers follow the dial
     // Same rule as the risk field: do not rewrite the box while it is being typed into,
     // that would fight the caret. `change` (blur, Enter, or a spinner click) syncs it to
     // the grid position actually in force.
@@ -1369,13 +1496,14 @@ function mountReport(root, DATA){
   // from the printed PDF, where nothing would have hinted at it. A chart that sometimes
   // does not exist is a far worse trade than 80 ms of load time.
   if ($("nwplot")) new ResizeObserver(renderNorm).observe($("nwplot"));
+  if ($("fwplot")) new ResizeObserver(renderFine).observe($("fwplot"));
   // setRisk seeds the box, the risk echoes and the hint, and recomputes + self-checks on
   // the way -- so it stands in for the old renderAll()/selfCheck() pair here.
-  applyCapText(); syncCapControl(); setRisk(RISK); renderNorm();
+  applyCapText(); syncCapControl(); setRisk(RISK); renderNorm(); renderFine();
   return {setRisk:r => setRisk(r, false), setCap:setCap, cap:()=>CAP, key:DATA.strategy,
           risk:()=>RISK, defaultRisk:()=>DEFAULT_RISK,
-          render:()=>{ render(); renderNorm(); },
-          norm:buildNorm, stats:()=>ST};
+          render:()=>{ render(); renderNorm(); renderFine(); },
+          norm:buildNorm, fine:buildFine, stats:()=>ST};
 }
 
 // ---- mount every section on this page --------------------------------------------
@@ -1668,6 +1796,7 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__PRICEONLY__", strategies.PRICE_ONLY_NOTE)
             .replace("__CAPBAR__", CAPBAR_HTML if strategy.r4.in_grid else "")
             .replace("__CAPCHART__", CAPCHART_HTML if strategy.r4.in_grid else "")
+            .replace("__FINECHART__", FINECHART_HTML if strategy.r4.in_grid else "")
             .replace("__RISKBAR__", riskbar)
             .replace("__RISKVAL__", f"{strategy.risk_pct:g}")
             .replace("__CAPMIN__", f"{strategies.CAP_MIN:g}")

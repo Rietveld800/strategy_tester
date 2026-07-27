@@ -371,7 +371,15 @@ def write_variants(results, caps=None, extra=None):
             avg_win_r=round(stats["avg_win_r"], 3), best_r=round(stats["best_r"], 3),
             avg_bars=round(stats["avg_bars"], 2))
 
-    doc = dict(caps=[r.token for r in grid],
+    # THREE lists over one `v` table, because the pages ask three different questions of it.
+    # `caps` is the dial's axis and the wide sweep's x axis (quarter-R, 2R-10R). `fine` is the
+    # zoomed chart's axis (tenth-R, 1R-3R); the two overlap and share their solved points.
+    # `extra` is the settings that are not caps at all. Guarded by membership in `out` so a
+    # partial run (export_charter_trades asks for four caps) cannot name a token it has no
+    # rows for.
+    have = lambda cs: [t for t in (strategies.cap_token(c) for c in cs) if t in out]
+    doc = dict(caps=have([None] + strategies.CAP_GRID),
+               fine=have(strategies.FINE_GRID),
                extra=[r.token for r in variants if not r.in_grid],
                labels={r.token: r.label for r in variants},
                texts={r.token: r.texts for r in variants},
@@ -382,7 +390,8 @@ def write_variants(results, caps=None, extra=None):
     VARIANTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     VARIANTS_PATH.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
     size = VARIANTS_PATH.stat().st_size
-    print(f"  written: {VARIANTS_PATH.name}  {len(grid)} caps"
+    print(f"  written: {VARIANTS_PATH.name}  {len(grid)} caps "
+          f"({len(doc['caps'])} on the dial, {len(doc['fine'])} on the detail grid)"
           + (f" + {len(variants) - len(grid)} other" if len(variants) > len(grid) else "")
           + f"  {size:,} bytes")
 

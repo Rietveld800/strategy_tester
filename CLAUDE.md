@@ -177,13 +177,30 @@ management, and warns if the bisection missed the target. Drawn SYNCHRONOUSLY at
 deferring it to a rAF silently skipped it on any page whose cap was `none`, including in the
 printed PDF.
 
+**Inside the hotspot** is a SECOND chart section under it (2026-07-27, user's ask), the same
+calculation zoomed: `FINE_GRID` = **1R-3R at 0.1R**, because the wide chart's quarter-R axis
+resolves the 2R-3R band at five points and STARTS at 2R, so the band's left side was never
+drawn. TWO grids on purpose -- `CAP_GRID` (2R-10R, 0.25R) stays the dial's and the wide
+sweep's axis; `CAP_CHOICES` is their union (52 settings). `_variants.json` carries `caps`,
+`fine` and `extra` over one `v` table. Solved risks are cached PER TOKEN (`leveredAt`) so the
+2R/2.5R/3R overlap is bisected once and both charts show the identical number. Cost measured
+before building: +0.1s backtest, ~+100 KB per page (394 KB, report 413 KB). NOT exported to
+charter (user: "for now we don't need it on our charts yet") -- `CHARTER_CAPS` unchanged.
+
+FINDING: the hotspot is a **PLATEAU, not a peak** -- allowed risk is flat at 1.39% right
+across **1R-2.3R**, then cliffs to 1.18% at 2.4R; inside it the capital line just saws
+($503k-$572k, best point 1.9R) because every cap there is the same bet at the same pain. 2R
+was never special, it was the old chart's left edge. **The plateau runs off the LEFT edge of
+the zoom too**, so 1R is not its start -- lower `FINE_MIN` to find the real beginning. The
+page's own prose says all of this, generated from the grid.
+
 Variant rows travel PACKED (positional arrays against shared market/date/reason tables):
 `VAR_COLS` in `run_portfolio.py` and `unpackCap` in `build_equity_html.py` are two halves of
 one format — change one and you must change the other. The whole grid shares one day
 calendar so the equity curve's x-axis does not shift as the dial moves. `_variants.json`
-holds `caps` (the dial's axis) AND `extra` (settings that are not caps, e.g. quickfixpro's
-`bar`) in one `v` table: same packing, same replay, but only `caps` feeds the dial and the
-levered chart.
+holds `caps` (the dial's axis and the wide sweep's), `fine` (the zoom's, 1R-3R) and `extra`
+(settings that are not caps, e.g. quickfixpro's `bar`) in one `v` table: same packing, same
+replay, three different questions asked of it.
 
 Obsolete markets (last daily bar > `OBSOLETE_AFTER_DAYS` behind the newest across all
 markets) have stopped being collected, so a position open on their last bar can never

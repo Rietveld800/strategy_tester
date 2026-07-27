@@ -66,8 +66,27 @@
 CAP_MIN, CAP_MAX, CAP_STEP = 2.0, 10.0, 0.25
 CAP_GRID = [round(CAP_MIN + i * CAP_STEP, 2)
             for i in range(int(round((CAP_MAX - CAP_MIN) / CAP_STEP)) + 1)]
-# None = no ceiling, listed first because it is one end of the same scale.
-CAP_CHOICES = [None] + CAP_GRID
+
+# The DETAIL grid: 1R to 3R in tenth-R steps, for the reports' zoomed chart.
+#
+# Why a second grid rather than a finer single one. The levered chart puts the sweet spot in
+# the 2R-3R band, and the quarter-R axis resolves that band at only five points -- too coarse
+# to say anything about its shape. Worse, the band's lower edge sits exactly at CAP_MIN, so
+# everything below 2R was never computed at all and the curve could have been still climbing
+# as it ran off the left of the chart. This grid answers both: 1R-3R at 0.1R.
+#
+# It does NOT replace CAP_GRID. The dial keeps its quarter-R axis and the wide sweep keeps
+# its 2R-10R one, because those answer the other question -- what the whole family does. The
+# two grids overlap at 2R, 2.5R and 3R, which is what ties the zoomed chart to the wide one.
+FINE_MIN, FINE_MAX, FINE_STEP = 1.0, 3.0, 0.1
+FINE_GRID = [round(FINE_MIN + i * FINE_STEP, 2)
+             for i in range(int(round((FINE_MAX - FINE_MIN) / FINE_STEP)) + 1)]
+
+# Everything that is actually BACKTESTED: both grids, deduplicated, plus the uncapped run.
+# None = no ceiling, listed first because it is one end of the same scale. 18 of the fine
+# settings are new, taking the grid from 34 to 52 -- measured at +0.1s of backtest (the
+# archive parse dominates and is unchanged) and about +100 KB on each page.
+CAP_CHOICES = [None] + sorted(set(CAP_GRID) | set(FINE_GRID))
 
 
 def cap_token(cap):

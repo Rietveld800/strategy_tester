@@ -261,6 +261,7 @@ backtests.
 | `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid, plus every registered Rule 4 that is not a cap**, packed for the pages. |
 | `build_equity_html.py` | Renders `_equity_<strategy>.json` + the shared `_variants.json` into `output/equity_<strategy>.html`, plus `report.html` and `conclusions.html`. Refuses to build if the variant grid disagrees with a strategy's workbook. |
 | `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<key>.json` — one file per **cap** in `CHARTER_CAPS` (2R, 2.25R, 2.5R, 5R) plus one per strategy in `CHARTER_STRATEGIES` (quickfixpro), trade geometry keyed by market. Prunes hand-off files it no longer owns. |
+| `strategies.py` (grids) | `CAP_GRID` 2R&ndash;10R at 0.25R = the dial's axis and the wide sweep's; `FINE_GRID` 1R&ndash;3R at 0.1R = the zoomed chart's; `CAP_CHOICES` is their union plus the uncapped run, and is what gets backtested. |
 | `solve_risk.py` | Solves each strategy's default risk: the one that puts it at `engine.TARGET_DD` (6%) maximum drawdown. Prints the paste-ready `risk_pct` and flags a stale registry. Not part of the pipeline &mdash; it is how the constants in `strategies.py` are derived. |
 | `run_pipeline.py` | Every writer in one pass over the array archive (the fast way to regenerate everything): per-market xlsx, portfolio, the cap grid, the charter hand-off, then the pages. |
 
@@ -453,8 +454,9 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
 - **`equity_<strategy>.html`** — standalone interactive report: the **four rules** (1–3
   shared, 4 this strategy's), the **Rule 4 cap dial**, equity + drawdown + open-positions
   panels, KPI + per-trade stat tiles, a sortable trade blotter, a per-market breakdown, and
-  **Choosing the profit cap** at the bottom (the whole 2R–10R grid levered to a constant 6%
-  drawdown, with its own reading). The cap dial and that last section are **left out for a
+  **Choosing the profit cap** plus **Inside the hotspot** at the bottom (the 2R–10R grid
+  levered to a constant 6% drawdown, then the same thing zoomed to 1R–3R at 0.1R, each with
+  its own generated reading). The cap dial and that last section are **left out for a
   strategy outside the cap family** — quickfixpro's page has neither, because there is no
   number in its Rule 4 to dial and it is not a point on the cap axis. Everything else,
   including the risk dial, is the same on every page. **Every page opens with
@@ -728,6 +730,41 @@ Mechanics:
   at it. A chart that sometimes does not exist is a far worse trade than 80 ms of load time.
   (Deferring also turned out not to help: it made first paint later, not sooner.)
 - `TARGET_DD` in the chart's code is the one constant to change for another drawdown budget.
+
+#### Inside the hotspot — the zoomed chart (1R–3R at 0.1R)
+
+The section immediately after it answers the question the wide chart raises and cannot
+settle. Its axis is quarter-R and **starts at 2R**, so the sweet spot it reports resolves at
+only five points and its left-hand side was never drawn at all. The zoom is the **same
+calculation on a tenth-R grid running down to 1R** — same `simulate()`, same `TARGET_DD`,
+same plotter, same four panels — and the two grids overlap at 2R, 2.5R and 3R, which is what
+ties them together. The solved risk is cached **per cap token**, so those three shared points
+are bisected once and both charts read the identical number.
+
+**What it found (2026-07-27): the hotspot is a plateau, not a peak.** The risk a cap can
+carry inside 6% holds flat at **1.39% right across 1R–2.3R**, then falls to 1.18% at 2.4R.
+Inside that stretch every cap is the same bet at the same pain, so the capital line simply
+saws — $502,799 at 2.2R to $571,649 at 1.9R — with no trend across it. 2R was never special;
+it was the wide chart's left edge.
+
+**The plateau runs off the left edge of the zoom too**, so 1R is not where it starts, only
+the last point still on it. Extending `FINE_MIN` below 1R is the way to find the real
+beginning; the page says so itself, generated from the grid, whenever the plateau reaches the
+first point.
+
+Two grids, deliberately, not one finer one: `CAP_GRID` (2R–10R, 0.25R) stays the dial's axis
+and the wide sweep's, because that answers what the whole family does; `FINE_GRID` (1R–3R,
+0.1R) is the zoom's. `CAP_CHOICES` is their union plus the uncapped run — 52 settings, of
+which the 18 new ones cost **+0.1s of backtest** (the ~60s archive parse dominates and is
+unchanged) and **~+100 KB per page** (pages 284 → 394 KB, `report.html` 302 → 413 KB).
+
+The zoom carries **no uncapped reference line**: at $158,195 it sits far below a 1R–3R window
+and would flatten every curve to fit it in. And when the dial sits above 3R the chart has no
+marker to place, so it says *"the dial is at 5R, outside this range"* rather than leaving a
+reader wondering where the marker went.
+
+`FINE_GRID` is **not** exported to charter (user, 2026-07-27 — "for now we don't need it on
+our charts yet"). `CHARTER_CAPS` is unchanged.
 
 Rows travel packed — positional arrays indexed against shared market/date/reason tables
 (`VAR_COLS` in `run_portfolio.py`, unpacked by `unpackCap` in `build_equity_html.py`; change

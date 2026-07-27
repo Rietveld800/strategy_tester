@@ -4,7 +4,7 @@
 # account portfolio xlsx + equity JSON, the standalone HTML page, and the charter hand-off.
 #
 #   python run_pipeline.py            # every registered strategy
-#   python run_pipeline.py slowfix    # just one
+#   python run_pipeline.py quickfixpro    # just one
 #
 # This exists because reading the array archive is the slow part of every runner. The
 # pipeline parses it ONCE (engine.run_markets) and feeds the same backtests to all four
@@ -26,7 +26,15 @@ def main(argv):
     print(f"strategies: {', '.join(s.key for s in picked)}\n")
     # The full cap grid: the pages carry a Rule 4 dial, and every position on it is a real
     # backtest. It rides along on the one archive pass, so it costs backtest time only.
-    results = eng.run_markets(picked)
+    #
+    # Plus anything the charter hand-off asks for that is NOT on that grid. The two lists are
+    # independent by design -- CHARTER_CAPS is a chosen handful for the price charts, the grid
+    # is the dial's axis -- and they stopped overlapping the moment the grid moved to tenth-R
+    # steps (2.25R is on no grid this project draws). Without this the export dies on a
+    # KeyError for a cap nobody backtested.
+    caps = list(strategies.CAP_CHOICES)
+    caps += [c for c in export_charter_trades.CHARTER_CAPS if c not in caps]
+    results = eng.run_markets(picked, caps=caps)
     print()
     for s in picked:
         run_all.write(s, results)

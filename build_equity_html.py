@@ -11,7 +11,7 @@
 # second renderer to keep in step.
 #
 #   python build_equity_html.py            # every registered strategy + report.html
-#   python build_equity_html.py slowfix    # just one page (report.html still gets all)
+#   python build_equity_html.py quickfixpro   # just one page (report.html still gets all)
 #
 # PDF: the pages do NOT bundle a JavaScript PDF library. The browser's own print-to-PDF
 # produces selectable vector text at a fraction of the size, where an html2canvas-style
@@ -360,7 +360,6 @@ __RISKBAR__
   </div>
 __DAILY__
 __CAPCHART__
-__FINECHART__
   <footer class="mono">__FOOTER__</footer>
 </section>"""
 
@@ -384,45 +383,34 @@ CAPCHART_HTML = r"""
   <h2 class="section-h">Choosing the profit cap</h2>
   <section class="card sweepcard">
     <div class="charthead">
-      <span class="t">Final capital by profit cap, levered to a constant 6% drawdown</span>
-      <span class="s">risk solved per cap &middot; does not follow the risk dial</span>
+      <span class="t">Every cap from 0R to 10R, at a constant 1% risk per trade</span>
+      <span class="s">real result &middot; drawdown varies &middot; does not follow the risk dial</span>
     </div>
-    <p class="chartnote">Risk per trade is a free variable, so comparing caps at one risk
-      compares them at unequal pain &mdash; part of a wider cap's bigger return is simply a
-      bigger bet. Here the risk is <b>solved for each cap</b> so that every one of them
-      bottoms out at the <b>same 6% maximum drawdown</b>, and the question becomes the one
-      worth asking: for the same hole, which cap ends up with the most money? Every point is
-      a full backtest at its own risk setting.</p>
+    <p class="chartnote">What each cap actually did on the same fixed bet. Every point is a
+      full backtest; the risk is pinned so the <b>drawdown is free to move</b>, which is what
+      makes the wider caps look good here &mdash; part of their return is the deeper hole
+      they were allowed to dig. Rank them on the chart below, not this one.</p>
+    <div class="plot sweepplot" data-el="fxplot">
+      <svg data-el="fxsvg" role="img" aria-label="Final capital, max drawdown, risk, return over drawdown and win rate against the Rule 4 profit cap at a constant 1 percent risk"></svg>
+      <div class="tip" data-el="fxtip"></div>
+    </div>
+    <div class="findings" data-el="fixedfindings"></div>
+  </section>
+
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">The same caps levered to a constant 6% drawdown</span>
+      <span class="s">risk solved per cap &middot; equal pain &middot; this is the ranking</span>
+    </div>
+    <p class="chartnote">Risk is a free variable, so the honest question is: held to the
+      <b>same 6% maximum drawdown</b>, which cap ends up with the most money? The risk is
+      solved per cap to make that true, and the second pane is what each one is then allowed
+      to bet.</p>
     <div class="plot sweepplot" data-el="nwplot">
-      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk needed, return over drawdown and win rate against the Rule 4 profit cap at a constant 6 percent drawdown"></svg>
+      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk per trade allowed and win rate against the Rule 4 profit cap at a constant 6 percent drawdown"></svg>
       <div class="tip" data-el="nwtip"></div>
     </div>
     <div class="findings" data-el="capfindings"></div>
-  </section>
-"""
-
-# The zoomed companion to the chart above. Same method, same 6% budget, same plotter -- only
-# the grid differs (1R-3R at 0.1R instead of 2R-10R at 0.25R). It exists because the wide
-# chart's answer was "somewhere in 2R-3R", which its own axis is too coarse to refine, and
-# because everything below 2R was off the left edge entirely.
-FINECHART_HTML = r"""
-  <h2 class="section-h">Inside the hotspot &mdash; 1R to 3R</h2>
-  <section class="card sweepcard">
-    <div class="charthead">
-      <span class="t">Final capital by profit cap, 1R&ndash;3R in 0.1R steps, at a constant 6% drawdown</span>
-      <span class="s">the chart above, zoomed &middot; does not follow the risk dial</span>
-    </div>
-    <p class="chartnote">The wide sweep puts the sweet spot in the <b>2R&ndash;3R</b> band but
-      resolves it at only five quarter-R points, and its axis <b>starts at 2R</b> &mdash; so
-      the left-hand side of the peak was never drawn. This is the same calculation on a
-      <b>tenth-R</b> grid running down to <b>1R</b>: every point a full backtest, each levered
-      to the same 6% maximum drawdown. Read it for the <b>shape</b> of the band; on 76&ndash;90
-      trades a single 0.1R step is well inside the noise.</p>
-    <div class="plot sweepplot" data-el="fwplot">
-      <svg data-el="fwsvg" role="img" aria-label="Final capital, risk needed, return over drawdown and win rate against the Rule 4 profit cap from 1R to 3R at a constant 6 percent drawdown"></svg>
-      <div class="tip" data-el="fwtip"></div>
-    </div>
-    <div class="findings" data-el="finefindings"></div>
   </section>
 """
 
@@ -455,8 +443,7 @@ const STRATS = __STRATS__;
 // that strategy at the 6% drawdown budget.
 const REF_RISK = __REFRISK__;
 // Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
-// strategy on the page: quickfix at 4R and slowfix at 4R are the same run and are stored
-// once. `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra`
+// strategy on the page: two strategies sitting on the same cap are one run, stored once. `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra`
 // holds the settings that are NOT caps (Quickfixpro's entry-bar target): same packed rows,
 // same replay, but not a point on that axis, so a strategy sitting on one carries neither
 // the dial nor the sweep.
@@ -1142,11 +1129,8 @@ function mountReport(root, DATA){
          rdd:null, n:null, wr:null}
       : statsAt(r, tok));
   }
-  let NORM=null, FINE=null;
+  let NORM=null;
   function buildNorm(){ return NORM || (NORM = VARIANTS.caps.map(leveredAt)); }
-  // `fine` is absent from a _variants.json written before the zoomed chart existed, so the
-  // page degrades to no chart rather than throwing.
-  function buildFine(){ return FINE || (FINE = (VARIANTS.fine || []).map(leveredAt)); }
   const drawNorm = !$("nwplot") ? function(){} :
     capPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
     `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
@@ -1156,13 +1140,15 @@ function mountReport(root, DATA){
       row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
       row("Trades", p.n)));
 
+  // No return/DD pane here, unlike the fixed-risk chart above: drawdown is pinned at
+  // TARGET_DD by construction, so return/DD is just return divided by a constant and the
+  // pane would redraw the capital line in different units. It earns its place on the chart
+  // above, where the drawdown actually varies.
   const NORM_PANELS = () => [
     {k:"final", h:150, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
      ref:START, none:1},
     {k:"risk", h:50, kind:"line", color:"var(--neg)", none:1,
-     label:"RISK PER TRADE NEEDED", fmt:v=>v.toFixed(2)+"%"},
-    {k:"rdd", h:50, kind:"line", color:"var(--bars)", none:1,
-     label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
+     label:"RISK PER TRADE ALLOWED", fmt:v=>v.toFixed(2)+"%"},
     {k:"wr",  h:50, kind:"line", color:"var(--ink2)", none:1,
      label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
   ];
@@ -1172,184 +1158,115 @@ function mountReport(root, DATA){
   // cannot go stale against the data the way a hand-written paragraph would. The claims are
   // deliberately about the BAND, not the single best quarter-R: on ~80 trades the exact peak
   // is noise, and the text says so.
+  // The chart's own reading. Every number is read OUT OF THE GRID at render time rather than
+  // typed, so it cannot go stale against the data -- that is the whole reason this is code
+  // and not a paragraph in the HTML. Kept short on purpose (2026-07-28): it was five
+  // passages, which buried the two things that matter -- where the plateau is, and that the
+  // mechanism is the risk each cap is allowed to carry.
   function renderFindings(){
     const el=$("capfindings"); if(!el) return;
     const S=buildNorm();
-    const grid=S.filter(p=>p.cap!=null && p.final!=null).sort((a,b)=>a.cap-b.cap);
+    const g=S.filter(p=>p.cap!=null && p.final!=null).sort((a,b)=>a.cap-b.cap);
     const none=S.filter(p=>p.tok==="none")[0];
-    if(!grid.length){ el.innerHTML=""; return; }
-    const pick=(xs,f)=>xs.reduce((a,b)=>f(b)>f(a)?b:a);
-    const best=pick(grid,p=>p.final);
-    const worst=grid.reduce((a,b)=>b.final<a.final?b:a);
-    const band=grid.filter(p=>p.cap>=2 && p.cap<=3);
-    const bandBest=band.length?pick(band,p=>p.final):best;
-    const rHi=pick(grid,p=>p.risk), rLo=grid.reduce((a,b)=>b.risk<a.risk?b:a);
-    const wrHi=pick(grid,p=>p.wr), wrLo=grid.reduce((a,b)=>b.wr<a.wr?b:a);
-    const here=grid.filter(p=>p.tok===CAP)[0];
-    const usd=fmtUSD, r1=v=>v.toFixed(1), r2=v=>v.toFixed(2);
-    // The trade count is itself a function of the cap, so the sample is a RANGE. Quoting
-    // one cap's count would read as though it were the size of the whole study.
-    const ns=grid.map(p=>p.n);
-    const sample=Math.min.apply(null,ns)+"&ndash;"+Math.max.apply(null,ns)+" trades";
-    // The structure of the allowed-risk line is PLATEAUS, so show the longest one and the
-    // cliff at the end of it. Listing every distinct value would be misleading (neighbouring
-    // caps differ in the third decimal, which reads as a step and is not one), and ranking by
-    // largest drop just finds the noisiest corner of the grid.
-    let run={i:0,j:0};
-    for(let i=0;i<grid.length;i++){
-      let j=i;
-      while(j+1<grid.length && Math.abs(grid[j+1].risk-grid[i].risk)<0.02) j++;
-      if(j-i > run.j-run.i) run={i:i, j:j};
-    }
-    const runA=grid[run.i], runB=grid[run.j], runNext=grid[run.j+1];
-    const plateau = run.j>run.i
-      ? `<b>${r2(runA.risk)}% right across ${runA.cap}R&ndash;${runB.cap}R</b>` +
-        (runNext ? `, then straight down to ${r2(runNext.risk)}% at ${runNext.cap}R` : "")
-      : "";
-
-    const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
-    el.innerHTML =
-      h("The sweet spot sits between 2R and 3R",
-        `The best setting on this data is <b>${bandBest.cap}R</b> at <b>${usd(bandBest.final)}</b>, `+
-        `and the whole <b>2R&ndash;3R</b> band sits at the top of the chart. A 5R cap makes `+
-        `${usd((grid.filter(p=>p.tok==="5")[0]||best).final)}`+
-        (none?`, and the uncapped run only <b>${usd(none.final)}</b> &mdash; the worst of the `+
-              `family`:``)+
-        `. At one fixed risk the wide caps looked best; levered to the same drawdown the `+
-        `ranking turns over, because their extra return was bought with a deeper hole rather `+
-        `than a better edge.`) +
-      h("Risk per trade allowed",
-        `This is the mechanism. A <b>${rHi.cap}R</b> cap can carry <b>${r2(rHi.risk)}%</b> per `+
-        `trade inside a 6% drawdown, while the widest settings are held to `+
-        `<b>${r2(rLo.risk)}%</b> &mdash; roughly `+
-        `<b>${r1(rHi.risk/rLo.risk)}&times; the position size for the same pain</b>. Taking `+
-        `profit early keeps a position from turning into a deep loser, so the account's worst `+
-        `path is shallower and the same drawdown budget buys a bigger bet. The allowed risk `+
-        `does not decline smoothly &mdash; it holds a level flat across a whole stretch of `+
-        `caps and then <b>falls off a cliff</b>`+(plateau?`: ${plateau}`:``)+`. On `+
-        `${sample} the maximum drawdown is set by a single worst run, so the number `+
-        `only moves when the cap crosses that run's exits. That is also why the capital line `+
-        `saws rather than curves: while the allowed risk holds, a wider cap earns more at the `+
-        `same bet size, and then the next cliff takes it back.`) +
-      h("Return / drawdown",
-        `Peaks with the same band: <b>${r1(bandBest.rdd)}x</b> at ${bandBest.cap}R against `+
-        (none?`<b>${r1(none.rdd)}x</b> uncapped`:`a low of ${r1(worst.rdd)}x`)+
-        `. Read it as confirmation, not as independent evidence: drawdown is fixed at 6% here `+
-        `by construction, so return / drawdown is just the return &divide; 6 and ranks the caps `+
-        `in exactly the order the capital line already does.`) +
-      h("Win rate",
-        `Falls straight down the grid, from <b>${r1(wrHi.wr)}%</b> at ${wrHi.cap}R to `+
-        (none?`<b>${r1(none.wr)}%</b> uncapped`:`<b>${r1(wrLo.wr)}%</b> at ${wrLo.cap}R`)+
-        `, and it is what produces the drawdown difference: winning more often shortens the `+
-        `losing runs, and a shorter losing run is a shallower hole. The trade-off in one line `+
-        `&mdash; a tight cap gives up the big winners to buy consistency, and at constant `+
-        `drawdown consistency is what pays. Win rate is the same at any risk setting, since `+
-        `risk cannot change which trades win.`) +
-      h("Read the band, not the point",
-        `Inside 2R&ndash;3R the curve is choppy, and single quarter-R settings drop well below `+
-        `their neighbours. On ${sample} that is sample noise, not signal. `+
-        `The finding is that the sweet spot lies <b>between 2R and 3R</b> &mdash; not that `+
-        `${bandBest.cap}R is the number.`+
-        (here?` This page is set to <b>${VARIANTS.labels[CAP]}</b>`+
-              (here.risk!=null?`, which would allow ${r2(here.risk)}% per trade and finish at `+
-                               `${usd(here.final)}`:``)+`.`:``));
-  }
-
-  // ---- the zoomed chart: the same method over 1R-3R at 0.1R --------------------------
-  const drawFine = !$("fwplot") ? function(){} :
-    capPlotter($("fwplot"), $("fwsvg"), $("fwtip"), p =>
-      `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
-      (p.risk==null ? row("Risk needed","cannot reach "+TARGET_DD+"%") :
-        row("Risk per trade", p.risk.toFixed(2)+"%") + row("Final capital", fmtUSD(p.final)) +
-        row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
-        row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
-        row("Trades", p.n)));
-
-  // What the zoom says. Deliberately shorter than the wide chart's reading and about the
-  // SHAPE of the band, not the winning point -- 0.1R apart on 76-90 trades is noise, and a
-  // paragraph naming one tenth-R setting as "the answer" would be the exact mistake the
-  // wide chart's own text warns against. Every number is read out of the grid at render
-  // time, same as above, so it cannot go stale.
-  function renderFineFindings(S){
-    const el=$("finefindings"); if(!el) return;
-    const g=S.filter(p=>p.final!=null).sort((a,b)=>a.cap-b.cap);
     if(!g.length){ el.innerHTML=""; return; }
-    const best=g.reduce((a,b)=>b.final>a.final?b:a);
-    const lo=g[0], hi=g[g.length-1];
     const usd=fmtUSD, r1=v=>v.toFixed(1), r2=v=>v.toFixed(2);
+    const best=g.reduce((a,b)=>b.final>a.final?b:a);
     const ns=g.map(p=>p.n);
     const sample=Math.min.apply(null,ns)+"&ndash;"+Math.max.apply(null,ns)+" trades";
-    // The structure here is the SAME as the wide chart's: allowed risk holds flat over a
-    // stretch of caps and then falls off a cliff, and the capital line saws about inside the
-    // flat part. So describe the plateau the best point sits in, not the point -- and say
-    // when that plateau runs off the edge of the window, because then this chart has not
-    // actually found the left-hand end of the hotspot either.
+    // The plateau the best cap sits on: the run of caps allowed the same risk. That run, not
+    // the single best point, is the finding -- inside it every cap bets the same.
     const near=(a,b)=>Math.abs(a-b)<0.02;
     let pa=g.indexOf(best), pb=pa;
     while(pa>0 && near(g[pa-1].risk,best.risk)) pa--;
     while(pb<g.length-1 && near(g[pb+1].risk,best.risk)) pb++;
-    const plat=g.slice(pa,pb+1);
-    const pMin=plat.reduce((a,b)=>b.final<a.final?b:a), pMax=plat.reduce((a,b)=>b.final>a.final?b:a);
-    const openLeft=pa===0, cliff=g[pb+1];
-    // Flat ALLOWED RISK does not imply a flat capital line -- inside the plateau every cap
-    // takes the same bet, but a wider one still lets its winners run further. Measure the
-    // drift across the plateau (upper half vs lower half) instead of asserting there is
-    // none: on this data the risk went flat at 1.3R while capital kept climbing to 1.9R,
-    // and a hardcoded "no trend" would have been simply false.
-    const mean=xs=>xs.reduce((s,p)=>s+p.final,0)/xs.length;
-    const half=Math.floor(plat.length/2);
-    const drift=plat.length>=4 ? 100*(mean(plat.slice(-half))-mean(plat.slice(0,half)))/
-                                 Math.max(mean(plat.slice(0,half)),1) : 0;
-    // Peak-vs-neighbours: how much of the peak is a spike between two lower points. If the
-    // best setting's neighbours are far below it, that is noise, not a plateau.
-    const i=g.indexOf(best), nb=[g[i-1],g[i+1]].filter(Boolean);
-    const nbAvg=nb.length?nb.reduce((s,p)=>s+p.final,0)/nb.length:best.final;
-    const spike=100*(best.final-nbAvg)/Math.max(nbAvg,1);
+    const plat=g.slice(pa,pb+1), cliff=g[pb+1];
+    const rHi=g.reduce((a,b)=>b.risk>a.risk?b:a), rLo=g.reduce((a,b)=>b.risk<a.risk?b:a);
+    const here=g.filter(p=>p.tok===CAP)[0];
     const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
     el.innerHTML =
-      h("The hotspot is a plateau, not a peak",
-        `Across <b>${lo.cap}R&ndash;${hi.cap}R</b> the best single point is <b>${best.cap}R</b> `+
-        `at <b>${usd(best.final)}</b> &mdash; but it is not a peak. The risk a cap can carry `+
-        `inside 6% holds flat at <b>${r2(best.risk)}%</b> right across `+
-        `<b>${plat[0].cap}R&ndash;${plat[plat.length-1].cap}R</b>`+
-        (cliff ? `, then drops to ${r2(cliff.risk)}% at ${cliff.cap}R and the capital line `+
-                 `falls with it` : ``)+
-        `. <b>Everything on that plateau is the same bet at the same pain</b>, from `+
-        `${usd(pMin.final)} at ${pMin.cap}R to ${usd(pMax.final)} at ${pMax.cap}R `+
-        (Math.abs(drift) < 8
-          ? `&mdash; and the line just saws across it with no real trend, so which tenth of `+
-            `an R tops it is decided by a handful of trades.`
-          : `&mdash; and it still <b>${drift>0?"rises":"falls"} across the plateau</b>, the `+
-            `upper half averaging <b>${drift>0?"+":""}${r1(drift)}%</b> against the lower. `+
-            `Flat allowed risk does not mean a flat result: every cap here bets the same, `+
-            `but a wider one still lets its winners run further before the ceiling bites.`)+
-        (openLeft
-          ? ` <b>And the plateau runs off the left edge of this chart</b>, so ${lo.cap}R is `+
-            `not its start &mdash; only the last point still on it. Extend the grid below `+
-            `${lo.cap}R to find where it really begins.`
-          : ` It begins at <b>${plat[0].cap}R</b>, which this grid can see and the `+
-            `quarter-R one could not.`)) +
-      h("Read the plateau, not the point",
-        `${best.cap}R sits <b>${spike>0?"+":""}${r1(spike)}%</b> above the average of its two `+
-        `neighbours. On ${sample} a gap that size between settings 0.1R apart is sample `+
-        `noise: the same handful of trades decide the worst path at every one of these caps, `+
-        `and one exit crossing a cap moves the whole curve. Take the <b>shape</b> from this `+
-        `chart &mdash; where the ground is high and where it falls away &mdash; and do not `+
-        `read ${best.cap}R as the answer to a tenth of an R.`);
+      h("Where it pays",
+        `<b>${plat[0].cap}R&ndash;${plat[plat.length-1].cap}R</b> is the band: every cap on it `+
+        `is allowed the same <b>${r2(best.risk)}%</b> per trade`+
+        (cliff?`, and at ${cliff.cap}R that falls to ${r2(cliff.risk)}%`:``)+
+        `. Best point <b>${best.cap}R</b> at <b>${usd(best.final)}</b>`+
+        (none?`; uncapped is the worst of the family at ${usd(none.final)}, sized down to `+
+              `${r2(none.risk)}%`:``)+`.`) +
+      h("Why",
+        `Taking profit early stops a position becoming a deep loser, so the worst path is `+
+        `shallower and the same 6% budget buys a bigger bet &mdash; <b>${r2(rHi.risk)}%</b> at `+
+        `${rHi.cap}R against <b>${r2(rLo.risk)}%</b> at ${rLo.cap}R, `+
+        `<b>${r1(rHi.risk/rLo.risk)}&times;</b> the position size for the same pain. That is `+
+        `the whole mechanism; the capital line follows it.`) +
+      h("How much to trust it",
+        `${sample}, and the allowed risk moves in steps rather than smoothly &mdash; on a `+
+        `sample this size one worst run sets the drawdown, so the number only shifts when a `+
+        `cap crosses that run's exits. Read the band, not the point.`+
+        (here&&here.risk!=null?` This page is at <b>${VARIANTS.labels[CAP]}</b>: `+
+          `${r2(here.risk)}% per trade, ${usd(here.final)}.`:``));
   }
 
-  function renderFine(){
-    if(!$("fwplot")) return;
-    const S=buildFine();
+  // ---- the fixed-risk chart: what each cap really did on the same bet ----------------
+  // The companion to the levered chart, and the one that must be read SECOND. Risk is pinned
+  // at FIXED_RISK, so the drawdown is free to move -- which is exactly why it cannot rank the
+  // caps: a wider cap's bigger return is partly just the deeper hole it was allowed to dig.
+  // It is here because it is the real result, and because seeing the drawdown fan out is what
+  // makes the levered chart's point land.
+  //
+  // Deliberately NOT the risk dial's value, so it stays cacheable and so the two charts are
+  // a fixed pair rather than one of them sliding around under the reader.
+  const FIXED_RISK = 1.0;              // percent; the round reference the chart is titled with
+  let FIXED=null;
+  function buildFixed(){
+    return FIXED || (FIXED = VARIANTS.caps.map(tok => statsAt(FIXED_RISK, tok)));
+  }
+  const drawFixed = !$("fxplot") ? function(){} :
+    capPlotter($("fxplot"), $("fxsvg"), $("fxtip"), p =>
+      `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
+      row("Final capital", fmtUSD(p.final)) + row("Return", pct(p.ret)) +
+      row("Max drawdown", ddTxt(p.dd)) + row("Risk per trade", FIXED_RISK.toFixed(2)+"%") +
+      row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
+      row("Trades", p.n));
+
+  // Panels: the real capital, then the drawdown that bought it, then the flat risk line that
+  // says the bet never changed, then return/DD, then win rate. The risk pane is a constant by
+  // construction -- it is on the chart precisely to show that it is, since that is the whole
+  // difference from the chart below.
+  const FIXED_PANELS = () => [
+    {k:"final", h:150, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
+     ref:START, none:1},
+    {k:"dd", h:50, kind:"line", color:"var(--neg)", none:1,
+     label:"MAX DRAWDOWN", fmt:v=>Math.abs(v).toFixed(0)+"%"},
+    {k:"risk", h:36, kind:"line", color:"var(--ink3)", none:1,
+     label:"RISK PER TRADE (CONSTANT)", fmt:v=>v.toFixed(2)+"%"},
+    {k:"rdd", h:50, kind:"line", color:"var(--bars)", none:1,
+     label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
+    {k:"wr",  h:50, kind:"line", color:"var(--ink2)", none:1,
+     label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
+  ];
+
+  function renderFixedFindings(S){
+    const el=$("fixedfindings"); if(!el) return;
+    const g=S.filter(p=>p.cap!=null && p.final!=null).sort((a,b)=>a.cap-b.cap);
+    if(!g.length){ el.innerHTML=""; return; }
+    const best=g.reduce((a,b)=>b.final>a.final?b:a);
+    const ddHi=g.reduce((a,b)=>Math.abs(b.dd)>Math.abs(a.dd)?b:a);
+    const ddLo=g.reduce((a,b)=>Math.abs(b.dd)<Math.abs(a.dd)?b:a);
+    const r1=v=>v.toFixed(1);
+    el.innerHTML = `<h4>Why this one cannot rank them</h4><p>`+
+      `Best here is <b>${best.cap}R</b> at <b>${fmtUSD(best.final)}</b> &mdash; but its `+
+      `drawdown is <b>${r1(Math.abs(best.dd))}%</b>, against ${r1(Math.abs(ddLo.dd))}% at `+
+      `${ddLo.cap}R. Across the grid the hole runs from ${r1(Math.abs(ddLo.dd))}% to `+
+      `<b>${r1(Math.abs(ddHi.dd))}%</b> on the same bet, so these caps are not being asked `+
+      `the same question. The chart below asks it.</p>`;
+  }
+
+  function renderFixed(){
+    if(!$("fxplot")) return;
+    const S=buildFixed();
     if(!S.length) return;
-    const off=S.filter(p=>p.dd!=null && Math.abs(Math.abs(p.dd)-TARGET_DD)>0.05);
-    if(off.length) console.warn(DATA.strategy+": zoomed chart missed the "+TARGET_DD+
-      "% target at cap "+off.map(p=>p.tok).join(", "));
-    // No uncapped reference line here: at $158k it sits far under a 1R-3R window and would
-    // flatten every curve on the chart to compress it in. The wide chart is where the
-    // uncapped run belongs.
-    drawFine(S.filter(p=>p.cap!=null).sort((a,b)=>a.cap-b.cap), null, NORM_PANELS(), CAP, 0.5);
-    renderFineFindings(S);
+    drawFixed(S.filter(p=>p.cap!=null).sort((a,b)=>a.cap-b.cap),
+              S.filter(p=>p.tok==="none")[0], FIXED_PANELS(), CAP);
+    renderFixedFindings(S);
   }
 
   function renderNorm(){
@@ -1481,7 +1398,7 @@ function mountReport(root, DATA){
     CAP = tok;
     if (tok !== "none") lastNum = tok;
     RAW = unpackCap(tok);
-    applyCapText(); renderNorm(); renderFine();      // both cap markers follow the dial
+    applyCapText(); renderNorm(); renderFixed();     // both cap markers follow the dial
     // Same rule as the risk field: do not rewrite the box while it is being typed into,
     // that would fight the caret. `change` (blur, Enter, or a spinner click) syncs it to
     // the grid position actually in force.
@@ -1510,14 +1427,14 @@ function mountReport(root, DATA){
   // from the printed PDF, where nothing would have hinted at it. A chart that sometimes
   // does not exist is a far worse trade than 80 ms of load time.
   if ($("nwplot")) new ResizeObserver(renderNorm).observe($("nwplot"));
-  if ($("fwplot")) new ResizeObserver(renderFine).observe($("fwplot"));
+  if ($("fxplot")) new ResizeObserver(renderFixed).observe($("fxplot"));
   // setRisk seeds the box, the risk echoes and the hint, and recomputes + self-checks on
   // the way -- so it stands in for the old renderAll()/selfCheck() pair here.
-  applyCapText(); syncCapControl(); setRisk(RISK); renderNorm(); renderFine();
+  applyCapText(); syncCapControl(); setRisk(RISK); renderNorm(); renderFixed();
   return {setRisk:r => setRisk(r, false), setCap:setCap, cap:()=>CAP, key:DATA.strategy,
           risk:()=>RISK, defaultRisk:()=>DEFAULT_RISK,
-          render:()=>{ render(); renderNorm(); renderFine(); },
-          norm:buildNorm, fine:buildFine, stats:()=>ST};
+          render:()=>{ render(); renderNorm(); renderFixed(); },
+          norm:buildNorm, fixed:buildFixed, stats:()=>ST};
 }
 
 // ---- mount every section on this page --------------------------------------------
@@ -1810,7 +1727,6 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__PRICEONLY__", strategies.PRICE_ONLY_NOTE)
             .replace("__CAPBAR__", CAPBAR_HTML if strategy.r4.in_grid else "")
             .replace("__CAPCHART__", CAPCHART_HTML if strategy.r4.in_grid else "")
-            .replace("__FINECHART__", FINECHART_HTML if strategy.r4.in_grid else "")
             .replace("__RISKBAR__", riskbar)
             .replace("__RISKVAL__", f"{strategy.risk_pct:g}")
             .replace("__CAPMIN__", f"{strategies.CAP_MIN:g}")
@@ -1865,7 +1781,7 @@ def build_report(picked):
     for s, d in zip(picked, datasets):
         check_variants(s, d, variants)
     # Both dials ride along on the print report, one per strategy: a PDF can compare
-    # quickfix at 4R against slowfix uncapped, and each section opens at its own
+    # quickfix at 4R against quickfix at 8R, and each section opens at its own
     # 6%-drawdown risk. The risk box used to be shared, on the reasoning that a like-for-like
     # comparison needs one bet size -- but equal DRAWDOWN is the like-for-like this project
     # ranks on, and one box cannot show three different defaults.

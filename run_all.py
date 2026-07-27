@@ -10,7 +10,7 @@
 # runs to its last daily bar. The shared-account view is run_portfolio.py.
 #
 #   python run_all.py            # every registered strategy
-#   python run_all.py slowfix    # just one
+#   python run_all.py quickfixpro    # just one
 #
 # Output: output/<strategy>_all_markets_daily.xlsx
 

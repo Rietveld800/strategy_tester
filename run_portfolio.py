@@ -78,26 +78,27 @@ def cost_in_r(trade):
     return (SLIP_ENTRY_TICKS + exit_ticks) * trade["tick"] / rpu
 
 
-def collect(strategy, results):
-    """`strategy`'s trades tagged with market + last bar, plus the set of all trading days."""
+def collect(results, trades_of):
+    """Trades tagged with market + last bar, plus the set of all trading days.
+
+    `trades_of(m)` picks which backtest of a market to take -- a strategy's default run for
+    the on-disk outputs, one cap of the grid for the report's variants.
+    """
     raw, all_days = [], set()
     for m in results:
         last_bar = m["bars"][-1].date.date()
         all_days.update(b.date.date() for b in m["bars"])
-        for t in m["res"][strategy.key]["trades"]:
+        for t in trades_of(m):
             raw.append({**t, "market": m["name"], "last_bar": last_bar, "tick": m["tick"]})
     return raw, sorted(all_days)
 
 
-def run(strategy, results):
-    raw, all_days = collect(strategy, results)
-    # EVERY market that was backtested, not just the ones that produced a trade. A market
-    # the rules never fired on is a real result and belongs in the per-market table as a
-    # zero, otherwise the report reads as though only 28 markets were ever researched.
-    universe = [dict(m=m["name"], obs=bool(m["obsolete"])) for m in results]
+def prepare(raw):
+    """Normalise each trade to (entry day, exit day, gross R, cost, net R), in place.
 
-    # normalise each trade to (entry day, exit day, gross R, cost, net R). An open-at-end
-    # trade "exits" on its market's last bar with gross R = 0 (outcome unknown).
+    An open-at-end trade "exits" on its market's last bar with gross R = 0 (outcome
+    unknown): it ties up its risk until then and releases it having booked nothing.
+    """
     for t in raw:
         t["entry_d"] = date.fromisoformat(t["entry_date"])
         if t["exit_reason"] == "open_at_end":
@@ -106,7 +107,21 @@ def run(strategy, results):
             t["exit_d"], t["gross_r"] = date.fromisoformat(t["exit_date"]), t["r_multiple"]
         t["cost_r"] = cost_in_r(t)
         t["r"] = t["gross_r"] - t["cost_r"]          # net R actually booked
+    return raw
 
+
+def first_trading_day(raw, all_days):
+    """The day the shared account starts working: its first entry."""
+    return min((t["entry_d"] for t in raw), default=(all_days[0] if all_days else None))
+
+
+def account(raw, all_days, first_day):
+    """The shared-account money management over `raw` (already prepared).
+
+    Returns (timeline, stats) and fills each trade's risk_dollars / base_at_entry /
+    pnl_dollars / balance_after. Split out of `run` so the cap grid can replay the exact
+    same loop for every cap without a second copy of the rules.
+    """
     entries_by_day, exits_by_day = defaultdict(list), defaultdict(list)
     for i, t in enumerate(raw):
         entries_by_day[t["entry_d"]].append(i)
@@ -116,7 +131,6 @@ def run(strategy, results):
     open_risk = {}                         # trade index -> risk dollars tied up
     timeline, peak, max_dd = [], START_CAP, 0.0
     max_open, max_committed_ratio, total_cost, days_in_mkt = 0, 0.0, 0.0, 0
-    first_day = min(t["entry_d"] for t in raw) if raw else (all_days[0] if all_days else None)
 
     for day in all_days:
         if first_day and day < first_day:
@@ -169,20 +183,149 @@ def run(strategy, results):
                  win_rate=100 * wins / len(closed) if closed else 0.0,
                  max_open=max_open, max_committed_pct=max_committed_ratio,
                  first=first_day, last=all_days[-1] if all_days else None,
-                 n_markets=len({t["market"] for t in raw}), n_markets_all=len(universe),
+                 n_markets=len({t["market"] for t in raw}),
                  gross_final=gross_final, gross_ret=(gross_final / START_CAP - 1) * 100.0,
                  total_cost=total_cost, avg_bars=_avg_bars(closed),
                  time_in_market=100 * days_in_mkt / n_days if n_days else 0.0)
     stats.update(_streaks_and_avgs(raw))
+    return timeline, stats
+
+
+def run(strategy, results):
+    """One strategy's on-disk outputs, at its DEFAULT cap: the workbook and the JSON."""
+    raw, all_days = collect(results, lambda m: m["res"][strategy.key]["trades"])
+    # EVERY market that was backtested, not just the ones that produced a trade. A market
+    # the rules never fired on is a real result and belongs in the per-market table as a
+    # zero, otherwise the report reads as though only 28 markets were ever researched.
+    universe = [dict(m=m["name"], obs=bool(m["obsolete"])) for m in results]
+
+    prepare(raw)
+    first_day = first_trading_day(raw, all_days)
+    timeline, stats = account(raw, all_days, first_day)
+    stats["n_markets_all"] = len(universe)
     _write(strategy, raw, timeline, stats)
     _write_json(strategy, raw, timeline, stats, universe)
-    print(f"{strategy.key}: NET  ${cash:,.2f} ({stats['ret']:+.2f}%)   "
-          f"gross ${gross_final:,.0f} ({stats['gross_ret']:+.2f}%)   "
-          f"cost drag ${total_cost:,.0f}")
-    print(f"  maxDD {max_dd:.2f}%  trades {len(closed)} winrate {stats['win_rate']:.1f}%  "
-          f"max concurrent {max_open}  time in market {stats['time_in_market']:.0f}%  "
+    print(f"{strategy.key} (cap {strategies.cap_label(strategy.cap)}): "
+          f"NET  ${stats['final']:,.2f} ({stats['ret']:+.2f}%)   "
+          f"gross ${stats['gross_final']:,.0f} ({stats['gross_ret']:+.2f}%)   "
+          f"cost drag ${stats['total_cost']:,.0f}")
+    print(f"  maxDD {stats['max_dd']:.2f}%  trades {stats['n_trades']} "
+          f"winrate {stats['win_rate']:.1f}%  "
+          f"max concurrent {stats['max_open']}  "
+          f"time in market {stats['time_in_market']:.0f}%  "
           f"avg hold {stats['avg_bars']:.1f}d")
     print(f"  written: {out_xlsx(strategy)}")
+
+
+# --- the cap grid, for the report's Rule 4 dial ------------------------------------
+# One packed table of EVERY cap in strategies.CAP_CHOICES, written once and shared by every
+# strategy's page -- Rule 4 is a single family, so quickfix at 4R and slowfix at 4R are the
+# same run and must not be stored twice.
+#
+# Why precomputed at all, when the risk dial replays in the browser: risk only changes the
+# DOLLAR SIZING of a fixed trade list, but the cap changes the trades themselves. It moves
+# every exit, and because only one position per market runs at a time, an earlier exit frees
+# that market for a later signal a longer hold would have missed. There is nothing to replay
+# from -- each cap is a real backtest, so all of them are run here.
+VARIANTS_PATH = eng.OUT_DIR / "_variants.json"
+
+# The packed row layout. Kept as data because build_equity_html.py's JS unpacks by this
+# exact order -- change one side and you must change the other.
+VAR_COLS = ["m", "side", "din", "dout", "xd", "gr", "cr", "bars",
+            "pin", "pout", "sl", "reason"]
+VAR_REASONS = ["target_r", "stop", "unknown_pl", "bullish_reversal", "bearish_reversal",
+               "data_end", "open_at_end"]
+
+
+def _pack_rows(raw, mkt_ix, day_ix):
+    """One cap's trades as arrays of small integers and numbers, in VAR_COLS order.
+
+    34 caps x ~80 trades of named JSON fields would put ~700 KB of repeated key names into
+    every page. Indexing the market names and the dates against tables the page already
+    has, and dropping to positional arrays, cuts that by about three quarters. Net R is not
+    stored: it is gr - cr, and the page computes it.
+
+    Three columns are here only so the PAGE can re-run the whole money management itself,
+    at any risk %, without a rebuild:
+
+      xd  the day the trade RELEASES its risk. Normally the exit date, but an open-at-end
+          trade releases on its market's last bar, which is not shown anywhere else.
+      gr  gross R (before slippage) -- needed to replay the gross curve alongside the net one.
+      cr  cost R (the slippage charge). Both are risk-INDEPENDENT, which is exactly why the
+          risk replay works: only the dollar sizing changes with risk, never the R multiples.
+          (The CAP is a different matter -- it changes gr itself, which is why every cap is
+          backtested here instead of being replayed.)
+
+    PRECISION MATTERS HERE. gr and cr carry 6 decimals, not the 3 the table displays: the
+    replay compounds them across ~80 trades, and rounding R to 3 dp put the page $13.56
+    away from the server's own final figure (measured 2026-07-25). The display formats to
+    2 dp regardless, so the extra digits cost nothing visible.
+    """
+    rows = []
+    for t in sorted(raw, key=lambda x: (x["entry_d"], x["market"])):
+        reason = t["exit_reason"]
+        pout = t["stop"] if reason == "unknown_pl" else t.get("exit_price")
+        rows.append([
+            mkt_ix[t["market"]],
+            0 if t["side"] == "short" else 1,
+            day_ix[t["entry_date"]],
+            None if reason == "open_at_end" else day_ix[t["exit_date"]],
+            day_ix[str(t["exit_d"])],
+            round(t["gross_r"], 6), round(t["cost_r"], 6),
+            t["bars_in_trade"],
+            t["entry"], pout, t["stop"],
+            VAR_REASONS.index(reason),
+        ])
+    return rows
+
+
+def write_variants(results, caps=None):
+    """Backtest results for every cap, packed into output/_variants.json for the pages.
+
+    The whole grid shares ONE day calendar, so moving the dial does not shift the equity
+    curve's x-axis underneath the reader -- 4R and 8R are drawn over exactly the same
+    period. The calendar starts at the earliest first entry across all caps; caps whose own
+    first trade is later simply open flat.
+    """
+    caps = list(strategies.CAP_CHOICES) if caps is None else list(caps)
+    universe = [m["name"] for m in results]
+    mkt_ix = {name: i for i, name in enumerate(universe)}
+
+    prepared = {}
+    for cap in caps:
+        tok = strategies.cap_token(cap)
+        raw, all_days = collect(results, lambda m, tok=tok: m["var"][tok]["trades"])
+        prepared[tok] = (prepare(raw), all_days)
+
+    shared_first = min(first_trading_day(raw, days) for raw, days in prepared.values())
+    all_days = next(iter(prepared.values()))[1]
+    days = [d for d in all_days if d >= shared_first]
+    day_ix = {str(d): i for i, d in enumerate(days)}
+
+    out = {}
+    for cap in caps:
+        tok = strategies.cap_token(cap)
+        raw, _ = prepared[tok]
+        _, stats = account(raw, all_days, shared_first)
+        closed = [t for t in raw if t["exit_reason"] != "open_at_end"]
+        out[tok] = dict(
+            rows=_pack_rows(raw, mkt_ix, day_ix),
+            # the page self-checks its own replay against this at the default risk
+            final=round(stats["final"], 2),
+            avg_win_r=round(stats["avg_win_r"], 3), best_r=round(stats["best_r"], 3),
+            avg_bars=round(stats["avg_bars"], 2))
+
+    doc = dict(caps=[strategies.cap_token(c) for c in caps],
+               labels={strategies.cap_token(c): strategies.cap_label(c) for c in caps},
+               texts={strategies.cap_token(c): strategies.cap_texts(c) for c in caps},
+               cols=VAR_COLS, reasons=VAR_REASONS,
+               markets=universe, days=[str(d) for d in days],
+               defaults={s.key: strategies.cap_token(s.cap) for s in strategies.REGISTRY},
+               v=out)
+    VARIANTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    VARIANTS_PATH.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    size = VARIANTS_PATH.stat().st_size
+    print(f"  written: {VARIANTS_PATH.name}  {len(caps)} caps  {size:,} bytes")
 
 
 def main(argv):
@@ -191,6 +334,7 @@ def main(argv):
     print()
     for s in picked:
         run(s, results)
+    write_variants(results)
 
 
 def _replay(raw, all_days, first_day, rkey):
@@ -246,55 +390,24 @@ def _streaks_and_avgs(raw):
                 avg_win_r=mean(wins, lambda t: t["r"]))
 
 
-def _trade_rows(raw):
-    """Per-trade records for the sortable table on the page.
-
-    Three of these fields exist so the PAGE can re-run this whole money-management
-    simulation client-side at a different risk %, without a rebuild (the risk input on the
-    equity page). They are what the replay needs beyond the visible columns:
-
-      xd  the day the trade RELEASES its risk. Normally the exit date, but an open-at-end
-          trade releases on its market's last bar, which is not shown anywhere else.
-      gr  gross R (before slippage) -- needed to replay the gross curve alongside the net one.
-      cr  cost R (the slippage charge). Both are risk-INDEPENDENT, which is exactly why the
-          replay works: only the dollar sizing changes with risk, never the R multiples.
-
-    PRECISION MATTERS HERE. These three carry 6 decimals, not the 3 the table displays:
-    the replay compounds them across ~80 trades, and rounding R to 3 dp put the page $13.56
-    away from the server's own final figure (measured 2026-07-25). The display formats to
-    2 dp regardless, so the extra digits cost nothing visible.
-    """
-    rows = []
-    for t in sorted(raw, key=lambda x: (x["entry_d"], x["market"])):
-        b, pnl = t.get("base_at_entry", 0), t.get("pnl_dollars", 0.0)
-        reason = t["exit_reason"]
-        pout = t["stop"] if reason == "unknown_pl" else t.get("exit_price")
-        rows.append(dict(
-            market=t["market"], side=t["side"], din=t["entry_date"],
-            dout=(t["exit_date"] if reason != "open_at_end" else None),
-            xd=str(t["exit_d"]), gr=round(t["gross_r"], 6), cr=round(t["cost_r"], 6),
-            bars=t["bars_in_trade"], pin=t["entry"], pout=pout, sl=t["stop"],
-            tgt=t["target"], r=round(t["r"], 6),
-            pnl=round(pnl, 2), pnlpct=round(pnl / b * 100.0, 3) if b else 0.0,
-            reason=reason))
-    return rows
-
-
 def _write_json(strategy, raw, timeline, stats, universe):
-    """Compact daily series, per-trade rows, and headline stats for the equity-curve page.
+    """Per-trade rows and headline stats for the equity-curve page, at the default cap.
 
     `universe` is every market backtested, with its obsolete flag -- the page seeds the
     per-market table from it so markets that produced no trade still show, as zeros.
+
+    No daily series here any more: the page rebuilds it from the trades on every risk AND
+    every cap change, and the day calendar it walks is shared by the whole cap grid, so it
+    lives in _variants.json instead of being repeated per strategy.
     """
-    pts = [dict(date=str(t["date"]), cash=round(t["cash"], 2), open=t["open_count"],
-                markets=t["open_markets"], dd=round(t["dd"], 2),
-                entries=t["entries"], exits=t["exits"]) for t in timeline]
+    days = [str(t["date"]) for t in timeline]
     out = dict(strategy=strategy.key, title=strategy.title, rule4=strategy.rule4,
+               cap=strategies.cap_token(strategy.cap),   # this strategy's default Rule 4
                risk_pct=RISK_PCT,          # the page's replay starts from this
-               points=pts, trades=_trade_rows(raw), start=START_CAP,
+               start=START_CAP,
                final=round(stats["final"], 2),
                ret=round(stats["ret"] / 100.0, 4), maxdd=round(-stats["max_dd"], 2),
-               first=pts[0]["date"], last=pts[-1]["date"], n=len(pts),
+               first=days[0], last=days[-1], n=len(days),
                n_trades=stats["n_trades"], win_rate=stats["win_rate"],
                n_markets=stats["n_markets"], n_markets_all=stats["n_markets_all"],
                markets_all=universe,

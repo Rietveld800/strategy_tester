@@ -8,7 +8,7 @@
   "starting_capital": 100000.0,
   "risk_pct": 1.0,
   "n_markets": 28,
-  "n_trades": 80
+  "n_trades": 82
  },
  "markets": {
   "Bitcoin_Per_USD_Binance": {
@@ -47,7 +47,7 @@
      "exit": 72123.0,
      "stop": 76101.0,
      "target": 72123.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -77,7 +77,7 @@
      "exit": 77310.0,
      "stop": 80226.0,
      "target": 77310.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -89,7 +89,7 @@
      "exit": 80271.0,
      "stop": 83601.0,
      "target": 80271.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     }
@@ -107,7 +107,7 @@
      "exit": 618.1,
      "stop": 671.5,
      "target": 618.1,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 5
     },
@@ -119,7 +119,7 @@
      "exit": 644.5,
      "stop": 688.3,
      "target": 644.5,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -143,7 +143,7 @@
      "exit": 598.5,
      "stop": 573.9,
      "target": 598.5,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -158,6 +158,18 @@
      "reason": "stop",
      "r": -1.0,
      "bars": 2
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-24",
+     "entry": 706.0,
+     "exit_date": null,
+     "exit": null,
+     "stop": 711.3,
+     "target": 679.5,
+     "reason": "open_at_end",
+     "r": null,
+     "bars": null
     }
    ]
   },
@@ -257,7 +269,7 @@
      "exit": 480.9,
      "stop": 487.5,
      "target": 480.9,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -272,6 +284,18 @@
      "reason": "stop",
      "r": -1.0,
      "bars": 1
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-24",
+     "entry": 488.1,
+     "exit_date": null,
+     "exit": null,
+     "stop": 492.1,
+     "target": 468.1,
+     "reason": "open_at_end",
+     "r": null,
+     "bars": null
     }
    ]
   },
@@ -287,7 +311,7 @@
      "exit": 49445.0,
      "stop": 49811.0,
      "target": 49445.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -299,7 +323,7 @@
      "exit": 51214.0,
      "stop": 51850.0,
      "target": 51214.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -341,7 +365,7 @@
      "exit": 1913.0,
      "stop": 1799.0,
      "target": 1913.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -353,7 +377,7 @@
      "exit": 2290.0,
      "stop": 2386.0,
      "target": 2290.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     }
@@ -401,7 +425,7 @@
      "exit": 5893.65,
      "stop": 6073.35,
      "target": 5893.65,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 2
     },
@@ -431,7 +455,7 @@
      "exit": 126.32,
      "stop": 127.7,
      "target": 126.32,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 4
     }
@@ -449,7 +473,7 @@
      "exit": 4310.0,
      "stop": 4409.6,
      "target": 4310.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -485,7 +509,7 @@
      "exit": 4479.0,
      "stop": 4306.2,
      "target": 4479.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -521,7 +545,7 @@
      "exit": 4387.5,
      "stop": 4046.1,
      "target": 4387.5,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 2
     },
@@ -533,7 +557,7 @@
      "exit": 4127.5,
      "stop": 3955.3,
      "target": 4127.5,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -545,7 +569,7 @@
      "exit": 4089.5,
      "stop": 3962.9,
      "target": 4089.5,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 2
     }
@@ -593,7 +617,7 @@
      "exit": 249.93,
      "stop": 251.91,
      "target": 249.93,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -605,7 +629,7 @@
      "exit": 249.13,
      "stop": 256.63,
      "target": 249.13,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 4
     },
@@ -677,7 +701,7 @@
      "exit": 5.6503,
      "stop": 5.2459,
      "target": 5.6503,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 6
     },
@@ -749,7 +773,7 @@
      "exit": 1205.0,
      "stop": 1159.4,
      "target": 1205.0,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     }
@@ -827,7 +851,7 @@
      "exit": 6916.08,
      "stop": 6965.7,
      "target": 6916.08,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -851,7 +875,7 @@
      "exit": 6930.15,
      "stop": 6992.85,
      "target": 6930.15,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -971,7 +995,7 @@
      "exit": 115.17,
      "stop": 123.03,
      "target": 115.17,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     },
@@ -983,7 +1007,7 @@
      "exit": 126.26,
      "stop": 130.94,
      "target": 126.26,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     }
@@ -1091,7 +1115,7 @@
      "exit": 100.836,
      "stop": 101.526,
      "target": 100.836,
-     "reason": "target_5r",
+     "reason": "target_r",
      "r": 5.0,
      "bars": 1
     }

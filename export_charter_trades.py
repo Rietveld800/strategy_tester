@@ -69,7 +69,9 @@ def export(strategy, results):
 
 def main(argv):
     picked = strategies.selected(argv)
-    results = eng.run_markets(picked)
+    # Only the strategies' own caps: the hand-off is always at the documented default, and
+    # the report's cap dial is display-side exploration that never touches these files.
+    results = eng.run_markets(picked, caps=[s.cap for s in picked])
     print()
     for s in picked:
         export(s, results)

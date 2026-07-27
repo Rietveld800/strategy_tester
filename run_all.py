@@ -68,7 +68,9 @@ def write(strategy, results):
 
 def main(argv):
     picked = strategies.selected(argv)
-    results = eng.run_markets(picked)
+    # Only the strategies' own caps -- this workbook is written at the default, and the
+    # report's cap dial never changes a file on disk.
+    results = eng.run_markets(picked, caps=[s.cap for s in picked])
     print()
     for s in picked:
         write(s, results)

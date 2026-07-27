@@ -31,11 +31,13 @@
 #   Rule 3 (min reward): the nearest bearish reversal below entry must be at least
 #           3.5R below entry, else refuse.
 #   Rule 4 (target): STRATEGY-SPECIFIC -- the one rule that differs between strategies.
-#           Supplied by the strategy's `target` policy (see strategies.py) and recomputed
-#           on every bar from the levels known at that bar's start, so a newly appearing
-#           nearer reversal moves the target in and an elected one falls away. Only
-#           OPPOSITE-side reversals ever close a trade early (bearish for a short,
-#           bullish for a long) -- never a same-side one.
+#           Supplied by a target POLICY (see strategies.py: one family, parameterized by a
+#           profit cap in R) and recomputed on every bar from the levels known at that
+#           bar's start, so a newly appearing nearer reversal moves the target in and an
+#           elected one falls away. Only OPPOSITE-side reversals ever close a trade early
+#           (bearish for a short, bullish for a long) -- never a same-side one.
+#           The cap is a DIAL, not a constant: `run_markets` backtests the whole
+#           strategies.CAP_CHOICES grid in one pass so the reports can move it.
 #
 # One position per market at a time; a new signal while in a trade is ignored. After each
 # close, equity is recomputed and the next trade's 1% is taken on the new equity.
@@ -64,6 +66,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / ".." / "charter" / "scripts"))
 import charting_core as cc  # noqa: E402
 
+import strategies  # noqa: E402   (strategies.py imports nothing, so there is no cycle)
+
 # --- simulation inputs ------------------------------------------------------------
 TIMEFRAME = "daily"
 ARRAY_ROOT = HERE / ".." / "hyperliquid_bot" / "data" / "array"
@@ -78,7 +82,9 @@ FEES = 0.0                  # per-trade cost, in equity percent; 0 for now
 
 MIN_REVERSALS = 3          # Rule 1: at least this many tested reversals
 MIN_RR = 3.5               # Rule 3: minimum reward-to-risk to take the trade
-TARGET_RR = 5.0            # Rule 4 reference distance (quickfix's cap; see strategies.py)
+# Rule 4's profit cap is NOT a constant here: it belongs to the strategy (strategies.py),
+# it is a dial on the reports, and the whole strategies.CAP_CHOICES grid is backtested in
+# one pass. Rules 1-3 above are fixed for every strategy and every cap.
 
 # A market is OBSOLETE when its newest daily bar lags the newest daily bar across ALL markets
 # by more than this (charter's rule, and relative rather than a hardcoded date so it stays
@@ -194,8 +200,10 @@ def detect_short(bar, prev_close, tick, bull, bear):
     nearest = max(below)
     if (entry - nearest) < MIN_RR * risk:  # Rule 3
         return None
-    return dict(side="short", entry=entry, stop=stop, risk=risk,
-                target_5r=entry - TARGET_RR * risk)
+    # No target here: Rule 4's cap is a property of the POLICY, not of the signal, and the
+    # same position is replayed under every cap in the grid. The policy derives its ceiling
+    # from `risk`.
+    return dict(side="short", entry=entry, stop=stop, risk=risk)
 
 
 def detect_long(bar, prev_close, tick, bull, bear):
@@ -226,12 +234,11 @@ def detect_long(bar, prev_close, tick, bull, bear):
     nearest = min(above)
     if (nearest - entry) < MIN_RR * risk:  # Rule 3
         return None
-    return dict(side="long", entry=entry, stop=stop, risk=risk,
-                target_5r=entry + TARGET_RR * risk)
+    return dict(side="long", entry=entry, stop=stop, risk=risk)
 
 
 # --- trade management -------------------------------------------------------------
-def check_exit(strategy, pos, bar, bull, bear):
+def check_exit(policy, pos, bar, bull, bear):
     """Does `pos` close on `bar`? Returns (exit_price, reason) or None.
 
     Only ever called on bars AFTER the entry bar: the profit target can never be reached
@@ -240,24 +247,27 @@ def check_exit(strategy, pos, bar, bull, bear):
     extreme). Management therefore starts the day after entry.
 
     `bull`/`bear` are the previous file's levels (known at the bar's start). The target in
-    force comes from the STRATEGY (Rule 4) and is recomputed here on every bar. It may be
-    None -- slowfix has no target while no opposite reversal exists beyond entry -- in
-    which case only the stop can close the trade. On a later bar:
+    force comes from the Rule 4 `policy` and is recomputed here on every bar. It may be
+    None -- an uncapped run has no target while no opposite reversal exists beyond entry --
+    in which case only the stop can close the trade. On a later bar:
 
       - only the target in range   -> clean win at the target;
       - only the stop in range      -> clean stop (-1%);
       - BOTH in range on one bar     -> the intraday order is unknowable, so we give the
         benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1%.
+
+    'target_r' means the exit was the R CAP itself, at whatever cap the run used; a
+    reversal exit is named for the side of the level that closed it.
     """
-    target, treason = strategy.target(pos, bull, bear)
+    target, treason = policy(pos, bull, bear)
     if pos["side"] == "short":
         stop_in = bar.high >= pos["stop"]
         target_in = target is not None and bar.low <= target
-        treason_name = "target_5r" if treason == "target_5r" else "bearish_reversal"
+        treason_name = "target_r" if treason == "target_r" else "bearish_reversal"
     else:
         stop_in = bar.low <= pos["stop"]
         target_in = target is not None and bar.high >= target
-        treason_name = "target_5r" if treason == "target_5r" else "bullish_reversal"
+        treason_name = "target_r" if treason == "target_r" else "bullish_reversal"
 
     if stop_in and target_in:
         return None, "unknown_pl"
@@ -275,8 +285,8 @@ def r_multiple(pos, exit_price):
 
 
 # --- backtest loop ----------------------------------------------------------------
-def backtest(bars, tick, dp, strategy, close_at_end=False):
-    """Run `strategy` over `bars` (oldest -> newest) with fresh capital.
+def backtest(bars, tick, dp, policy, close_at_end=False):
+    """Run one Rule 4 `policy` over `bars` (oldest -> newest) with fresh capital.
 
     Data-driven window: entries fire from the first bar whose PREVIOUS file carries
     enough reversals, and run to the last bar. Returns dict(trades, equity_curve,
@@ -303,7 +313,7 @@ def backtest(bars, tick, dp, strategy, close_at_end=False):
 
         # 1) manage an open position on this bar (never enter and manage same bar)
         if pos is not None:
-            hit = check_exit(strategy, pos, bar, sig_bull, sig_bear)
+            hit = check_exit(policy, pos, bar, sig_bull, sig_bear)
             if hit is not None:
                 exit_price, reason = hit
                 equity = _close(pos, bar, i, exit_price, reason, equity,
@@ -324,7 +334,7 @@ def backtest(bars, tick, dp, strategy, close_at_end=False):
         pos = dict(id=tid, entry_index=i, entry_date=bar.date,
                    equity_before=equity, risk_dollars=risk_dollars, **entry)
         # the Rule 4 level in force at entry, recorded for the ledger (it can move later)
-        pos["target"] = strategy.target(pos, sig_bull, sig_bear)[0]
+        pos["target"] = policy(pos, sig_bull, sig_bear)[0]
         # the entry bar never exits: management starts on the next bar (loop continues)
 
     if pos is not None and close_at_end:       # obsolete market -> flatten at the last close
@@ -380,21 +390,35 @@ def _r(x, dp):
 
 
 # --- all markets, all strategies, one pass ----------------------------------------
-def run_markets(strategies, progress=True):
-    """Backtest EVERY market for EVERY strategy given, in one pass.
+def run_markets(picked, caps=None, progress=True):
+    """Backtest EVERY market at EVERY cap in the grid, in one pass over the archive.
 
     Reading and parsing the array xlsx files is by far the slow part, so each market's
-    bars are parsed ONCE and reused for all strategies -- which is also why the runners
-    take a precomputed result list: a full refresh loads the archive once, not once per
-    output file.
+    bars are parsed ONCE and reused -- which is also why the runners take a precomputed
+    result list: a full refresh loads the archive once, not once per output file.
+
+    Rule 4 is ONE family parameterized by the cap (strategies.py), so the caps are what is
+    actually backtested, not the strategies: quickfix at 5R and slowfix at 5R are the same
+    run, computed once and shared. Each strategy is then just a pointer into that grid at
+    its own default cap. `caps` defaults to strategies.CAP_CHOICES -- the grid the reports
+    let you move the dial across -- plus whatever defaults `picked` needs; pass a shorter
+    list (e.g. just the defaults) when only the on-disk outputs are wanted.
 
     Every market is loaded FIRST, because obsolescence is a cross-market property: it is
     measured against the newest daily bar across all markets, and the backtest needs to know
     it up front (an obsolete market's open position is flattened at its last close rather
     than left unresolved -- see CLOSE_OBSOLETE_AT_END).
 
-    Returns a list of dicts: name, bars, tick, dp, obsolete, res={strategy key -> result}.
+    Returns a list of dicts: name, bars, tick, dp, obsolete,
+      var = {cap token -> result}   every cap in the grid
+      res = {strategy key -> result}  the same objects, at each strategy's default cap.
     """
+    if caps is None:
+        caps = list(strategies.CAP_CHOICES)
+    # a strategy whose default is off the grid must still be runnable
+    caps = caps + [s.cap for s in picked if s.cap not in caps]
+    policies = {strategies.cap_token(c): strategies.target_policy(c) for c in caps}
+
     loaded = []
     for d in market_dirs():
         bars = load_bars(d)
@@ -409,11 +433,14 @@ def run_markets(strategies, progress=True):
         obsolete = (newest - bars[-1].date).days > OBSOLETE_AFTER_DAYS
         tick, dp = infer_tick(bars)
         flatten = obsolete and CLOSE_OBSOLETE_AT_END
-        res = {s.key: backtest(bars, tick, dp, s, close_at_end=flatten) for s in strategies}
-        out.append(dict(name=name, bars=bars, tick=tick, dp=dp, obsolete=obsolete, res=res))
+        var = {tok: backtest(bars, tick, dp, pol, close_at_end=flatten)
+               for tok, pol in policies.items()}
+        res = {s.key: var[strategies.cap_token(s.cap)] for s in picked}
+        out.append(dict(name=name, bars=bars, tick=tick, dp=dp, obsolete=obsolete,
+                        var=var, res=res))
         if progress:
             parts = []
-            for s in strategies:
+            for s in picked:
                 r = res[s.key]
                 closed = [t for t in r["trades"] if t["exit_reason"] != "open_at_end"]
                 parts.append(f"{s.key} {len(closed):>3}tr "
@@ -428,13 +455,13 @@ def run_single(strategy, market=REFERENCE_MARKET):
     """One market, fresh capital: write the JSON ledger and print a summary."""
     bars = load_bars(ARRAY_ROOT / market)
     tick, dp = infer_tick(bars)
-    res = backtest(bars, tick, dp, strategy)
+    res = backtest(bars, tick, dp, strategy.target)
     result = dict(
         meta=dict(market=market, timeframe=TIMEFRAME, strategy=strategy.key,
                   start=str(bars[0].date.date()), end=str(bars[-1].date.date()),
                   starting_capital=STARTING_CAPITAL, risk_pct=RISK_PCT,
                   tick=tick, fees=FEES, min_reversals=MIN_REVERSALS,
-                  min_rr=MIN_RR, target_rr=TARGET_RR, rule4=strategy.rule4),
+                  min_rr=MIN_RR, target_cap=strategy.cap, rule4=strategy.rule4),
         trades=res["trades"],
         equity_curve=[dict(date=str(bars[0].date.date()),
                            equity=STARTING_CAPITAL)] + res["equity_curve"],
@@ -470,8 +497,6 @@ def _summary(strategy, trades, equity, out_path):
 
 
 if __name__ == "__main__":
-    import strategies
-
     for _s in strategies.selected(sys.argv[1:]):
         run_single(_s)
         print()

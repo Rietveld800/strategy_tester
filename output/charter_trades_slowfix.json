@@ -2,13 +2,13 @@
  "meta": {
   "strategy": "slowfix",
   "title": "Slowfix",
-  "rule4": "target = the first opposite reversal beyond entry, no 5R cap",
+  "rule4": "target = the first opposite reversal beyond entry, no cap",
   "timeframe": "daily",
   "source": "strategy_tester",
   "starting_capital": 100000.0,
   "risk_pct": 1.0,
   "n_markets": 28,
-  "n_trades": 78
+  "n_trades": 80
  },
  "markets": {
   "Bitcoin_Per_USD_Binance": {
@@ -158,6 +158,18 @@
      "reason": "stop",
      "r": -1.0,
      "bars": 2
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-24",
+     "entry": 706.0,
+     "exit_date": null,
+     "exit": null,
+     "stop": 711.3,
+     "target": 629.0,
+     "reason": "open_at_end",
+     "r": null,
+     "bars": null
     }
    ]
   },
@@ -272,6 +284,18 @@
      "reason": "stop",
      "r": -1.0,
      "bars": 1
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-24",
+     "entry": 488.1,
+     "exit_date": null,
+     "exit": null,
+     "stop": 492.1,
+     "target": 458.5,
+     "reason": "open_at_end",
+     "r": null,
+     "bars": null
     }
    ]
   },

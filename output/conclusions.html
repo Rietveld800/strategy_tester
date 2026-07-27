@@ -121,6 +121,31 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
 .riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
 .riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
 .riskbar .warn:empty{display:none}
+/* Rule 4's cap dial. Sits directly under the rule cards because it IS Rule 4, and unlike
+   the risk control there is one PER STRATEGY -- Rule 4 is what tells the strategies apart,
+   so a single shared dial would collapse them onto each other on the report. */
+.capbar{margin-top:-1px;border-top-left-radius:0;border-top-right-radius:0;}
+.capbar .nocap{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);
+  cursor:pointer;user-select:none;}
+.capbar .nocap input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
+.capbar input[type=number]:disabled{opacity:.4;cursor:not-allowed;}
+.capbar .hint{flex-basis:100%;font-size:11.5px;color:var(--ink3);}
+.capbar .hint:empty{display:none}
+.capbar .hint b{color:var(--ink2);font-weight:600;}
+/* the rules block and its dial read as one object */
+.rules:has(+ .capbar){border-bottom-left-radius:0;border-bottom-right-radius:0;}
+/* the cap sweep sits right under the dial: it is what the dial does, across the whole grid */
+.sweepcard{margin-top:14px;}
+.sweepplot{min-height:210px;}
+.chartnote{margin:0;padding:0 14px 4px;font-size:12px;color:var(--ink3);line-height:1.5;
+  max-width:78ch;}
+.chartnote b{color:var(--ink2);font-weight:600;}
+/* the chart's own reading, generated from the chart so it cannot go stale */
+.findings{padding:6px 14px 14px;max-width:86ch;}
+.findings h4{margin:15px 0 3px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;}
+.findings p{margin:0;font-size:13px;color:var(--ink2);line-height:1.55;}
+.findings b{color:var(--ink);font-weight:600;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
   background:var(--border);
   border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:22px 0 22px;}
@@ -223,6 +248,9 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
   @page{size:A4 portrait;margin:13mm 11mm;}
   html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .noprint{display:none!important;}
+  /* the cap dial is one of those, and :has(+ .capbar) still matches a hidden sibling --
+     give the rules block its bottom corners back rather than leaving them squared off */
+  .rules{border-bottom-left-radius:12px!important;border-bottom-right-radius:12px!important;}
   .wrap{max-width:none;padding:0;}
   /* scroll boxes must open up: a PDF cannot be scrolled */
   .tradescroll,.tscroll{max-height:none!important;overflow:visible!important;}

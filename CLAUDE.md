@@ -70,6 +70,16 @@ unfair). A gapped stop therefore loses MORE than 1R (worst on this data: −11.6
 through both. This changed every published number and every solved risk; slippage still
 charges the full 3-tick stop rate on a gapped stop, deliberately.
 
+AUDITED when the user asked why quickfix and quickfixpro disagree on an engulfing bar (see
+README "Why two strategies can split on the same bar"): `check_exit` IS shared and both give
+the doubt to the stop (quickfix 5 of 9 such days -> `unknown_pl`, quickfixpro 6 of 7). The
+wins are the GAP rule firing first. They split on exactly one date, EURO_Futures 2026-05-08,
+where the open fell between the two strategies' targets (1.6 ticks apart). Do NOT "fix" this
+as an inconsistency -- it is one rule against two target prices. The one thing genuinely open:
+`open <= target` counts an open sitting EXACTLY on the target as a gap (once today,
+USD_EUR_Cross_Rate 2026-03-09 quickfixpro +0.27R); requiring a strict one-tick gap was offered
+and not taken.
+
 **RISK PER TRADE IS PER STRATEGY** (user, 2026-07-27): each strategy's default is the risk
 that puts THAT strategy at `engine.TARGET_DD` (6%) max drawdown — quickfix **1.175%**,
 quickfixpro **0.8%**, slowfix **0.396%**. They are MEASURED constants in `strategies.py`

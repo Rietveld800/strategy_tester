@@ -313,16 +313,7 @@ SECTION_HTML = r"""<section class="rep" data-root>
     <div class="rulefoot">__MECHANICS__</div>
     <div class="rulefoot">__PRICEONLY__</div>
   </div>
-  <section class="riskbar capbar noprint">
-    <span class="lbl">Rule 4 &middot; profit cap</span>
-    <input data-el="capin" type="number" min="__CAPMIN__" max="__CAPMAX__"
-           step="__CAPSTEP__" value="__CAPVAL__"
-           aria-label="Rule 4 profit cap, in R">
-    <span class="unit">R</span>
-    <label class="nocap"><input data-el="capoff" type="checkbox"> no cap</label>
-    <span class="hint" data-el="caphint"></span>
-  </section>
-
+__CAPBAR__
 __RISKBAR__
   <section class="kpis" data-el="kpis"></section>
 
@@ -363,7 +354,27 @@ __RISKBAR__
     </div>
   </div>
 __DAILY__
+__CAPCHART__
+  <footer class="mono">__FOOTER__</footer>
+</section>"""
 
+# Rule 4's cap dial, and the section that sweeps the whole cap axis. Both are filled in only
+# for a strategy whose Rule 4 IS the cap family. Quickfixpro's Rule 4 has no number in it, so
+# a dial would have nothing to move and the sweep would be a chart of a different strategy --
+# they are simply left out of its section rather than shown disabled.
+CAPBAR_HTML = r"""
+  <section class="riskbar capbar noprint">
+    <span class="lbl">Rule 4 &middot; profit cap</span>
+    <input data-el="capin" type="number" min="__CAPMIN__" max="__CAPMAX__"
+           step="__CAPSTEP__" value="__CAPVAL__"
+           aria-label="Rule 4 profit cap, in R">
+    <span class="unit">R</span>
+    <label class="nocap"><input data-el="capoff" type="checkbox"> no cap</label>
+    <span class="hint" data-el="caphint"></span>
+  </section>
+"""
+
+CAPCHART_HTML = r"""
   <h2 class="section-h">Choosing the profit cap</h2>
   <section class="card sweepcard">
     <div class="charthead">
@@ -382,9 +393,7 @@ __DAILY__
     </div>
     <div class="findings" data-el="capfindings"></div>
   </section>
-
-  <footer class="mono">__FOOTER__</footer>
-</section>"""
+"""
 
 RISKBAR_HTML = r"""
   <section class="riskbar noprint">
@@ -409,12 +418,15 @@ SCRIPT = r"""<script>
 const DATASETS = __DATASETS__;
 const STRATS = __STRATS__;
 const RISK_DEFAULT = __RISKDEF__;
-// Rule 4's cap grid: one entry per setting of the profit cap, each a REAL backtest run by
-// run_portfolio.py. Shared by every strategy on the page, because Rule 4 is one family --
-// quickfix at 4R and slowfix at 4R are the same run and are stored once.
+// Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
+// strategy on the page: quickfix at 4R and slowfix at 4R are the same run and are stored
+// once. `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra`
+// holds the settings that are NOT caps (Quickfixpro's entry-bar target): same packed rows,
+// same replay, but not a point on that axis, so a strategy sitting on one carries neither
+// the dial nor the sweep.
 //
 // Why this is precomputed while the risk % is replayed live: risk changes only the DOLLAR
-// SIZING of a fixed trade list, so the browser can redo the arithmetic. The cap changes the
+// SIZING of a fixed trade list, so the browser can redo the arithmetic. Rule 4 changes the
 // trades. It moves every exit, and since only one position per market runs at a time, an
 // earlier exit frees that market for a signal a longer hold would have missed -- the trade
 // list itself is different, and there is nothing to replay it from.
@@ -464,9 +476,10 @@ const signFix = (v,d) => v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
 const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
 // 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
 // a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
+// 'target_bar' = Quickfixpro's target, the entry bar's own extreme.
 const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L",
   bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
-  data_end:"data ended",open_at_end:"open at end"})[r]||r;
+  data_end:"data ended",open_at_end:"open at end",target_bar:"bar target"})[r]||r;
 
 // ---- one strategy's report, mounted into `root` ----------------------------------
 // A factory rather than top-level code: the print report mounts SEVERAL of these on one
@@ -477,9 +490,12 @@ function mountReport(root, DATA){
   // One calendar for the whole cap grid, so moving the dial does not shift the equity
   // curve's x-axis underneath the reader: 4R and 8R are drawn over exactly the same period.
   const DAYS = VARIANTS.days;
-  // The two dials. CAP is this strategy's OWN (Rule 4 is what tells strategies apart, so
-  // each mounted section keeps its own); RISK is set globally for the whole page.
-  let CAP = DATA.cap, RISK = RISK_DEFAULT;
+  // The two dials. CAP is this strategy's OWN Rule 4 setting (Rule 4 is what tells the
+  // strategies apart, so each mounted section keeps its own); RISK is set globally for the
+  // whole page. A strategy whose Rule 4 is not in the cap family has no dial to turn -- its
+  // section is built without one, and IN_FAMILY says so for everything downstream.
+  let CAP = DATA.r4, RISK = RISK_DEFAULT;
+  const IN_FAMILY = VARIANTS.caps.indexOf(CAP) >= 0;
   let RAW = unpackCap(CAP);
 
   // ---- shared-account money management, replayed in the browser ------------------
@@ -1069,7 +1085,8 @@ function mountReport(root, DATA){
     });
     return NORM;
   }
-  const drawNorm = capPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
+  const drawNorm = !$("nwplot") ? function(){} :
+    capPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
     `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
     (p.risk==null ? row("Risk needed","cannot reach "+TARGET_DD+"%") :
       row("Risk per trade", p.risk.toFixed(2)+"%") + row("Final capital", fmtUSD(p.final)) +
@@ -1177,6 +1194,9 @@ function mountReport(root, DATA){
   }
 
   function renderNorm(){
+    // Only a cap-family section carries this chart -- it is a sweep of the cap axis, and a
+    // strategy that is not on that axis would be shown someone else's result.
+    if(!$("nwplot")) return;
     const S=buildNorm();
     // The bisection has to have actually converged, or every figure on this chart is a
     // different drawdown pretending to be 6%.
@@ -1205,13 +1225,13 @@ function mountReport(root, DATA){
   // Per strategy, not per page: Rule 4 IS the difference between the strategies, so one
   // shared dial would collapse them onto each other in a multi-strategy report.
   const capIn = $("capin"), capOff = $("capoff"), capHint = $("caphint");
-  const DEFAULT_CAP = DATA.cap;
+  const DEFAULT_CAP = DATA.r4;
   // What the number box shows while "no cap" is ticked, so unticking returns somewhere sane.
   // Taken from the box's own initial value rather than a magic number: for an uncapped page
   // that value is the registry's default cap, so unticking lands on the setting the OTHER
   // strategy uses instead of somewhere arbitrary. (It was hardcoded to 5, which stopped
   // agreeing with the box the moment quickfix's default moved off 5R.)
-  let lastNum = DEFAULT_CAP !== "none" ? DEFAULT_CAP
+  let lastNum = (IN_FAMILY && DEFAULT_CAP !== "none") ? DEFAULT_CAP
               : (capIn && capIn.value !== "" ? snapCap(Number(capIn.value)) : snapCap(5));
 
   // Everything on the page that quotes the cap is rewritten from strategies.py's own text,
@@ -1250,7 +1270,10 @@ function mountReport(root, DATA){
     }
   }
   function setCap(tok, typed){
-    if (!VARIANTS.v[tok] || tok === CAP) return;
+    // IN_FAMILY guards the URL route as much as the control: report.html accepts a
+    // "&cap=key:tok" pair, and letting one re-dial a strategy that is not on the cap axis
+    // would print a Quickfixpro section showing a cap run's trades.
+    if (!IN_FAMILY || !VARIANTS.v[tok] || tok === CAP) return;
     CAP = tok;
     if (tok !== "none") lastNum = tok;
     RAW = unpackCap(tok);
@@ -1282,7 +1305,7 @@ function mountReport(root, DATA){
   // "none" the callback silently never ran and the chart was simply missing -- including
   // from the printed PDF, where nothing would have hinted at it. A chart that sometimes
   // does not exist is a far worse trade than 80 ms of load time.
-  new ResizeObserver(renderNorm).observe($("nwplot"));
+  if ($("nwplot")) new ResizeObserver(renderNorm).observe($("nwplot"));
   applyCapText(); syncCapControl(); renderAll(); renderNorm(); selfCheck();
   return {setRisk:setRisk, setCap:setCap, cap:()=>CAP, key:DATA.strategy,
           render:()=>{ render(); renderNorm(); },
@@ -1524,21 +1547,22 @@ def load_variants():
 
 
 def check_variants(strategy, data, variants):
-    """The strategy's default cap must be in the grid, and must agree with its workbook.
+    """The strategy's default Rule 4 must be in the grid, and must agree with its workbook.
 
-    The grid runs every cap over ONE shared calendar while the workbook uses the strategy's
-    own first trading day. Those coincide today (the first signal does not depend on the
-    cap), and this is the guard that says so out loud if the data ever makes them diverge --
-    otherwise the page would quietly show a final capital the workbook does not have.
+    The grid runs every setting over ONE shared calendar while the workbook uses the
+    strategy's own first trading day. Those coincide today (the first signal does not depend
+    on Rule 4), and this is the guard that says so out loud if the data ever makes them
+    diverge -- otherwise the page would quietly show a final capital the workbook does not
+    have.
     """
-    tok = data["cap"]
+    tok = data["r4"]
     if tok not in variants["v"]:
-        raise SystemExit(f"{strategy.key}: cap {tok!r} is not in the grid -- "
-                         f"rerun run_portfolio.py after changing strategies.CAP_CHOICES")
+        raise SystemExit(f"{strategy.key}: Rule 4 {tok!r} is not in the grid -- "
+                         f"rerun run_portfolio.py after changing strategies.py")
     grid, book = variants["v"][tok]["final"], data["final"]
     if abs(grid - book) > 0.5:
         raise SystemExit(
-            f"{strategy.key}: the cap grid's final capital ({grid:,.2f}) disagrees with "
+            f"{strategy.key}: the variant grid's final capital ({grid:,.2f}) disagrees with "
             f"{strategy.key}_portfolio_daily.xlsx ({book:,.2f}). The shared calendar in "
             f"run_portfolio.write_variants has drifted from the per-strategy one.")
 
@@ -1577,6 +1601,10 @@ def section_html(strategy, data, riskbar, daily):
               f"{n_all} markets tested, <span data-el=\"footmk\">{data['n_markets']}</span> "
               f"traded &middot; rule 4: <span data-el=\"footrule4\">{strategy.rule4}</span> "
               f"&middot; per-market one-position-at-a-time, portfolio-level concurrency")
+    # The cap dial and the cap sweep belong to the cap FAMILY, not to every strategy. A
+    # strategy whose Rule 4 is a different shape has no number to dial and does not sit on
+    # that axis, so both are left out of its section entirely -- an inert control and a
+    # chart of somebody else's strategy would both be worse than their absence.
     return (SECTION_HTML
             .replace("__EYEBROW__", eyebrow)
             .replace("__H1__", f"{strategy.title} &mdash; portfolio equity curve")
@@ -1584,6 +1612,8 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__RULES__", rules_html(strategy))
             .replace("__MECHANICS__", strategies.entry_mechanics(eng.RISK_PCT))
             .replace("__PRICEONLY__", strategies.PRICE_ONLY_NOTE)
+            .replace("__CAPBAR__", CAPBAR_HTML if strategy.r4.in_grid else "")
+            .replace("__CAPCHART__", CAPCHART_HTML if strategy.r4.in_grid else "")
             .replace("__RISKBAR__", riskbar)
             .replace("__CAPMIN__", f"{strategies.CAP_MIN:g}")
             .replace("__CAPMAX__", f"{strategies.CAP_MAX:g}")

@@ -1,30 +1,36 @@
 # export_charter_trades.py
 #
-# Hand-off from strategy_tester to charter: write ONE JSON PER PROFIT CAP of that cap's
+# Hand-off from strategy_tester to charter: write ONE JSON PER OVERLAY of that overlay's
 # trades, keyed by market, which charter overlays on each market's daily price chart. This
 # is trade GEOMETRY only (dates + prices on the chart) -- the shared-account money
 # management (position sizing, portfolio P&L) lives in run_portfolio.py and is not needed
 # here.
 #
-# BY CAP, NOT BY STRATEGY (2026-07-27). The overlay used to be one file per registered
-# strategy, quickfix and slowfix. Now that Rule 4 is one family with the cap as its only
-# parameter, the useful thing to compare on a price chart is a few CAPS -- see
-# CHARTER_CAPS below. Slowfix is no longer exported at all: it is the same family at no
-# cap, its trades are the least interesting on the chart, and the reports already carry it.
-# (Slowfix remains a full strategy everywhere else -- the workbooks and the HTML reports
-# are unchanged. This is only about what charter draws.)
+# WHAT GETS AN OVERLAY. Two lists, because Rule 4 comes in two shapes:
+#
+#   CHARTER_CAPS        a few settings of the CAP FAMILY. Not one file per strategy: quickfix
+#                       and slowfix are that family at two caps, so the useful comparison on
+#                       a price chart is a handful of caps (2026-07-27). Slowfix is not
+#                       exported at all -- it is the family at no cap, its trades are the
+#                       least interesting on the chart, and the reports already carry it.
+#   CHARTER_STRATEGIES  strategies whose Rule 4 is NOT a cap, exported by KEY because there
+#                       is no cap number to name the file after. Quickfixpro today.
+#
+# (Slowfix remains a full strategy everywhere else -- the workbooks and the HTML reports are
+# unchanged. This is only about what charter draws.)
 #
 # Each trade carries the entry/exit the way it plots on price: entry at the first-reversal
-# price on the entry bar, exit at the fill level (R cap / stop / opposite reversal) on the
-# exit bar. An 'unknown_pl' trade is booked at the stop, so its exit price is the stop. An
-# 'open_at_end' trade never exited, so exit_date/exit are null (charter draws it as open).
+# price on the entry bar, exit at the fill level (R cap / entry-bar target / stop / opposite
+# reversal) on the exit bar. An 'unknown_pl' trade is booked at the stop, so its exit price
+# is the stop. An 'open_at_end' trade never exited, so exit_date/exit are null (charter draws
+# it as open).
 #
 #   python export_charter_trades.py
 #
-# Output: output/charter_trades_cap<NN>_<NN>.json -- one file per cap, all in the same
-# schema, so charter reads a fixed pattern instead of a new path shape per cap (charter
-# reads these at build time; see charter's README). The names are zero-padded so filename
-# order IS cap order: charter sorts by filename and shows the boxes in that order.
+# Output: output/charter_trades_<key>.json -- one file per overlay, all in the same schema,
+# so charter reads a fixed pattern instead of a new path shape per overlay (charter reads
+# these at build time; see charter's README). Cap names are zero-padded so filename order IS
+# cap order: charter sorts by filename and shows the boxes in that order.
 
 import json
 import sys
@@ -35,14 +41,20 @@ import strategies
 # The caps handed to charter. Deliberately a SHORT list, not the whole grid: every cap takes
 # exactly the same setups (Rules 1-3 do not involve the cap), so their entry markers land on
 # identical bars at identical prices -- 33 overlays would stack 33 triangles on one point and
-# fan 33 exit lines from it. Charter also has only four line styles, and colour already means
-# the outcome. Three caps is what stays readable.
+# fan 33 exit lines from it. Charter also draws every overlay identically, and colour already
+# means the outcome. Four caps is what stays readable.
 #
 # 2R, 2.25R and 2.5R are the levered sweet spot the reports single out -- 2.5R is quickfix's
 # documented default, so it has to be here: the charts would otherwise draw every cap except
 # the one the strategy actually runs at. 5R is what that default used to be, kept as the
 # comparison the tight caps are worth reading against.
 CHARTER_CAPS = [2.0, 2.25, 2.5, 5.0]
+
+# Strategies outside the cap family, exported whole. Quickfixpro earns its overlay by being a
+# different SHAPE rather than another setting: its exits are the entry bar's own low, so
+# unlike the caps its lines do not fan out from the entry point along one axis -- they stop
+# inside the entry bar. That is worth seeing against the caps on the same price pane.
+CHARTER_STRATEGIES = ["quickfixpro"]
 
 
 def charter_key(cap):
@@ -56,8 +68,25 @@ def charter_key(cap):
     return f"cap{whole:02d}_{frac:02d}"
 
 
-def out_path(cap):
-    return eng.OUT_DIR / f"charter_trades_{charter_key(cap)}.json"
+def hand_offs(caps=None, keys=None):
+    """Every overlay this export owns, as (file key, title, rule 4 line, variant token).
+
+    Caps first, then the non-cap strategies. Charter lists the boxes in FILENAME order, and
+    'quickfixpro' sorts after every 'cap..' name, so the caps stay together in cap order and
+    the strategies follow them.
+    """
+    caps = CHARTER_CAPS if caps is None else caps
+    keys = CHARTER_STRATEGIES if keys is None else keys
+    out = [(charter_key(c), strategies.cap_label(c), strategies.rule4_line(c),
+            strategies.cap_token(c)) for c in caps]
+    for k in keys:
+        s = strategies.get(k)
+        out.append((s.key, s.title, s.rule4, s.token))
+    return out
+
+
+def out_path(key):
+    return eng.OUT_DIR / f"charter_trades_{key}.json"
 
 
 def trade_for_chart(t):
@@ -75,9 +104,13 @@ def trade_for_chart(t):
                 bars=t["bars_in_trade"])
 
 
-def export(cap, results):
-    """One cap's trades, keyed by market, in charter's schema."""
-    tok = strategies.cap_token(cap)
+def export(item, results):
+    """One overlay's trades, keyed by market, in charter's schema.
+
+    `item` is a `hand_offs()` tuple, so a cap and a whole strategy are written by exactly the
+    same code -- charter's schema does not care which shape of Rule 4 produced the trades.
+    """
+    key, title, rule4, tok = item
     markets, total = {}, 0
     for m in results:
         trades = m["var"][tok]["trades"]
@@ -88,21 +121,19 @@ def export(cap, results):
         total += len(trades)
 
     out = dict(
-        meta=dict(strategy=charter_key(cap), title=strategies.cap_label(cap),
-                  cap=tok, rule4=strategies.rule4_line(cap),
+        meta=dict(strategy=key, title=title, cap=tok, rule4=rule4,
                   timeframe=eng.TIMEFRAME, source="strategy_tester",
                   starting_capital=eng.STARTING_CAPITAL, risk_pct=eng.RISK_PCT,
                   n_markets=len(markets), n_trades=total),
         markets=markets,
     )
-    path = out_path(cap)
+    path = out_path(key)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, indent=1), encoding="utf-8")
-    print(f"{strategies.cap_label(cap):>7}: {total} trades across {len(markets)} markets "
-          f"-> {path.name}")
+    print(f"{title:>12}: {total} trades across {len(markets)} markets -> {path.name}")
 
 
-def prune(caps):
+def prune(items):
     """Delete hand-off files this export no longer owns.
 
     Charter GLOBS charter_trades_*.json, so a file left behind from an earlier set keeps
@@ -110,7 +141,7 @@ def prune(caps):
     dropped here. Only files matching this exact pattern are touched, and each one is named
     as it goes.
     """
-    keep = {out_path(c).name for c in caps}
+    keep = {out_path(i[0]).name for i in items}
     for p in sorted(eng.OUT_DIR.glob("charter_trades_*.json")):
         if p.name not in keep:
             p.unlink()
@@ -118,12 +149,17 @@ def prune(caps):
 
 
 def main(argv):
+    # Arguments select the CAPS only; the non-cap strategies are always handed over, since
+    # naming one on the command line would mean guessing whether it is a cap or a key.
     caps = [float(a) for a in argv] if argv else list(CHARTER_CAPS)
+    items = hand_offs(caps=caps)
+    # Only the caps being exported, not the whole dial grid: run_markets adds each registered
+    # strategy's own Rule 4 on top, which is what brings Quickfixpro's run along.
     results = eng.run_markets(strategies.REGISTRY, caps=caps)
     print()
-    for cap in caps:
-        export(cap, results)
-    prune(caps)
+    for item in items:
+        export(item, results)
+    prune(items)
 
 
 if __name__ == "__main__":

@@ -192,7 +192,7 @@ def account(raw, all_days, first_day):
 
 
 def run(strategy, results):
-    """One strategy's on-disk outputs, at its DEFAULT cap: the workbook and the JSON."""
+    """One strategy's on-disk outputs, at its DEFAULT Rule 4: the workbook and the JSON."""
     raw, all_days = collect(results, lambda m: m["res"][strategy.key]["trades"])
     # EVERY market that was backtested, not just the ones that produced a trade. A market
     # the rules never fired on is a real result and belongs in the per-market table as a
@@ -205,7 +205,7 @@ def run(strategy, results):
     stats["n_markets_all"] = len(universe)
     _write(strategy, raw, timeline, stats)
     _write_json(strategy, raw, timeline, stats, universe)
-    print(f"{strategy.key} (cap {strategies.cap_label(strategy.cap)}): "
+    print(f"{strategy.key} (rule 4: {strategy.r4.label}): "
           f"NET  ${stats['final']:,.2f} ({stats['ret']:+.2f}%)   "
           f"gross ${stats['gross_final']:,.0f} ({stats['gross_ret']:+.2f}%)   "
           f"cost drag ${stats['total_cost']:,.0f}")
@@ -217,24 +217,30 @@ def run(strategy, results):
     print(f"  written: {out_xlsx(strategy)}")
 
 
-# --- the cap grid, for the report's Rule 4 dial ------------------------------------
+# --- the Rule 4 variant grid, for the report's dial --------------------------------
 # One packed table of EVERY cap in strategies.CAP_CHOICES, written once and shared by every
-# strategy's page -- Rule 4 is a single family, so quickfix at 4R and slowfix at 4R are the
-# same run and must not be stored twice.
+# strategy's page -- the cap family is a single family, so quickfix at 4R and slowfix at 4R
+# are the same run and must not be stored twice. Every registered Rule 4 that is NOT a cap
+# (Quickfixpro's entry-bar target) is filed in the same table under its own token; it is
+# listed separately from `caps` in the document, because the caps are the dial's axis and a
+# different Rule 4 shape is not a point on it.
 #
 # Why precomputed at all, when the risk dial replays in the browser: risk only changes the
-# DOLLAR SIZING of a fixed trade list, but the cap changes the trades themselves. It moves
+# DOLLAR SIZING of a fixed trade list, but Rule 4 changes the trades themselves. It moves
 # every exit, and because only one position per market runs at a time, an earlier exit frees
 # that market for a later signal a longer hold would have missed. There is nothing to replay
-# from -- each cap is a real backtest, so all of them are run here.
+# from -- each setting is a real backtest, so all of them are run here.
 VARIANTS_PATH = eng.OUT_DIR / "_variants.json"
 
 # The packed row layout. Kept as data because build_equity_html.py's JS unpacks by this
 # exact order -- change one side and you must change the other.
 VAR_COLS = ["m", "side", "din", "dout", "xd", "gr", "cr", "bars",
             "pin", "pout", "sl", "reason"]
+# 'target_bar' is Quickfixpro's exit: the entry bar's own extreme. Appended rather than
+# slotted in beside 'target_r' -- the table travels WITH the rows, so the order is free to
+# change, but keeping it append-only makes a hand-read of an old file less confusing.
 VAR_REASONS = ["target_r", "stop", "unknown_pl", "bullish_reversal", "bearish_reversal",
-               "data_end", "open_at_end"]
+               "data_end", "open_at_end", "target_bar"]
 
 
 def _pack_rows(raw, mkt_ix, day_ix):
@@ -279,21 +285,35 @@ def _pack_rows(raw, mkt_ix, day_ix):
     return rows
 
 
-def write_variants(results, caps=None):
-    """Backtest results for every cap, packed into output/_variants.json for the pages.
+def write_variants(results, caps=None, extra=None):
+    """Backtest results for every Rule 4 setting, packed into output/_variants.json.
+
+    `caps` is the dial's axis (strategies.CAP_CHOICES by default). `extra` is every
+    registered Rule 4 that is NOT a cap, defaulting to exactly those in the registry -- they
+    go into the same packed table so the pages have one unpacker, and are listed under
+    `extra` in the document so the dial and the levered chart, which are about the cap axis,
+    can ignore them.
 
     The whole grid shares ONE day calendar, so moving the dial does not shift the equity
     curve's x-axis underneath the reader -- 4R and 8R are drawn over exactly the same
-    period. The calendar starts at the earliest first entry across all caps; caps whose own
-    first trade is later simply open flat.
+    period. The calendar starts at the earliest first entry across all settings; settings
+    whose own first trade is later simply open flat.
     """
     caps = list(strategies.CAP_CHOICES) if caps is None else list(caps)
+    if extra is None:
+        extra = [s.r4 for s in strategies.REGISTRY if not s.r4.in_grid]
+    # One uniform list of Rule 4 objects: the packing, the money-management replay and the
+    # per-setting texts are identical whether or not the setting is a point on the dial.
+    grid = [strategies.cap_rule4(c) for c in caps]
+    seen = {r.token for r in grid}
+    variants = grid + [r for r in extra if r.token not in seen]
+
     universe = [m["name"] for m in results]
     mkt_ix = {name: i for i, name in enumerate(universe)}
 
     prepared = {}
-    for cap in caps:
-        tok = strategies.cap_token(cap)
+    for r4 in variants:
+        tok = r4.token
         raw, all_days = collect(results, lambda m, tok=tok: m["var"][tok]["trades"])
         prepared[tok] = (prepare(raw), all_days)
 
@@ -303,29 +323,30 @@ def write_variants(results, caps=None):
     day_ix = {str(d): i for i, d in enumerate(days)}
 
     out = {}
-    for cap in caps:
-        tok = strategies.cap_token(cap)
-        raw, _ = prepared[tok]
+    for r4 in variants:
+        raw, _ = prepared[r4.token]
         _, stats = account(raw, all_days, shared_first)
-        closed = [t for t in raw if t["exit_reason"] != "open_at_end"]
-        out[tok] = dict(
+        out[r4.token] = dict(
             rows=_pack_rows(raw, mkt_ix, day_ix),
             # the page self-checks its own replay against this at the default risk
             final=round(stats["final"], 2),
             avg_win_r=round(stats["avg_win_r"], 3), best_r=round(stats["best_r"], 3),
             avg_bars=round(stats["avg_bars"], 2))
 
-    doc = dict(caps=[strategies.cap_token(c) for c in caps],
-               labels={strategies.cap_token(c): strategies.cap_label(c) for c in caps},
-               texts={strategies.cap_token(c): strategies.cap_texts(c) for c in caps},
+    doc = dict(caps=[r.token for r in grid],
+               extra=[r.token for r in variants if not r.in_grid],
+               labels={r.token: r.label for r in variants},
+               texts={r.token: r.texts for r in variants},
                cols=VAR_COLS, reasons=VAR_REASONS,
                markets=universe, days=[str(d) for d in days],
-               defaults={s.key: strategies.cap_token(s.cap) for s in strategies.REGISTRY},
+               defaults={s.key: s.token for s in strategies.REGISTRY},
                v=out)
     VARIANTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     VARIANTS_PATH.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
     size = VARIANTS_PATH.stat().st_size
-    print(f"  written: {VARIANTS_PATH.name}  {len(caps)} caps  {size:,} bytes")
+    print(f"  written: {VARIANTS_PATH.name}  {len(grid)} caps"
+          + (f" + {len(variants) - len(grid)} other" if len(variants) > len(grid) else "")
+          + f"  {size:,} bytes")
 
 
 def main(argv):
@@ -391,7 +412,7 @@ def _streaks_and_avgs(raw):
 
 
 def _write_json(strategy, raw, timeline, stats, universe):
-    """Per-trade rows and headline stats for the equity-curve page, at the default cap.
+    """Per-trade rows and headline stats for the equity-curve page, at the default Rule 4.
 
     `universe` is every market backtested, with its obsolete flag -- the page seeds the
     per-market table from it so markets that produced no trade still show, as zeros.
@@ -402,7 +423,9 @@ def _write_json(strategy, raw, timeline, stats, universe):
     """
     days = [str(t["date"]) for t in timeline]
     out = dict(strategy=strategy.key, title=strategy.title, rule4=strategy.rule4,
-               cap=strategies.cap_token(strategy.cap),   # this strategy's default Rule 4
+               # the variant token this page opens at. Named r4, not cap: it is a cap token
+               # for the family and something else entirely for a strategy outside it.
+               r4=strategy.token,
                risk_pct=RISK_PCT,          # the page's replay starts from this
                start=START_CAP,
                final=round(stats["final"], 2),

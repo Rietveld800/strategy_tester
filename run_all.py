@@ -68,9 +68,12 @@ def write(strategy, results):
 
 def main(argv):
     picked = strategies.selected(argv)
-    # Only the strategies' own caps -- this workbook is written at the default, and the
-    # report's cap dial never changes a file on disk.
-    results = eng.run_markets(picked, caps=[s.cap for s in picked])
+    # Only the strategies' own Rule 4 settings -- this workbook is written at the default,
+    # and the report's cap dial never changes a file on disk. The caps are named explicitly;
+    # a strategy outside the cap family is added by run_markets from its own token, so it
+    # must NOT be listed here as a cap (its `cap` is None, which means "no cap" and is a
+    # different run entirely).
+    results = eng.run_markets(picked, caps=[s.cap for s in picked if s.r4.in_grid])
     print()
     for s in picked:
         write(s, results)

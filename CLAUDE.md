@@ -39,10 +39,15 @@ TWO strategies are built and documented — **quickfix** (strategy 1) and **slow
 differ only in the exit.
 
 **Rule 4 is ONE family with one number in it — the profit cap in R.** "Ride to the first
-opposite reversal beyond entry, but never past `cap`R." quickfix is that family at cap 5R,
-slowfix at cap None. So quickfix uncapped IS slowfix and slowfix at 5R IS quickfix, trade
-for trade; they are one strategy at the two settings the research is about. Say that
-plainly rather than describing them as two methods. See `README.md` for the full rules,
+opposite reversal beyond entry, but never past `cap`R." quickfix is that family at cap
+**2.5R** (was 5R until 2026-07-27), slowfix at cap None. So quickfix uncapped IS slowfix
+and slowfix at 2.5R IS quickfix, trade for trade; they are one strategy at the two settings
+the research is about. Say that plainly rather than describing them as two methods.
+
+**`engine.RISK_PCT` is 1.573%, NOT 1%** (user, 2026-07-27): it is the risk that puts
+quickfix's 2.5R at exactly a 6% maximum drawdown. So **1R = 1.573%**, and any text saying
+"1R = 1%" is stale — the rules block generates it from the constant
+(`strategies.entry_mechanics(risk_pct)`, a function for exactly this reason). See `README.md` for the full rules,
 money-management/slippage model, outputs and the charter hand-off.
 
 The cap is a **DIAL on the reports** (2R–10R in quarter-R steps, plus no cap): each setting
@@ -51,9 +56,12 @@ changes the trades themselves (every exit moves, and an earlier exit frees that 
 signal a longer hold blocked). Do NOT confuse it with the risk dial, which replays live in
 the browser precisely because trades are capital-independent. One cap dial PER STRATEGY
 (Rule 4 is what tells them apart); one risk dial per PAGE (one account). Files on disk are
-always written at the strategy's default cap. On this data 5R is the best return/drawdown
-setting on the grid, but drawdown moves in plateaus on a 79-trade sample — do not read the
-sweep as an optimisation.
+always written at the strategy's default cap. On this data **2.5R is the best cap once the
+caps are levered to equal drawdown**, which is why it is the default — but drawdown moves in
+plateaus on an ~80-trade sample, so do not read any of this as an optimisation. Critically,
+ret/DD at a FIXED risk is NOT risk-invariant: the same fixed-risk sweep ranked 5R top at 1%
+and 7R/8.5R top at 1.573%, with nothing about the strategies changing in between. Only the
+levered chart compares caps honestly — never rank caps off the fixed-risk sweep.
 
 Layout: one shared `engine.py`, and strategies are DATA in `strategies.py` (a registry; each
 strategy is a key, a title and a default cap — every line of Rule 4 text is generated from
@@ -121,7 +129,9 @@ Obsolescence is cross-market, so `run_markets` loads every market before backtes
 
 Trades are handed to charter **per CAP, not per strategy** (2026-07-27):
 `output/charter_trades_cap<NN>_<NN>.json`, zero-padded so filename order IS cap order. The
-set is `CHARTER_CAPS` in `export_charter_trades.py` — currently **2R, 2.25R, 5R**.
+set is `CHARTER_CAPS` in `export_charter_trades.py` — currently **2R, 2.25R, 2.5R, 5R**.
+It MUST contain quickfix's default cap, or the charts draw every cap except the one the
+strategy runs at.
 **Slowfix is no longer exported to charter at all** (user, 2026-07-27) — it stays a full
 strategy everywhere else; this is only about what charter draws. The exporter PRUNES
 hand-off files it no longer owns, because charter globs the directory and a leftover file

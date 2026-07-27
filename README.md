@@ -14,8 +14,8 @@ They share every rule except Rule 4, so they take **exactly the same setups** an
 only in where those trades are closed.
 
 Rule 4 is a **single family with one number in it** — the profit cap in R — and that number
-is a **dial on the reports**: quickfix is the family at 5R, slowfix at no cap, and the pages
-re-run the whole backtest at any setting from 2R to 10R in quarter-R steps. See
+is a **dial on the reports**: quickfix is the family at 2.5R, slowfix at no cap, and the
+pages re-run the whole backtest at any setting from 2R to 10R in quarter-R steps. See
 [The Rule 4 cap dial](#the-rule-4-cap-dial-on-the-reports).
 
 ---
@@ -46,7 +46,7 @@ for entry detection and for target recomputation alike.
 3. **Entry trigger.** The bar **closes below the first reversal**. Entry fills at the first
    reversal price. (Close at or above it → no trade — no proof price snapped back.)
 4. **Stop.** One tick above the entry bar's high. `risk = stop - entry`. Position is sized
-   so that risk is exactly 1% of equity, so **1R = 1%**.
+   so that risk is exactly `RISK_PCT` of equity (**1.573%** today), so **1R = 1.573%**.
 5. **Reward filter (Rule 3).** The nearest bearish reversal below entry must be at least
    **3.5R** below entry, else refuse (not enough room).
 6. **Target (Rule 4).** **This is the only rule that differs per strategy** — see the table
@@ -70,12 +70,12 @@ Rule 4 is a single policy with a **profit cap in R** as its only parameter:
 
 | Strategy | Rule 4 | Character |
 |---|---|---|
-| **quickfix** | The family at **cap = 5R**: take profit at 5R, or at an opposite reversal that sits **closer** than 5R (then that reversal is the target). | Takes profit fast. 5R is a hard ceiling on every winner. |
+| **quickfix** | The family at **cap = 2.5R**: take profit at 2.5R, or at an opposite reversal that sits **closer** than 2.5R (then that reversal is the target). | Takes profit fast. 2.5R is a hard ceiling on every winner. |
 | **slowfix** | The family at **cap = none**: the first opposite reversal beyond entry, however far away. | Rides the move. Rule 3 keeps that level ≥ 3.5R away at entry, so a winner is at least 3.5R unless a nearer reversal appears later; a level 8R away is ridden to 8R. |
 
 The two used to be hand-written functions. Writing them as one family makes the cap a dial
 the reports can move — and makes the relationship explicit: **quickfix uncapped *is*
-slowfix, and slowfix at 5R *is* quickfix, trade for trade.** They are one strategy at the
+slowfix, and slowfix at 2.5R *is* quickfix, trade for trade.** They are one strategy at the
 two settings the research is about, not two methods. The pages say so whenever a dial is
 moved onto another registered strategy's setting.
 
@@ -158,7 +158,7 @@ backtests.
 | `run_all.py` | Runs every market independently (each a fresh $100k) → `<strategy>_all_markets_daily.xlsx` (per-market summary + all trades). |
 | `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid**, packed for the pages. |
 | `build_equity_html.py` | Renders `_equity_<strategy>.json` into the standalone interactive report `output/equity_<strategy>.html`, including the strategy-switcher buttons. |
-| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_cap<NN>_<NN>.json`, one file per **cap** in `CHARTER_CAPS` (2R, 2.25R, 5R), trade geometry keyed by market. Prunes hand-off files it no longer owns. |
+| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_cap<NN>_<NN>.json`, one file per **cap** in `CHARTER_CAPS` (2R, 2.25R, 2.5R, 5R), trade geometry keyed by market. Prunes hand-off files it no longer owns. |
 | `run_pipeline.py` | All four writers in one pass over the array archive (the fast way to regenerate everything). |
 
 Parsing is imported from `../charter/scripts/charting_core.py` (`parse_array`); do not
@@ -186,8 +186,9 @@ strategy. A market's trades (which trades, their entries/exits, their R) are
 capital-independent, so they are reused verbatim and only the money management is re-run on
 the shared account.
 
-- **1% risk on liquid capital.** A new trade risks 1% of `cash − risk already tied up in
-  open trades`. Each open trade ties up its own 1% until it closes.
+- **`RISK_PCT` on liquid capital** (1.573% today). A new trade risks that share of
+  `cash − risk already tied up in open trades`. Each open trade ties up its own risk
+  until it closes.
 - **Cash changes only when a trade closes** (realized P&L added). Open trades are never
   marked to market.
 - **No cap** on concurrent positions.
@@ -201,19 +202,24 @@ trade's own risk distance. In dollars this equals ticks × tick × position size
 slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are omitted
 (negligible for liquid futures relative to slippage).
 
-### Where they stand (2026-07-27 data, 28 markets with trades)
+### Where they stand (2026-07-27 data, 28 markets with trades, risk 1.573%)
 
-| | quickfix | slowfix |
+| | quickfix (2.5R) | slowfix (no cap) |
 |---|---|---|
-| Net return | +171.16% | +205.53% |
-| Gross return | +179.95% | +215.13% |
-| Max drawdown | 5.85% | 12.66% |
-| **Return / drawdown** | **29.2x** | 16.2x |
-| Closed trades | 79 | 76 |
-| Win rate | 41.8% | 27.6% |
-| Average hold | 2.2 bars | 3.8 bars |
+| Net return | +210.74% | +388.25% |
+| Gross return | +225.67% | +411.21% |
+| Max drawdown | **6.00%** | 19.18% |
+| **Return / drawdown** | **35.1x** | 20.2x |
+| Closed trades | 84 | 76 |
+| Win rate | 56.0% | 27.6% |
+| Average hold | 1.4 bars | 3.8 bars |
 | Max concurrent | 5 | 8 |
-| Time in market | 74% | 87% |
+| Time in market | 52% | 87% |
+| Longest losing run | 4 | 13 |
+
+Quickfix's 6.00% drawdown is exact by construction, not luck: `RISK_PCT` **is** the risk that
+puts a 2.5R cap at a 6% maximum drawdown on this data. Slowfix is shown at that same risk
+and is not levered to anything, which is why its hole is three times as deep.
 
 Same entries, different exits: slowfix wins less often but its winners are far larger, and
 it pays for that with a drawdown roughly twice as deep.
@@ -221,38 +227,45 @@ it pays for that with a drawdown roughly twice as deep.
 **Return / drawdown is the ranking metric**, not total return. Risk per trade is a dial, so
 a shallower edge can be levered up to meet a given drawdown, while the reverse conversion
 does not exist — a bigger total return bought with a deeper hole is not automatically the
-better strategy. On that measure quickfix extracts nearly twice as much return per point of
-pain. Its deeper-drawdown profile is structural rather than bad luck: removing the 5R cap
-makes slowfix hold longer (87% vs 74% time in market, 8 vs 5 concurrent positions) and win
-less often (27.6% vs 41.8%), which mechanically produces longer losing runs — its longest
-was 13 straight losers against quickfix's 6.
+better strategy. On that measure quickfix extracts about three quarters more return per point
+of pain despite slowfix's much bigger headline number. Slowfix's deeper drawdown is
+structural rather than bad luck: removing the cap makes it hold longer (87% vs 52% time in
+market, 8 vs 5 concurrent positions) and win far less often (27.6% vs 56.0%), which
+mechanically produces longer losing runs — its longest was 13 straight losers against
+quickfix's 4.
 
-Caveat on both drawdown figures: ~7 months and 79/76 trades. Max drawdown is a single
+Caveat on both drawdown figures: ~7 months and 84/76 trades. Max drawdown is a single
 worst-path observation and the most sample-dependent statistic here. The structural reasons
-above will hold; the specific 5.85% will not — expect it to deepen as the sample grows.
+above will hold; the specific 6.00% will not — expect it to deepen as the sample grows,
+which is a reason to treat the risk that produced it as a ceiling rather than a target.
 
-#### What the cap sweep shows (same data)
+#### What the cap sweep shows (same data, at the default risk)
 
-Now that the cap is a dial, the whole 2R–10R grid can be read at once. **5R is the best
-return/drawdown setting on the grid**, which is a genuinely useful thing to have checked
-rather than assumed:
-
-| cap | 2R | 2.5R | 3.5R | 4.5R | **5R** | 6R | 7R | 8.5R | 10R | none |
+| cap | 2R | **2.5R** | 3.5R | 4.5R | 5R | 6R | 7R | 8.5R | 10R | none |
 |---|---|---|---|---|---|---|---|---|---|---|
-| return | +84% | +108% | +125% | +165% | **+171%** | +181% | +244% | +246% | +212% | +206% |
-| max DD | 3.23% | 3.83% | 5.00% | 5.87% | **5.85%** | 8.73% | 8.72% | 8.71% | 12.66% | 12.66% |
-| ret/DD | 26.0x | 28.3x | 25.0x | 28.1x | **29.2x** | 20.7x | 28.0x | 28.3x | 16.8x | 16.2x |
-| trades | 88 | 84 | 80 | 79 | **79** | 79 | 79 | 77 | 76 | 76 |
-| win rate | 59% | 56% | 48% | 44% | **42%** | 38% | 38% | 35% | 32% | 28% |
+| return | +157% | **+211%** | +247% | +341% | +357% | +375% | +544% | +542% | +438% | +388% |
+| max DD | 5.06% | **6.00%** | 7.71% | 8.96% | 8.93% | 13.34% | 13.32% | 13.29% | 19.18% | 19.18% |
+| ret/DD | 31.0x | **35.1x** | 32.0x | 38.1x | 39.9x | 28.1x | 40.8x | 40.8x | 22.8x | 20.2x |
+| trades | 88 | **84** | 80 | 79 | 79 | 79 | 79 | 77 | 76 | 76 |
+| win rate | 59% | **56%** | 48% | 44% | 42% | 38% | 38% | 35% | 32% | 28% |
 
-Read it carefully rather than as an optimisation. Return climbs fairly steadily with the
-cap; **drawdown moves in plateaus** (3.2% → 5.0% → 5.9% → 8.7% → 12.7%), because on a
-79-trade sample the worst path is dominated by a handful of trades and only jumps when the
-cap crosses one of their exits. Return/drawdown therefore peaks wherever return has climbed
-furthest *within* a plateau — 5R, 8.5R and 2.5R all sit just under a step. That is a
-property of this sample, not a law: the ordering of those peaks is exactly what a longer
-history is most likely to rearrange. The honest reading is that **5R is a reasonable place
-to be and nothing in 2R–10R beats it on this data**, not that 5R is optimal.
+**Do not rank the caps off this table.** It compares them at one bet size, and at one bet
+size a wider cap is being handed a deeper drawdown for free — part of its bigger return is
+just the bigger hole it was allowed to dig. Worse, the ranking *moves with the risk*: return
+compounds exponentially with risk while drawdown is bounded near 100%, so at 1% this same
+sweep put 5R on top at 29.2x and at 1.573% it puts 7R and 8.5R on top at 40.8x. Nothing about
+the strategies changed between those two readings — only the dial did.
+
+The comparison that survives is the **levered one**: solve for the risk that holds every cap
+to the same drawdown, and the caps are being asked the same question. That chart lives at the
+bottom of every report page and it puts **2.5R first**, which is why it is quickfix's default.
+See [Choosing the profit cap](#choosing-the-profit-cap--the-section-at-the-bottom-of-the-page).
+
+What this table *is* good for is the shape: **drawdown moves in plateaus** (5.1% → 7.7% →
+8.9% → 13.3% → 19.2%), because on ~80 trades the worst path is dominated by a handful of
+trades and only jumps when the cap crosses one of their exits. Win rate falls monotonically
+as the cap widens, from 59% at 2R to 28% uncapped. Both of those are structural and will
+hold; the specific peaks will not.
 
 ---
 
@@ -299,7 +312,8 @@ never push the real rows off the top. The full list travels in
 
 Each page states the strategy in full before any figure: the four numbered rules as cards
 (1–3 identical everywhere, 4 the strategy's own), then how the trade is actually placed
-(entry fill, stop, 1R = 1%), then an explicit note that **entries use the reversal levels
+(entry fill, stop, 1R = the risk per trade), then an explicit note that **entries use the
+reversal levels
 only — no timing, cycle or aggregate signal is involved**. That last line exists because the
 page used to describe "time-and-price reversal signals", which misled a first-time reader:
 the umbrella method is "time and price meet", but these strategies are the price half alone.
@@ -416,7 +430,7 @@ steps, plus a **no cap** tick) that switches the entire report to that setting: 
 curve, drawdown, KPIs, per-trade stats, the blotter, the per-market table — and the prose.
 The Rule 4 card, the lede, the honesty note and the footer are all regenerated from the cap
 (their text comes from `strategies.py`, shipped per cap), so a page showing 4.25R never
-still claims a 5R ceiling.
+still claims a 2.5R ceiling.
 
 **Precomputed, not replayed — the opposite of the risk dial.** Risk works in the browser
 because the trades are capital-independent: risk changes the dollar sizing and nothing else.
@@ -434,8 +448,10 @@ slow part and is unchanged, so the grid rides along on the same pass.
 - **The whole grid shares one day calendar**, so moving the dial does not shift the equity
   curve's x-axis: 4R and 8R are drawn over exactly the same period.
 - **Nothing on disk changes.** The workbooks, the JSON ledgers and the charter hand-off are
-  always written at the strategy's **default** cap (quickfix 5R, slowfix none), and the page
-  says so under the dial. The dial is display-side exploration, exactly like risk.
+  always written at the strategy's **default** cap (quickfix 2.5R, slowfix none), and the
+  page says so under the dial. The dial is display-side exploration, exactly like risk.
+  (The charter hand-off is a separate chosen set of caps and need not contain the default —
+  the dial's note is careful not to claim otherwise.)
 - **The page self-checks at every cap.** At the default risk its replay must reproduce
   `run_portfolio.py`'s own final capital for the cap in force; it logs a console warning if
   it ever does not. `build_equity_html.py` additionally refuses to build if the grid's figure
@@ -451,7 +467,7 @@ levered to a constant 6% drawdown**, over the whole 2R–10R grid.
 
 **Why levered rather than at one risk.** Risk per trade is a free variable, so comparing caps
 at a single risk compares them at unequal pain — an uncapped run is twice as deep in drawdown
-as a 5R one, and part of its bigger return is simply a bigger bet. Here the risk is **solved
+as a 2.5R one, and part of its bigger return is simply a bigger bet. Here the risk is **solved
 per cap** by bisection (max drawdown rises with risk) so every cap bottoms out in the same 6%
 hole, and the question becomes the one the ranking metric implies: for the same pain, which
 cap ends up with the most money? Four stacked panels — final capital, **the risk each cap
@@ -461,7 +477,8 @@ There was briefly a second chart above it showing the same grid at whatever risk
 set to. It was dropped: at one risk the comparison is the misleading one, and having both
 invited reading the wrong one first.
 
-**It reorders the family.** At a fixed 1% the wide caps look best (7R–8.5R top the return).
+**It reorders the family.** At any single risk the wide caps look best (7R–8.5R top the
+return).
 Levered to equal drawdown the ranking turns over: **2.5R wins** ($310,898, 1.57% risk,
 35.1x), 2R is second ($303,650, 1.87%), 5R third ($278,075, 1.03%), and the uncapped run is
 the **worst of the whole family** at $177,066 — it must be sized down to 0.46% per trade to
@@ -559,8 +576,9 @@ picks up a new one on its next build with no code change. The names are **zero-p
 the boxes in filename order, and `cap10` would otherwise land before `cap2`.
 
 The set is chosen in `CHARTER_CAPS` at the top of `export_charter_trades.py` — today
-**2R, 2.25R and 5R**: the two the levered chart singles out, plus quickfix's documented
-default to read them against. `export_charter_trades.py` also **prunes** any
+**2R, 2.25R, 2.5R and 5R**: the band the levered chart singles out, including quickfix's
+own default (2.5R must be here — the charts would otherwise draw every cap except the one
+the strategy actually runs at), plus 5R, what that default used to be, as the comparison. `export_charter_trades.py` also **prunes** any
 `charter_trades_*.json` it no longer owns, because charter globs the directory and a file
 left over from an earlier set would go on being drawn.
 
@@ -593,7 +611,7 @@ price pane behind a toggle. To refresh the overlay end to end:
    (append a market substring, e.g. `... gold`, for a fast single-market rebuild).
 3. In `../charter`: `venv\Scripts\python.exe serve.py`, open the site, and click the **T**
    button (green/red triangles) on the right rail. It opens the **Strategy trades box** —
-   one checkbox per exported cap (2R, 2.25R, 5R), each labelled with its own Rule 4 and its
+   one checkbox per exported cap (2R, 2.25R, 2.5R, 5R), each labelled with its own Rule 4 and its
    trade count — so you can show any combination or none. Long entry = up-triangle, short =
    down-triangle, exit = a marker on the exit bar; the entry→exit line is green for a win,
    red for a stop, amber for an ambiguous (`unknown_pl`) outcome, blue for a still-open
@@ -637,5 +655,5 @@ Requirements: `pandas`, `openpyxl` (see `requirements.txt`).
 ## Working agreements
 
 - Commit straight to main. English only in code/comments/strings. No emoji.
-- Simulation inputs (starting capital, 1% risk, slippage) live here; data and charts do not.
+- Simulation inputs (starting capital, risk per trade, slippage) live here; data and charts do not.
 - When the user supplies text verbatim, use it verbatim.

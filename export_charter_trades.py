@@ -38,9 +38,11 @@ import strategies
 # fan 33 exit lines from it. Charter also has only four line styles, and colour already means
 # the outcome. Three caps is what stays readable.
 #
-# 2R and 2.25R are the levered sweet spot the reports single out; 5R is quickfix's documented
-# default, and the comparison the other two are worth reading against.
-CHARTER_CAPS = [2.0, 2.25, 5.0]
+# 2R, 2.25R and 2.5R are the levered sweet spot the reports single out -- 2.5R is quickfix's
+# documented default, so it has to be here: the charts would otherwise draw every cap except
+# the one the strategy actually runs at. 5R is what that default used to be, kept as the
+# comparison the tight caps are worth reading against.
+CHARTER_CAPS = [2.0, 2.25, 2.5, 5.0]
 
 
 def charter_key(cap):

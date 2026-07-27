@@ -174,13 +174,19 @@ SHARED_RULES = [
 
 # Rules 1-4 say which setups qualify; this says how the trade is actually placed. A reader
 # cannot size a trade or read an R multiple without it.
-ENTRY_MECHANICS = (
-    "<b>Entry and stop.</b> The bar must <b>close below the first reversal</b> &mdash; the "
-    "proof that price probed the cluster and snapped back. The trade fills at that reversal "
-    "price, and the stop sits <b>one tick above that bar's high</b>. Position size makes "
-    "that distance exactly 1% of capital, so <b>1R = 1%</b>. One position per market at a "
-    "time; management starts the day after entry."
-)
+#
+# A FUNCTION of the risk, not a constant: 1R is whatever percentage of capital is being
+# risked, and that is a number the page can be re-dialled to. It said "1R = 1%" for as long
+# as the risk happened to be 1%, which stopped being true the moment the default moved.
+# (strategies.py imports nothing on purpose -- engine imports THIS module -- so the risk is
+# passed in by the caller rather than read from engine.)
+def entry_mechanics(risk_pct):
+    return ("<b>Entry and stop.</b> The bar must <b>close below the first reversal</b> "
+            "&mdash; the proof that price probed the cluster and snapped back. The trade "
+            "fills at that reversal price, and the stop sits <b>one tick above that bar's "
+            f"high</b>. Position size makes that distance exactly {risk_pct:g}% of capital, "
+            f"so <b>1R = {risk_pct:g}%</b>. One position per market at a time; management "
+            "starts the day after entry.")
 
 # The correction that prompted this block: the umbrella method is "time and price meet", but
 # THESE strategies use the price half alone. Saying otherwise misleads a first-time reader.
@@ -239,7 +245,13 @@ class Strategy:
         return f"<Strategy {self.key} cap={cap_token(self.cap)}>"
 
 
-QUICKFIX = Strategy(key="quickfix", title="Quickfix", cap=5.0)
+# quickfix's default cap was 5R until 2026-07-27. It is 2.5R because that is where the
+# reports' levered chart puts it: solve for the risk that holds every cap to the same 6%
+# drawdown and 2.5R comes out top of the grid, while 5R gives up about a tenth of the final
+# capital for the same pain. engine.RISK_PCT is set to the risk that setting needs. The dial
+# still reaches 5R, and the charter hand-off still draws it, so the old setting stays one
+# click away rather than disappearing.
+QUICKFIX = Strategy(key="quickfix", title="Quickfix", cap=2.5)
 SLOWFIX = Strategy(key="slowfix", title="Slowfix", cap=None)
 
 REGISTRY = [QUICKFIX, SLOWFIX]

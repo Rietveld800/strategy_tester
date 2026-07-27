@@ -7,7 +7,7 @@
   "timeframe": "daily",
   "source": "strategy_tester",
   "starting_capital": 100000.0,
-  "risk_pct": 1.0,
+  "risk_pct": 1.573,
   "n_markets": 28,
   "n_trades": 82
  },

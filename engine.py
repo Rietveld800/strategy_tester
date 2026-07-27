@@ -31,13 +31,14 @@
 #   Rule 3 (min reward): the nearest bearish reversal below entry must be at least
 #           3.5R below entry, else refuse.
 #   Rule 4 (target): STRATEGY-SPECIFIC -- the one rule that differs between strategies.
-#           Supplied by a target POLICY (see strategies.py: one family, parameterized by a
-#           profit cap in R) and recomputed on every bar from the levels known at that
-#           bar's start, so a newly appearing nearer reversal moves the target in and an
-#           elected one falls away. Only OPPOSITE-side reversals ever close a trade early
+#           Supplied by a target POLICY (see strategies.py: the cap family, or Quickfixpro's
+#           entry-bar target) and recomputed on every bar from the levels known at that
+#           bar's start, so a newly appearing nearer reversal moves a reversal target in and
+#           an elected one falls away. Only OPPOSITE-side reversals ever close a trade early
 #           (bearish for a short, bullish for a long) -- never a same-side one.
 #           The cap is a DIAL, not a constant: `run_markets` backtests the whole
-#           strategies.CAP_CHOICES grid in one pass so the reports can move it.
+#           strategies.CAP_CHOICES grid in one pass so the reports can move it, plus each
+#           registered strategy's own Rule 4 for the ones that are not caps at all.
 #
 # One position per market at a time; a new signal while in a trade is ignored. After each
 # close, equity is recomputed and the next trade's risk is taken on the new equity.
@@ -205,10 +206,13 @@ def detect_short(bar, prev_close, tick, bull, bear):
     nearest = max(below)
     if (entry - nearest) < MIN_RR * risk:  # Rule 3
         return None
-    # No target here: Rule 4's cap is a property of the POLICY, not of the signal, and the
-    # same position is replayed under every cap in the grid. The policy derives its ceiling
-    # from `risk`.
-    return dict(side="short", entry=entry, stop=stop, risk=risk)
+    # No target here: Rule 4 is a property of the POLICY, not of the signal, and the same
+    # position is replayed under every Rule 4 in the grid. The position carries the raw
+    # ingredients instead -- `risk` (the cap family prices its ceiling off it) and the entry
+    # BAR's own high/low/tick (Quickfixpro prices its target off those) -- so a policy never
+    # needs anything the position does not already hold.
+    return dict(side="short", entry=entry, stop=stop, risk=risk,
+                bar_high=bar.high, bar_low=bar.low, tick=tick)
 
 
 def detect_long(bar, prev_close, tick, bull, bear):
@@ -239,7 +243,8 @@ def detect_long(bar, prev_close, tick, bull, bear):
     nearest = min(above)
     if (nearest - entry) < MIN_RR * risk:  # Rule 3
         return None
-    return dict(side="long", entry=entry, stop=stop, risk=risk)
+    return dict(side="long", entry=entry, stop=stop, risk=risk,
+                bar_high=bar.high, bar_low=bar.low, tick=tick)
 
 
 # --- trade management -------------------------------------------------------------
@@ -261,18 +266,21 @@ def check_exit(policy, pos, bar, bull, bear):
       - BOTH in range on one bar     -> the intraday order is unknowable, so we give the
         benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1R.
 
-    'target_r' means the exit was the R CAP itself, at whatever cap the run used; a
-    reversal exit is named for the side of the level that closed it.
+    The policy NAMES its own exit, and the name goes into the ledger as it comes: 'target_r'
+    = the R cap itself was hit, at whatever cap the run used; 'target_bar' = Quickfixpro's
+    entry-bar extreme. The one name the policy does not settle is 'reversal', which is
+    resolved here into the SIDE of the level that closed the trade -- the policy knows a
+    reversal target is in force, but the ledger wants to say which ladder it came off.
     """
     target, treason = policy(pos, bull, bear)
     if pos["side"] == "short":
         stop_in = bar.high >= pos["stop"]
         target_in = target is not None and bar.low <= target
-        treason_name = "target_r" if treason == "target_r" else "bearish_reversal"
+        treason_name = "bearish_reversal" if treason == "reversal" else treason
     else:
         stop_in = bar.low <= pos["stop"]
         target_in = target is not None and bar.high >= target
-        treason_name = "target_r" if treason == "target_r" else "bullish_reversal"
+        treason_name = "bullish_reversal" if treason == "reversal" else treason
 
     if stop_in and target_in:
         return None, "unknown_pl"
@@ -402,12 +410,13 @@ def run_markets(picked, caps=None, progress=True):
     bars are parsed ONCE and reused -- which is also why the runners take a precomputed
     result list: a full refresh loads the archive once, not once per output file.
 
-    Rule 4 is ONE family parameterized by the cap (strategies.py), so the caps are what is
-    actually backtested, not the strategies: quickfix at 5R and slowfix at 5R are the same
-    run, computed once and shared. Each strategy is then just a pointer into that grid at
-    its own default cap. `caps` defaults to strategies.CAP_CHOICES -- the grid the reports
-    let you move the dial across -- plus whatever defaults `picked` needs; pass a shorter
-    list (e.g. just the defaults) when only the on-disk outputs are wanted.
+    What is backtested is RULE 4 SETTINGS, not strategies: quickfix at 5R and slowfix at 5R
+    are the same run, computed once and shared. Each strategy is then just a pointer into
+    that grid at its own default. `caps` defaults to strategies.CAP_CHOICES -- the grid the
+    reports let you move the dial across -- and every `picked` strategy's own Rule 4 is
+    added on top, which is how a strategy outside the cap family (Quickfixpro) gets run at
+    all. Pass a shorter `caps` list (e.g. just the defaults) when only the on-disk outputs
+    are wanted.
 
     Every market is loaded FIRST, because obsolescence is a cross-market property: it is
     measured against the newest daily bar across all markets, and the backtest needs to know
@@ -415,14 +424,17 @@ def run_markets(picked, caps=None, progress=True):
     than left unresolved -- see CLOSE_OBSOLETE_AT_END).
 
     Returns a list of dicts: name, bars, tick, dp, obsolete,
-      var = {cap token -> result}   every cap in the grid
-      res = {strategy key -> result}  the same objects, at each strategy's default cap.
+      var = {Rule 4 token -> result}  every cap in the grid, plus every picked strategy's own
+      res = {strategy key -> result}  the same objects, at each strategy's default Rule 4.
     """
     if caps is None:
         caps = list(strategies.CAP_CHOICES)
-    # a strategy whose default is off the grid must still be runnable
-    caps = caps + [s.cap for s in picked if s.cap not in caps]
     policies = {strategies.cap_token(c): strategies.target_policy(c) for c in caps}
+    # A strategy whose Rule 4 is off the grid -- a cap that is not in `caps`, or a Rule 4
+    # that is not a cap at all -- must still be runnable. setdefault, so a strategy sitting
+    # on a grid cap shares that one run rather than duplicating it.
+    for s in picked:
+        policies.setdefault(s.token, s.target)
 
     loaded = []
     for d in market_dirs():
@@ -440,7 +452,7 @@ def run_markets(picked, caps=None, progress=True):
         flatten = obsolete and CLOSE_OBSOLETE_AT_END
         var = {tok: backtest(bars, tick, dp, pol, close_at_end=flatten)
                for tok, pol in policies.items()}
-        res = {s.key: var[strategies.cap_token(s.cap)] for s in picked}
+        res = {s.key: var[s.token] for s in picked}
         out.append(dict(name=name, bars=bars, tick=tick, dp=dp, obsolete=obsolete,
                         var=var, res=res))
         if progress:
@@ -466,7 +478,8 @@ def run_single(strategy, market=REFERENCE_MARKET):
                   start=str(bars[0].date.date()), end=str(bars[-1].date.date()),
                   starting_capital=STARTING_CAPITAL, risk_pct=RISK_PCT,
                   tick=tick, fees=FEES, min_reversals=MIN_REVERSALS,
-                  min_rr=MIN_RR, target_cap=strategy.cap, rule4=strategy.rule4),
+                  min_rr=MIN_RR, target_cap=strategy.cap, rule4_token=strategy.token,
+                  rule4=strategy.rule4),
         trades=res["trades"],
         equity_curve=[dict(date=str(bars[0].date.date()),
                            equity=STARTING_CAPITAL)] + res["equity_curve"],

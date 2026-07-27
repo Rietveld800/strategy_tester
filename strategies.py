@@ -11,38 +11,49 @@
 # position per market at a time means a later signal can be taken that a longer hold would
 # have missed. Same rules, same signals; the realised trade list still differs.)
 #
-# --- Rule 4 is ONE family, parameterized by a cap ---------------------------------
-# Rule 4 used to be a hand-written function per strategy. It is now a single policy with
-# one number in it -- the profit CAP in R:
+# --- Rule 4 comes in two SHAPES ----------------------------------------------------
+# 1. THE CAP FAMILY (`target_policy`) -- ride to the first opposite reversal beyond entry,
+#    but never past `cap` R. One policy with one number in it. Quickfix is that family at
+#    2.5R, Slowfix at no cap; the reports carry the cap as a DIAL across the whole
+#    CAP_CHOICES grid, so a page can be re-run at 4R, 6.75R or no cap at all.
 #
-#     ride to the first opposite reversal beyond entry, but never past `cap` R.
+#    The consequence, stated plainly: with the cap exposed, those two strategies are the
+#    SAME strategy at two settings. Set quickfix to no cap and it IS slowfix; set slowfix to
+#    2.5R and it IS quickfix, trade for trade. The registry keeps them as two entries
+#    because those two settings are the two the research is about, not because the rules
+#    underneath differ.
 #
-#   quickfix = this policy at cap 5.0        slowfix = this policy at cap None (no ceiling)
+# 2. THE ENTRY BAR (`entry_bar_policy`) -- take profit one tick beyond the entry bar's own
+#    opposite extreme, fixed at entry. Quickfixpro. This is a genuinely different shape, not
+#    a setting of the cap: no reversal level and no R ceiling is involved, and the target
+#    does not move once the trade is on. It therefore has NO cap dial -- there is no number
+#    in it to dial -- and it is stored in the report's variant grid under its own token
+#    rather than as a point on the cap axis.
 #
-# That is not a simplification imposed on the strategies, it is what they always were:
-# quickfix's old "5R, or a nearer opposite reversal" and slowfix's "the first opposite
-# reversal, no cap" are the same rule with and without a ceiling. Writing it once makes the
-# cap a DIAL, which is the whole point -- the reports can re-run the backtest at 4R, 6.75R
-# or no cap at all and show what changes.
-#
-# The consequence, stated plainly: with the cap exposed, the two strategies are the same
-# strategy at two settings. Set quickfix to no cap and it IS slowfix; set slowfix to 5R and
-# it IS quickfix, trade for trade. The registry keeps them as two entries because those two
-# settings are the two the research is about, not because the rules underneath differ.
+# A `Rule4` (below) is one setting of one shape: its policy, the token its backtest is filed
+# under, and every line of prose that quotes it. `Strategy` is a key, a title and one of
+# these.
 #
 # --- The target policy ------------------------------------------------------------
-# Signature: policy(pos, bull, bear) -> (price_or_None, "target_r" | "reversal" | "none")
+# Signature: policy(pos, bull, bear) -> (price_or_None, reason)
 #
-#   pos    the open position: side, entry, stop, risk. The cap price is derived here from
-#          `risk`, not stored on the position -- the cap is a property of the policy, and
-#          the same position is replayed under many caps.
+#   pos    the open position: side, entry, stop, risk, and the entry bar's own high, low
+#          and tick. Nothing derived is stored on it -- the cap price and the entry-bar
+#          target are both computed by the policy, because the same position is replayed
+#          under every Rule 4 in the grid.
 #   bull   bullish reversal levels known at the START of the bar being evaluated.
 #   bear   bearish reversal levels known at the START of that bar.
 #
-# It is called on EVERY bar the trade is open, never once at entry, so the target tracks
-# the reversal ladder as Socrates redraws it: a newly appearing nearer reversal moves the
-# target in, an elected one falls away. Returning None means no target is in force on this
-# bar -- only the stop can close the trade.
+#   reason is what the ledger calls the exit: "target_r" (the R cap), "reversal" (the engine
+#          names it for the side of the level that closed it), "target_bar" (the entry bar's
+#          extreme), or "none" when no target is in force on this bar.
+#
+# It is called on EVERY bar the trade is open, never once at entry, so a cap-family target
+# tracks the reversal ladder as Socrates redraws it: a newly appearing nearer reversal moves
+# the target in, an elected one falls away. (An entry-bar target is fixed by construction --
+# it is priced off the entry bar, which cannot change -- so calling it every bar returns the
+# same number.) Returning None means no target is in force on this bar; only the stop can
+# close the trade.
 #
 # Only OPPOSITE-side reversals may close a trade (bearish levels close a short, bullish
 # levels close a long); a same-side level is never an exit.
@@ -103,6 +114,38 @@ def target_policy(cap):
     return policy
 
 
+def entry_bar_policy():
+    """Rule 4 for Quickfixpro: one tick beyond the ENTRY BAR's own opposite extreme.
+
+    Short side (the long is the mirror): take profit one tick BELOW the entry bar's low.
+    The trade is buying the initial energy of the move -- if the thesis that made us sell
+    into the reversal cluster is right, that low should break more often than the high above
+    it, which is where the stop sits. So the whole trade is contained by the entry bar: stop
+    one tick above its high, target one tick below its low.
+
+    The target is FIXED at entry and never moves. It is priced off the entry bar, and the
+    entry bar cannot change, so recomputing it every bar (which the engine does, uniformly
+    for every policy) returns the same number every time. Reversal levels are not consulted
+    at all -- this Rule 4 is not the cap family with a different number in it, it is a
+    different shape, and it has no cap to dial.
+
+    The target is always strictly beyond the entry: the entry trigger requires the bar to
+    CLOSE below the first reversal (the entry price), and the close is inside the bar's
+    range, so low <= close < entry on a short. There is no degenerate case to guard.
+
+    Note what this does to the R multiple of a winner: it is whatever the entry bar happened
+    to measure -- (entry - low + tick) / (high + tick - entry) -- typically well under Rule
+    3's 3.5R, and sometimes under 1R. Rule 3 still applies unchanged (it is Rule 3, not Rule
+    4), so the SETUPS are identical to every other strategy; it just no longer describes the
+    target, only the room the trade was given.
+    """
+    def policy(pos, bull, bear):
+        if pos["side"] == "short":
+            return pos["bar_low"] - pos["tick"], "target_bar"
+        return pos["bar_high"] + pos["tick"], "target_bar"
+    return policy
+
+
 # --- how a cap reads on a report --------------------------------------------------
 # Every one of these is a function of the cap, because the cap is a dial: a page showing
 # 4.25R must not carry a rule card that still says 5R. The report swaps them as the dial
@@ -154,6 +197,66 @@ def cap_texts(cap):
                 lede=lede_text(cap), caveat=caveat_text(cap), label=cap_label(cap))
 
 
+# --- Rule 4 as an object ------------------------------------------------------------
+class Rule4:
+    """ONE setting of Rule 4: its policy, the token its backtest is filed under, and every
+    line of prose that quotes it.
+
+    `in_grid` says whether this setting is a point on the report's CAP DIAL. The cap family
+    is (every one of CAP_CHOICES is a real backtest the pages can move between); a Rule 4 of
+    a different shape is not -- there is no number in it to dial, so its page carries no cap
+    control and no "Choosing the profit cap" chart. `cap` is the number for the family and
+    None otherwise; do not read it as "no cap" without checking `in_grid` first.
+    """
+
+    __slots__ = ("token", "label", "policy", "texts", "cap", "in_grid")
+
+    def __init__(self, token, label, policy, texts, cap=None, in_grid=False):
+        self.token = token      # key in _variants.json and in the pages' variant table
+        self.label = label      # how the setting is written on a page: '2.5R', 'entry bar'
+        self.policy = policy    # the Rule 4 itself
+        self.texts = texts      # rule4 / rule4_text / lede / caveat / label
+        self.cap = cap          # the cap in R, for the family only
+        self.in_grid = in_grid  # is this a position on the report's cap dial?
+
+    def __repr__(self):
+        return f"<Rule4 {self.token}>"
+
+
+def cap_rule4(cap):
+    """The cap family at one cap -- a point on the reports' Rule 4 dial."""
+    return Rule4(token=cap_token(cap), label=cap_label(cap), policy=target_policy(cap),
+                 texts=cap_texts(cap), cap=cap, in_grid=True)
+
+
+# Quickfixpro's Rule 4. Written out rather than generated, because it is not a setting of
+# anything: there is no number in it. Phrased for the short side like every other rule text.
+ENTRY_BAR = Rule4(
+    token="bar",
+    label="entry bar",
+    policy=entry_bar_policy(),
+    texts=dict(
+        label="entry bar",
+        rule4="target = one tick beyond the entry bar's own extreme (a short: below its low)",
+        rule4_text=(
+            "Take profit <b>one tick below the entry bar's own low</b>. The level is fixed "
+            "the moment the trade is placed and never moves &mdash; no reversal level and no "
+            "R ceiling is involved. The whole trade is contained by the entry bar: the stop "
+            "one tick above its high, the target one tick below its low. This is a bet on "
+            "the <b>initial energy</b> of the move &mdash; if the thesis behind the entry is "
+            "right, that low should break more often than the high does. A winner is worth "
+            "whatever the entry bar measured, which is usually well under 3.5R."),
+        lede=(
+            "Captures the initial energy move only: the target is fixed at entry, one tick "
+            "beyond the entry bar's opposite extreme &mdash; a tick below its low on a short "
+            "&mdash; and never moves. Stop and target are the two sides of the entry bar, so "
+            "the bet is simply that its low breaks before its high."),
+        caveat=(
+            "the entry bar's low counts as broken whenever the day's range touches one tick "
+            "below it"),
+    ))
+
+
 # --- rules 1-3: identical in every strategy, written once --------------------------
 # Written for someone who has never seen the method, and phrased for the SHORT side
 # throughout, since the long side is its exact mirror (bearish ladder for entry, bullish
@@ -198,51 +301,64 @@ PRICE_ONLY_NOTE = (
 
 
 class Strategy:
-    """One strategy = one default cap, plus the name its outputs label themselves with.
+    """One strategy = one DEFAULT Rule 4, plus the name its outputs label themselves with.
 
-    The cap is a DEFAULT, not a fixed property: every file on disk (workbooks, the charter
-    hand-off, the JSON ledgers) is written at this cap, and the pages open at it, but the
-    reports carry the whole CAP_CHOICES grid and can be moved off it. Everything derived
-    from the cap -- the Rule 4 policy and every line of text that quotes the number -- is a
-    property, so nothing can go stale against it.
+    For a cap-family strategy the cap is a default, not a fixed property: every file on disk
+    (workbooks, the charter hand-off, the JSON ledgers) is written at it and the pages open
+    at it, but the reports carry the whole CAP_CHOICES grid and can be moved off it. A
+    strategy whose Rule 4 is not in the family has nothing to move: its page shows that one
+    setting, because that IS the strategy.
+
+    Everything the outputs quote comes off the Rule 4 object, so nothing can go stale
+    against it.
     """
 
-    __slots__ = ("key", "title", "cap")
+    __slots__ = ("key", "title", "r4")
 
-    def __init__(self, key, title, cap):
-        self.key = key          # file/CLI name: quickfix, slowfix, ...
+    def __init__(self, key, title, rule4):
+        self.key = key          # file/CLI name: quickfix, slowfix, quickfixpro, ...
         self.title = title      # display name on pages and sheets
-        self.cap = cap          # default Rule 4 ceiling in R, or None for no ceiling
+        self.r4 = rule4         # this strategy's default Rule 4
+
+    @property
+    def token(self):
+        """The key its backtest is filed under in the report's variant grid."""
+        return self.r4.token
+
+    @property
+    def cap(self):
+        """The default cap in R -- for a cap-family strategy only (else None; see Rule4)."""
+        return self.r4.cap
 
     @property
     def target(self):
-        """The Rule 4 policy at this strategy's own cap."""
-        return target_policy(self.cap)
+        """The Rule 4 policy this strategy's on-disk outputs are written at."""
+        return self.r4.policy
 
     @property
     def rule4(self):
-        return rule4_line(self.cap)
+        return self.r4.texts["rule4"]
 
     @property
     def rule4_text(self):
-        return rule4_text(self.cap)
+        return self.r4.texts["rule4_text"]
 
     @property
     def lede(self):
-        return lede_text(self.cap)
+        return self.r4.texts["lede"]
 
     @property
     def caveat(self):
-        return caveat_text(self.cap)
+        return self.r4.texts["caveat"]
 
     def rules(self):
-        """The four numbered rules as (number, name, html) -- 1-3 shared, 4 this cap's."""
+        """The four numbered rules as (number, name, html) -- 1-3 shared, 4 this one's."""
         out = [(i + 1, name, text) for i, (name, text) in enumerate(SHARED_RULES)]
         out.append((4, "Target", self.rule4_text))
         return out
 
     def __repr__(self):
-        return f"<Strategy {self.key} cap={cap_token(self.cap)}>"
+        return f"<Strategy {self.key} rule4={self.r4.token}>"
 
 
 # quickfix's default cap was 5R until 2026-07-27. It is 2.5R because that is where the
@@ -251,10 +367,12 @@ class Strategy:
 # capital for the same pain. engine.RISK_PCT is set to the risk that setting needs. The dial
 # still reaches 5R, and the charter hand-off still draws it, so the old setting stays one
 # click away rather than disappearing.
-QUICKFIX = Strategy(key="quickfix", title="Quickfix", cap=2.5)
-SLOWFIX = Strategy(key="slowfix", title="Slowfix", cap=None)
+QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(2.5))
+SLOWFIX = Strategy(key="slowfix", title="Slowfix", rule4=cap_rule4(None))
+# Not a third cap: a different Rule 4 shape, so it carries no cap dial (see ENTRY_BAR).
+QUICKFIXPRO = Strategy(key="quickfixpro", title="Quickfixpro", rule4=ENTRY_BAR)
 
-REGISTRY = [QUICKFIX, SLOWFIX]
+REGISTRY = [QUICKFIX, SLOWFIX, QUICKFIXPRO]
 BY_KEY = {s.key: s for s in REGISTRY}
 
 

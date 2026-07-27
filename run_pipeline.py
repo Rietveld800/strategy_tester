@@ -32,11 +32,13 @@ def main(argv):
         run_all.write(s, results)
         run_portfolio.run(s, results)
         print()
-    # The charter hand-off is per CAP, not per strategy (see export_charter_trades.py), so
-    # it is written once from the grid rather than inside the per-strategy loop.
-    for cap in export_charter_trades.CHARTER_CAPS:
-        export_charter_trades.export(cap, results)
-    export_charter_trades.prune(export_charter_trades.CHARTER_CAPS)
+    # The charter hand-off is per OVERLAY -- a few caps plus the strategies that are not
+    # caps at all (see export_charter_trades.py) -- so it is written once from the grid
+    # rather than inside the per-strategy loop.
+    hand_offs = export_charter_trades.hand_offs()
+    for item in hand_offs:
+        export_charter_trades.export(item, results)
+    export_charter_trades.prune(hand_offs)
     print()
     run_portfolio.write_variants(results)
     print()

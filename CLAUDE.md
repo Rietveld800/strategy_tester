@@ -53,23 +53,41 @@ the exit.
    dial and no cap-sweep section**. Exit reason `target_bar`. Rule 3's 3.5R filter still
    applies unchanged (it is Rule 3, not Rule 4), which is what keeps the setups identical to
    the other two; it just no longer describes the target. A winner is worth whatever the bar
-   measured — +2.89R average, 0.62R to 9.52R on this data. Both-in-range days are `unknown_pl`
+   measured — +3.02R average, up to 9.52R on this data. Both-in-range days are `unknown_pl`
    at −1R, which was already the engine's rule and is what the user asked for.
-   On 2026-07-27 data it is the best of the three both raw (+518.6%, 8.44% DD, 64.7% win
-   rate, 61.4x) and **levered to a 6% drawdown ($371,524 at 1.107% risk, 45.3x, against
-   quickfix's $310,898 / 35.1x and slowfix's $177,134 / 12.9x)** — on 85 trades, so treat it
-   as promising, not settled.
 
 A **`Rule4`** in `strategies.py` is ONE setting: policy + variant token + `in_grid` + prose.
 A `Strategy` is a key, a title and a default `Rule4`. `in_grid` is the flag that makes the
 pages drop the cap dial and the cap sweep automatically, and the policy signature now returns
 its own exit reason (the engine only resolves `"reversal"` into a side).
 
-**`engine.RISK_PCT` is 1.573%, NOT 1%** (user, 2026-07-27): it is the risk that puts
-quickfix's 2.5R at exactly a 6% maximum drawdown. So **1R = 1.573%**, and any text saying
-"1R = 1%" is stale — the rules block generates it from the constant
-(`strategies.entry_mechanics(risk_pct)`, a function for exactly this reason). See `README.md` for the full rules,
-money-management/slippage model, outputs and the charter hand-off.
+**GAP FILLS** (user, 2026-07-27). A bar that OPENS beyond the stop or beyond the target
+gapped through it and fills at **that bar's OPEN**, not at the level — the open is the day's
+first price, so it is the one case where a daily bar reveals the intraday order. Applies to
+ALL strategies (the stop is shared machinery, and two fill models would make the comparison
+unfair). A gapped stop therefore loses MORE than 1R (worst on this data: −11.68R, slowfix).
+`unknown_pl` at −1R survives only for the bar that opened BETWEEN the two and then traded
+through both. This changed every published number and every solved risk; slippage still
+charges the full 3-tick stop rate on a gapped stop, deliberately.
+
+**RISK PER TRADE IS PER STRATEGY** (user, 2026-07-27): each strategy's default is the risk
+that puts THAT strategy at `engine.TARGET_DD` (6%) max drawdown — quickfix **1.175%**,
+quickfixpro **0.8%**, slowfix **0.396%**. They are MEASURED constants in `strategies.py`
+(`Strategy.risk_pct`), derived by **`solve_risk.py`** — re-run it and paste the numbers back
+after any change to the rules, the fill model or the archive, or the reports quietly go
+stale. So **1R = the strategy's own percentage**; any text saying "1R = 1%" or "1R = 1.573%"
+is stale (the rules block generates it via `strategies.entry_mechanics(risk_pct)`, a function
+for exactly this reason). Every page therefore opens at the same PAIN, not the same bet size,
+which is what makes the three directly comparable. `engine.RISK_PCT` is a DIFFERENT thing —
+the REFERENCE risk the shared variant grid is priced at and the pages self-check against; it
+tracks quickfix's number but nothing depends on them being equal. `run_portfolio.at_risk()`
+is the context manager that sets the money management's risk for one run and restores it.
+
+At their own 6% risks on 2026-07-27 data: **quickfix $390,833 / 48.5x / 59.5% wr; quickfixpro
+$281,067 / 30.2x / 65.9% wr; slowfix $158,195 / 9.7x / 27.6% wr.** Quickfixpro led this table
+BEFORE gap fills went in and is second after — 76–85 trades, so do not present any of it as
+settled. See `README.md` for the full rules, money-management/slippage model, outputs and the
+charter hand-off.
 
 The cap is a **DIAL on the reports** (2R–10R in quarter-R steps, plus no cap): each setting
 is a real backtest, precomputed into `output/_variants.json`, because changing the cap
@@ -77,12 +95,16 @@ changes the trades themselves (every exit moves, and an earlier exit frees that 
 signal a longer hold blocked). Do NOT confuse it with the risk dial, which replays live in
 the browser precisely because trades are capital-independent. One cap dial PER CAP-FAMILY
 STRATEGY (Rule 4 is what tells them apart), NONE on a strategy outside the family; one risk
-dial per PAGE (one account). Files on disk are always written at the strategy's default. On this data **2.5R is the best cap once the
-caps are levered to equal drawdown**, which is why it is the default — but drawdown moves in
-plateaus on an ~80-trade sample, so do not read any of this as an optimisation. Critically,
-ret/DD at a FIXED risk is NOT risk-invariant: the same fixed-risk sweep ranked 5R top at 1%
-and 7R/8.5R top at 1.573%, with nothing about the strategies changing in between. Only the
-levered chart compares caps honestly — never rank caps off the fixed-risk sweep.
+dial PER STRATEGY too (since 2026-07-27 — the defaults are three different numbers, so one
+box cannot show them). Files on disk are always written at the strategy's default cap and
+default risk. Levered to equal drawdown the sweet spot is the **2R–3R band**; the top POINT
+inside it was 2.5R (hence quickfix's default) and is **2R since gap fills went in** — the
+default was deliberately left at 2.5R, because on 76–88 trades the point moves and the band
+does not. Do not read any of this as an optimisation, and do not move the default unless the
+BAND moves. Critically, ret/DD at a FIXED risk is NOT risk-invariant: the same fixed-risk
+sweep has ranked 5R, 7R/8.5R and 2R top at different reference risks, with nothing about the
+strategies changing in between. Only the levered chart compares caps honestly — never rank
+caps off the fixed-risk sweep.
 
 Layout: one shared `engine.py`, and strategies are DATA in `strategies.py` (a registry; each
 strategy is a key, a title and a default `Rule4` — for the cap family every line of Rule 4
@@ -90,10 +112,12 @@ text is generated from the cap, for a one-off shape it is written on the `Rule4`
 are strategy-parameterized and take optional strategy keys, defaulting to
 all: `run_all.py`, `run_portfolio.py`, `build_equity_html.py`, `export_charter_trades.py`,
 and `run_pipeline.py` (all four in one pass over the array archive — reading it is the slow
-part — then `report.html` + `conclusions.html`). Adding a strategy at a new cap is ONE line
-in `strategies.py` (`rule4=cap_rule4(3.0)`); a genuinely different Rule 4 shape is a new
-policy factory plus a `Rule4` with `in_grid=False` — see README "Adding a strategy", and
-remember a new exit reason has to be added to `VAR_REASONS`, `prettyReason` AND charter's
+part — then `report.html` + `conclusions.html`). `solve_risk.py` is NOT in the pipeline: it
+derives the registry's `risk_pct` constants and is run by hand when they need refreshing.
+Adding a strategy at a new cap is ONE line in `strategies.py` (`rule4=cap_rule4(3.0)`) plus
+a `solve_risk.py` run for its risk; a genuinely different Rule 4 shape is a new policy
+factory plus a `Rule4` with `in_grid=False` — see README "Adding a strategy", and remember a
+new exit reason has to be added to `VAR_REASONS`, `prettyReason` AND charter's
 `TRADE_COLORS`.
 `build_equity_html.py` needs `_variants.json`, so `run_portfolio.py` must run first. `venv\`
 has pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
@@ -133,7 +157,9 @@ typed, so the prose cannot go stale. Risk is solved per cap by bisection (`TARGE
 caps are compared at equal PAIN, not equal bet size; it deliberately does NOT follow the risk
 dial, so it is computed once and cached (the cap marker still moves). This INVERTS the
 ranking: at equal drawdown the sweet spot is 2R-3R and the uncapped run is the WORST of the
-family, since it must be sized down to 0.46% per trade. A second chart showing the same grid
+family, since it must be sized down to 0.396% per trade. Note the chart's own bisection is
+the SAME method `solve_risk.py` uses for the strategies' default risks, at the same
+`TARGET_DD` -- so quickfix's page marker sits at exactly the risk the page opens at. A second chart showing the same grid
 at the dial's risk was built and then removed on request — at one risk the comparison is the
 misleading one. Uncapped is a dashed reference line, never a point ("no cap" is not 10.25R).
 It calls the SAME `simulate()` with a `lite` flag, NEVER a second copy of the money

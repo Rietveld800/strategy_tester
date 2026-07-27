@@ -37,8 +37,31 @@ from openpyxl.utils import get_column_letter
 import engine as eng
 import strategies
 
+# The risk the account is currently being run at. A MODULE-LEVEL dial rather than an argument
+# threaded through every function: `account`, `_replay` and the whole workbook are one
+# simulation, and passing the same number through five layers only invites one of them being
+# missed. `at_risk()` sets it for the duration of one run and always puts it back, so a caller
+# can never leak a strategy's risk into the next one. Defaults to the reference risk, which is
+# what the shared variant grid is priced at.
 RISK_PCT = eng.RISK_PCT
 START_CAP = eng.STARTING_CAPITAL
+
+
+class at_risk:
+    """`with at_risk(0.457):` -- run the money management at that risk, then restore."""
+
+    def __init__(self, risk):
+        self.risk = risk
+
+    def __enter__(self):
+        global RISK_PCT
+        self.prev, RISK_PCT = RISK_PCT, self.risk
+        return self
+
+    def __exit__(self, *exc):
+        global RISK_PCT
+        RISK_PCT = self.prev
+        return False
 
 # --- transaction costs ------------------------------------------------------------
 # Realistic fills, charged as SLIPPAGE in ticks (the market's inferred price tick, the
@@ -201,11 +224,22 @@ def run(strategy, results):
 
     prepare(raw)
     first_day = first_trading_day(raw, all_days)
-    timeline, stats = account(raw, all_days, first_day)
+    # This strategy's OWN risk -- the one that puts it at the 6% drawdown budget. Every
+    # figure in the workbook and on the page is at that risk, so all three strategies are
+    # published at equal pain rather than at equal bet size.
+    with at_risk(strategy.risk_pct):
+        timeline, stats = account(raw, all_days, first_day)
+    # The same account replayed at the REFERENCE risk, purely so build_equity_html.py can
+    # check the shared variant grid against this workbook. The grid is priced at the
+    # reference risk (it is shared by every page), so the guard has to compare like with
+    # like; without this it would flag every strategy whose own risk is not the reference.
+    with at_risk(eng.RISK_PCT):
+        ref_final = account(raw, all_days, first_day)[1]["final"]
+    stats["ref_final"] = ref_final
     stats["n_markets_all"] = len(universe)
     _write(strategy, raw, timeline, stats)
     _write_json(strategy, raw, timeline, stats, universe)
-    print(f"{strategy.key} (rule 4: {strategy.r4.label}): "
+    print(f"{strategy.key} (rule 4: {strategy.r4.label}, risk {strategy.risk_pct:g}%): "
           f"NET  ${stats['final']:,.2f} ({stats['ret']:+.2f}%)   "
           f"gross ${stats['gross_final']:,.0f} ({stats['gross_ret']:+.2f}%)   "
           f"cost drag ${stats['total_cost']:,.0f}")
@@ -325,7 +359,11 @@ def write_variants(results, caps=None, extra=None):
     out = {}
     for r4 in variants:
         raw, _ = prepared[r4.token]
-        _, stats = account(raw, all_days, shared_first)
+        # Explicitly the REFERENCE risk. The grid is shared by every page, so it cannot be
+        # priced at any one strategy's own risk -- and the pages self-check their replay
+        # against these figures at exactly this number.
+        with at_risk(eng.RISK_PCT):
+            _, stats = account(raw, all_days, shared_first)
         out[r4.token] = dict(
             rows=_pack_rows(raw, mkt_ix, day_ix),
             # the page self-checks its own replay against this at the default risk
@@ -426,7 +464,9 @@ def _write_json(strategy, raw, timeline, stats, universe):
                # the variant token this page opens at. Named r4, not cap: it is a cap token
                # for the family and something else entirely for a strategy outside it.
                r4=strategy.token,
-               risk_pct=RISK_PCT,          # the page's replay starts from this
+               risk_pct=strategy.risk_pct,   # this strategy's own default; the page opens here
+               # the same account at the reference risk, for the grid-vs-workbook guard
+               ref_final=round(stats["ref_final"], 2),
                start=START_CAP,
                final=round(stats["final"], 2),
                ret=round(stats["ret"] / 100.0, 4), maxdd=round(-stats["max_dd"], 2),
@@ -516,7 +556,9 @@ def _sheet_summary(ws, strategy, s):
         ("time in market", f"{s['time_in_market']:.0f}% of trading days"),
         ("peak risk committed", f"{s['max_committed_pct']:.1f}% of live balance"),
         ("window", f"{s['first']} -> {s['last']}"),
-        ("risk per trade", f"{RISK_PCT}% of liquid capital"),
+        ("risk per trade",
+         f"{strategy.risk_pct:g}% of liquid capital "
+         f"(solved for a {eng.TARGET_DD:g}% max drawdown)"),
         ("slippage model",
          f"entry {SLIP_ENTRY_TICKS}t, target {SLIP_TARGET_TICKS}t, stop {SLIP_STOP_TICKS}t"),
     ]

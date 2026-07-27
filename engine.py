@@ -50,9 +50,17 @@
 # alike.
 #
 # Path-ambiguity rules on a daily bar (can't see intraday order):
-#   - stop and target both inside a later bar's range -> booked as 'unknown_pl' at -1R
-#     (the benefit of the doubt goes to the loss).
-#   - a gap past the stop still fills at the stop price (user's choice).
+#   - a bar that OPENS beyond the stop or beyond the target GAPPED through it, and fills at
+#     that bar's OPEN (user, 2026-07-27). The open is the day's first price, so a level the
+#     bar opened past was taken at the open and nothing else can have been hit before it --
+#     the gap is the one case where the daily bar does tell us the order. On a stop that is
+#     worse than the stop price (a gapped stop can lose well over 1R); on a target it is
+#     better than the target. Both are the real fill. A short gaps its stop when
+#     `open >= stop` and its target when `open <= target`; the long is the mirror.
+#   - otherwise, stop and target both inside a later bar's range -> booked as 'unknown_pl'
+#     at -1R (the benefit of the doubt goes to the loss). With gaps resolved at the open,
+#     this is now only the genuinely unknowable case: the bar opened BETWEEN the two and
+#     then traded through both.
 #   - the entry bar NEVER exits: management starts on the bar AFTER entry. The entry
 #     bar's high/low are already spent by the time its close confirms the entry, and
 #     the stop sits one tick beyond that bar's own extreme, so neither side can trigger
@@ -78,12 +86,23 @@ REFERENCE_MARKET = "Gold_Futures_COMEX"   # the market single-market runs use
 # No date window: it is data-driven. Entries start at the first bar whose PREVIOUS
 # file carries enough reversals, and run to the last available file.
 STARTING_CAPITAL = 100_000.0
+# --- risk per trade -----------------------------------------------------------------
 # Percent of equity risked per trade -- this IS 1R, so every R multiple in the outputs is
-# worth this many percent. It was a round 1.0 until 2026-07-27; it is now the risk that puts
-# quickfix's default cap (2.5R) at a 6% maximum drawdown, which is the budget the reports'
-# levered chart compares caps at. Nothing else assumes a particular value: the pages carry a
-# risk dial and every figure that depends on it is generated from this constant.
-RISK_PCT = 1.573
+# worth this many percent.
+#
+# It is a property of the STRATEGY, not of the project (`Strategy.risk_pct`, solved by
+# `solve_risk.py`): each strategy's default is the risk that puts THAT strategy at a 6%
+# maximum drawdown, so every page opens at the same PAIN rather than the same bet size. That
+# is the comparison the whole project ranks on, and quoting one strategy's number on another
+# strategy's page was simply wrong (user, 2026-07-27).
+#
+# RISK_PCT is the REFERENCE risk: the one the shared variant grid in `_variants.json` is
+# priced at, which the pages self-check their replay against, and the default when a caller
+# does not name one. Keeping it fixed is what makes that guard meaningful -- the grid is
+# shared by every page, so it cannot be priced per strategy. It is set to quickfix's own
+# default because quickfix is the reference strategy; nothing depends on them being equal.
+RISK_PCT = 1.175
+TARGET_DD = 6.0             # the drawdown budget each strategy's default risk is solved for
 FEES = 0.0                  # per-trade cost, in equity percent; 0 for now
 
 MIN_REVERSALS = 3          # Rule 1: at least this many tested reversals
@@ -259,12 +278,24 @@ def check_exit(policy, pos, bar, bull, bear):
     `bull`/`bear` are the previous file's levels (known at the bar's start). The target in
     force comes from the Rule 4 `policy` and is recomputed here on every bar. It may be
     None -- an uncapped run has no target while no opposite reversal exists beyond entry --
-    in which case only the stop can close the trade. On a later bar:
+    in which case only the stop can close the trade. On a later bar, in this order:
 
+      - the bar OPENED beyond the stop   -> GAPPED out; fills at the OPEN, not at the stop.
+        A gap is the one case where a daily bar reveals the intraday order: the open is the
+        day's first price, so nothing can have traded before it. The loss is therefore
+        bigger than 1R by however far the gap ran.
+      - the bar OPENED beyond the target -> gapped INTO profit; fills at the open, which is
+        better than the target for the same reason.
       - only the target in range   -> clean win at the target;
       - only the stop in range      -> clean stop (-1R);
       - BOTH in range on one bar     -> the intraday order is unknowable, so we give the
-        benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1R.
+        benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1R. Now that
+        gaps are resolved above, this is only the bar that opened BETWEEN the two levels and
+        then traded through both -- which really is unknowable without intraday prices.
+
+    The two gap tests are mutually exclusive by construction (a short's target is below its
+    entry and its stop above it, so one open cannot be beyond both), but the stop is checked
+    first anyway, keeping the same doubt-goes-to-the-loss convention as the ambiguous case.
 
     The policy NAMES its own exit, and the name goes into the ledger as it comes: 'target_r'
     = the R cap itself was hit, at whatever cap the run used; 'target_bar' = Quickfixpro's
@@ -276,12 +307,20 @@ def check_exit(policy, pos, bar, bull, bear):
     if pos["side"] == "short":
         stop_in = bar.high >= pos["stop"]
         target_in = target is not None and bar.low <= target
+        stop_gap = bar.open >= pos["stop"]
+        target_gap = target is not None and bar.open <= target
         treason_name = "bearish_reversal" if treason == "reversal" else treason
     else:
         stop_in = bar.low <= pos["stop"]
         target_in = target is not None and bar.high >= target
+        stop_gap = bar.open <= pos["stop"]
+        target_gap = target is not None and bar.open >= target
         treason_name = "bullish_reversal" if treason == "reversal" else treason
 
+    if stop_gap:                        # gapped through the stop -> filled at the open
+        return bar.open, "stop"
+    if target_gap:                      # gapped past the target -> filled at the open
+        return bar.open, treason_name
     if stop_in and target_in:
         return None, "unknown_pl"
     if stop_in:
@@ -298,7 +337,7 @@ def r_multiple(pos, exit_price):
 
 
 # --- backtest loop ----------------------------------------------------------------
-def backtest(bars, tick, dp, policy, close_at_end=False):
+def backtest(bars, tick, dp, policy, close_at_end=False, risk_pct=None):
     """Run one Rule 4 `policy` over `bars` (oldest -> newest) with fresh capital.
 
     Data-driven window: entries fire from the first bar whose PREVIOUS file carries
@@ -313,7 +352,13 @@ def backtest(bars, tick, dp, policy, close_at_end=False):
                                  P&L. The data has stopped, so the trade could never
                                  resolve. Callers pass run_markets' obsolete flag; see
                                  CLOSE_OBSOLETE_AT_END.
+
+    `risk_pct` scales the reported percentages and this single-market equity curve; it does
+    NOT change which trades fire or their R multiples, which are fixed by price and reversals
+    alone. That is why the portfolio and the pages can re-run the money management at any
+    risk without re-running the backtest. Defaults to the reference RISK_PCT.
     """
+    risk_pct = RISK_PCT if risk_pct is None else risk_pct
     equity = STARTING_CAPITAL
     trades, equity_curve = [], []
     pos, tid = None, 0
@@ -330,7 +375,7 @@ def backtest(bars, tick, dp, policy, close_at_end=False):
             if hit is not None:
                 exit_price, reason = hit
                 equity = _close(pos, bar, i, exit_price, reason, equity,
-                                trades, equity_curve, dp)
+                                trades, equity_curve, dp, risk_pct)
                 pos = None
             continue
 
@@ -343,7 +388,7 @@ def backtest(bars, tick, dp, policy, close_at_end=False):
             continue
 
         tid += 1
-        risk_dollars = equity * RISK_PCT / 100.0
+        risk_dollars = equity * risk_pct / 100.0
         pos = dict(id=tid, entry_index=i, entry_date=bar.date,
                    equity_before=equity, risk_dollars=risk_dollars, **entry)
         # the Rule 4 level in force at entry, recorded for the ledger (it can move later)
@@ -353,7 +398,7 @@ def backtest(bars, tick, dp, policy, close_at_end=False):
     if pos is not None and close_at_end:       # obsolete market -> flatten at the last close
         last = bars[-1]
         equity = _close(pos, last, len(bars) - 1, last.close, "data_end", equity,
-                        trades, equity_curve, dp)
+                        trades, equity_curve, dp, risk_pct)
     elif pos is not None:                      # still open at the end -> reported, unrealized
         trades.append(dict(id=pos["id"], side=pos["side"],
                            entry_date=str(pos["entry_date"].date()),
@@ -371,7 +416,7 @@ def backtest(bars, tick, dp, policy, close_at_end=False):
                 first_trade_date=first_trade)
 
 
-def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve, dp):
+def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve, dp, risk_pct):
     """Realize a closed trade, append it, update and record equity, return new equity.
 
     An 'unknown_pl' exit has no fill price: the path was ambiguous, so it is booked at
@@ -381,7 +426,7 @@ def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve, dp):
         r, exit_out = -1.0, None
     else:
         r, exit_out = r_multiple(pos, exit_price), _r(exit_price, dp)
-    pnl_pct = r * RISK_PCT - FEES
+    pnl_pct = r * risk_pct - FEES
     equity_after = equity * (1 + pnl_pct / 100.0)
     trades.append(dict(
         id=pos["id"], side=pos["side"],
@@ -450,9 +495,20 @@ def run_markets(picked, caps=None, progress=True):
         obsolete = (newest - bars[-1].date).days > OBSOLETE_AFTER_DAYS
         tick, dp = infer_tick(bars)
         flatten = obsolete and CLOSE_OBSOLETE_AT_END
+        # The grid is priced at the REFERENCE risk: it is shared by every page, so it cannot
+        # carry one strategy's risk. Only the reported percentages depend on that -- the
+        # trades and their R multiples do not -- and run_portfolio re-runs the money
+        # management from R anyway.
         var = {tok: backtest(bars, tick, dp, pol, close_at_end=flatten)
                for tok, pol in policies.items()}
-        res = {s.key: var[s.token] for s in picked}
+        # A strategy's own run reuses the grid's when its risk IS the reference, and is a
+        # second pass otherwise: the per-market workbook reports percentages and a fresh-
+        # capital equity curve, and those must be at the risk the strategy is documented at.
+        res = {}
+        for s in picked:
+            res[s.key] = (var[s.token] if abs(s.risk_pct - RISK_PCT) < 1e-9 else
+                          backtest(bars, tick, dp, s.target, close_at_end=flatten,
+                                   risk_pct=s.risk_pct))
         out.append(dict(name=name, bars=bars, tick=tick, dp=dp, obsolete=obsolete,
                         var=var, res=res))
         if progress:
@@ -472,11 +528,11 @@ def run_single(strategy, market=REFERENCE_MARKET):
     """One market, fresh capital: write the JSON ledger and print a summary."""
     bars = load_bars(ARRAY_ROOT / market)
     tick, dp = infer_tick(bars)
-    res = backtest(bars, tick, dp, strategy.target)
+    res = backtest(bars, tick, dp, strategy.target, risk_pct=strategy.risk_pct)
     result = dict(
         meta=dict(market=market, timeframe=TIMEFRAME, strategy=strategy.key,
                   start=str(bars[0].date.date()), end=str(bars[-1].date.date()),
-                  starting_capital=STARTING_CAPITAL, risk_pct=RISK_PCT,
+                  starting_capital=STARTING_CAPITAL, risk_pct=strategy.risk_pct,
                   tick=tick, fees=FEES, min_reversals=MIN_REVERSALS,
                   min_rr=MIN_RR, target_cap=strategy.cap, rule4_token=strategy.token,
                   rule4=strategy.rule4),

@@ -50,13 +50,21 @@
 # alike.
 #
 # Path-ambiguity rules on a daily bar (can't see intraday order):
-#   - a bar that OPENS beyond the stop or beyond the target GAPPED through it, and fills at
-#     that bar's OPEN (user, 2026-07-27). The open is the day's first price, so a level the
-#     bar opened past was taken at the open and nothing else can have been hit before it --
-#     the gap is the one case where the daily bar does tell us the order. On a stop that is
-#     worse than the stop price (a gapped stop can lose well over 1R); on a target it is
-#     better than the target. Both are the real fill. A short gaps its stop when
-#     `open >= stop` and its target when `open <= target`; the long is the mirror.
+#   - a bar that GAPS through the stop or the target fills at that bar's OPEN (user,
+#     2026-07-27). The open is the day's first price, so a level the bar jumped over was
+#     taken at the open and nothing else can have been hit before it -- the gap is the one
+#     case where the daily bar does tell us the order. On a stop that is worse than the stop
+#     price (a gapped stop can lose well over 1R); on a target it is better. Both are the
+#     real fill.
+#     A gap means price JUMPED OVER the level, so it is measured against the PREVIOUS CLOSE,
+#     not against the open alone: a short gaps its target when `open <= target < prev_close`.
+#     Testing the open by itself was a bug (fixed 2026-07-27, same day): a short's entry bar
+#     closes below its entry by definition, so any target above that close was already in
+#     the money before management started, every next open counted as a "gap", and the trade
+#     was paid out at that open instead of at its target. An already-through target is NOT a
+#     gap -- a resting limit there fills at the limit.
+#     The stop needs no such guard: it sits one tick beyond the entry bar's own extreme, so
+#     no close can be through it while the trade is still open.
 #   - otherwise, stop and target both inside a later bar's range -> booked as 'unknown_pl'
 #     at -1R (the benefit of the doubt goes to the loss). With gaps resolved at the open,
 #     this is now only the genuinely unknowable case: the bar opened BETWEEN the two and
@@ -267,7 +275,7 @@ def detect_long(bar, prev_close, tick, bull, bear):
 
 
 # --- trade management -------------------------------------------------------------
-def check_exit(policy, pos, bar, bull, bear):
+def check_exit(policy, pos, bar, bull, bear, prev_close):
     """Does `pos` close on `bar`? Returns (exit_price, reason) or None.
 
     Only ever called on bars AFTER the entry bar: the profit target can never be reached
@@ -284,8 +292,17 @@ def check_exit(policy, pos, bar, bull, bear):
         A gap is the one case where a daily bar reveals the intraday order: the open is the
         day's first price, so nothing can have traded before it. The loss is therefore
         bigger than 1R by however far the gap ran.
-      - the bar OPENED beyond the target -> gapped INTO profit; fills at the open, which is
-        better than the target for the same reason.
+      - the bar GAPPED past the target -> fills at the open, better than the target for the
+        same reason. A gap means price JUMPED OVER the level: `prev_close` must be on the
+        near side of the target and the open on the far side. Testing the open alone was a
+        bug (found 2026-07-27): a short's entry bar closes BELOW the entry by definition, so
+        whenever the target sat above that close it was already in the money before
+        management started, the next open was "past" it as a matter of course, and the trade
+        was paid out at that open instead of at its target. It cost quickfix ~24R of free
+        profit at 2.5R and made a 0R cap the best setting on the whole grid, at +1.94R a
+        trade for a target sitting ON the entry price. An already-through target is not a
+        gap: a resting limit there fills AT the limit, which is what the in-range branch
+        below does.
       - only the target in range   -> clean win at the target;
       - only the stop in range      -> clean stop (-1R);
       - BOTH in range on one bar     -> the intraday order is unknowable, so we give the
@@ -296,6 +313,11 @@ def check_exit(policy, pos, bar, bull, bear):
     The two gap tests are mutually exclusive by construction (a short's target is below its
     entry and its stop above it, so one open cannot be beyond both), but the stop is checked
     first anyway, keeping the same doubt-goes-to-the-loss convention as the ambiguous case.
+
+    The STOP needs no already-through guard, only the target does. A stop sits one tick
+    beyond the entry bar's own extreme, so the entry close can never be through it; and on
+    any later bar a previous close beyond the stop is impossible, because that bar would
+    already have closed the trade.
 
     The policy NAMES its own exit, and the name goes into the ledger as it comes: 'target_r'
     = the R cap itself was hit, at whatever cap the run used; 'target_bar' = Quickfixpro's
@@ -308,13 +330,16 @@ def check_exit(policy, pos, bar, bull, bear):
         stop_in = bar.high >= pos["stop"]
         target_in = target is not None and bar.low <= target
         stop_gap = bar.open >= pos["stop"]
-        target_gap = target is not None and bar.open <= target
+        # a REAL gap: price was on the near side of the target at the last close, and opened
+        # past it. Without the prev_close half, an already-in-the-money target pays out at
+        # the open -- see the note above.
+        target_gap = target is not None and bar.open <= target < prev_close
         treason_name = "bearish_reversal" if treason == "reversal" else treason
     else:
         stop_in = bar.low <= pos["stop"]
         target_in = target is not None and bar.high >= target
         stop_gap = bar.open <= pos["stop"]
-        target_gap = target is not None and bar.open >= target
+        target_gap = target is not None and bar.open >= target > prev_close
         treason_name = "bullish_reversal" if treason == "reversal" else treason
 
     if stop_gap:                        # gapped through the stop -> filled at the open
@@ -371,7 +396,10 @@ def backtest(bars, tick, dp, policy, close_at_end=False, risk_pct=None):
 
         # 1) manage an open position on this bar (never enter and manage same bar)
         if pos is not None:
-            hit = check_exit(policy, pos, bar, sig_bull, sig_bear)
+            # prev.close is the last price before this bar opened -- the reference the gap
+            # test needs to tell a jump OVER the target from a target that was already
+            # through. `prev` is never None here: a position cannot exist on bar 0.
+            hit = check_exit(policy, pos, bar, sig_bull, sig_bear, prev.close)
             if hit is not None:
                 exit_price, reason = hit
                 equity = _close(pos, bar, i, exit_price, reason, equity,

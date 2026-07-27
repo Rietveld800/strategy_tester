@@ -61,11 +61,22 @@ A `Strategy` is a key, a title and a default `Rule4`. `in_grid` is the flag that
 pages drop the cap dial and the cap sweep automatically, and the policy signature now returns
 its own exit reason (the engine only resolves `"reversal"` into a side).
 
-**GAP FILLS** (user, 2026-07-27). A bar that OPENS beyond the stop or beyond the target
-gapped through it and fills at **that bar's OPEN**, not at the level — the open is the day's
-first price, so it is the one case where a daily bar reveals the intraday order. Applies to
-ALL strategies (the stop is shared machinery, and two fill models would make the comparison
-unfair). A gapped stop therefore loses MORE than 1R (worst on this data: −11.68R, slowfix).
+**GAP FILLS** (user, 2026-07-27). A bar that JUMPS OVER the stop or the target fills at
+**that bar's OPEN**, not at the level — the open is the day's first price, so it is the one
+case where a daily bar reveals the intraday order. Applies to ALL strategies (the stop is
+shared machinery, and two fill models would make the comparison unfair). A gapped stop
+therefore loses MORE than 1R (worst on this data: −11.68R, slowfix).
+
+A gap is measured against the **PREVIOUS CLOSE**, not the open alone: a short gaps its target
+when `open <= target < prev_close`. Testing the open by itself was a REAL BUG, introduced and
+fixed the same day — a short's entry bar closes below its entry by definition, so any target
+above that close was already in the money before management started, every next open counted
+as a "gap", and the trade was paid out at that open instead of at its target. Cost: ~24R of
+free profit on quickfix, and it made a **0R cap the best setting on the whole grid** ($633k,
+88% wr) which is what exposed it. An already-through target is NOT a gap; a resting limit
+there fills at the limit. The STOP needs no such guard (it sits one tick beyond the entry
+bar's own extreme, so no close can be through it while the trade is open). Do not "simplify"
+`target_gap` back to a one-sided test.
 `unknown_pl` at −1R survives only for the bar that opened BETWEEN the two and then traded
 through both. This changed every published number and every solved risk; slippage still
 charges the full 3-tick stop rate on a gapped stop, deliberately.
@@ -93,10 +104,12 @@ the REFERENCE risk the shared variant grid is priced at and the pages self-check
 tracks quickfix's number but nothing depends on them being equal. `run_portfolio.at_risk()`
 is the context manager that sets the money management's risk for one run and restores it.
 
-At their own 6% risks on 2026-07-27 data: **quickfix $390,833 / 48.5x / 59.5% wr; quickfixpro
-$281,067 / 30.2x / 65.9% wr; slowfix $158,195 / 9.7x / 27.6% wr.** Quickfixpro led this table
-BEFORE gap fills went in and is second after — 76–85 trades, so do not present any of it as
-settled. See `README.md` for the full rules, money-management/slippage model, outputs and the
+At their own 6% risks on 2026-07-27 data: **quickfix $290,446 / 31.7x / 58.3% wr; quickfixpro
+$281,067 / 30.2x / 65.9% wr; slowfix $158,195 / 9.7x / 27.6% wr.** Quickfix and quickfixpro
+are effectively TIED (1.5 points of ret/DD on 84 trades is not a result); quickfixpro gets
+there on 45% time in market against 52%. This table was rewritten TWICE in one day by changes
+to the FILL MODEL alone, strategies untouched — treat the fill assumptions as the biggest
+open risk and never present the ordering as settled. See `README.md` for the full rules, money-management/slippage model, outputs and the
 charter hand-off.
 
 The cap is a **DIAL on the reports** (2R–10R in quarter-R steps, plus no cap): each setting
@@ -178,21 +191,26 @@ deferring it to a rAF silently skipped it on any page whose cap was `none`, incl
 printed PDF.
 
 **Inside the hotspot** is a SECOND chart section under it (2026-07-27, user's ask), the same
-calculation zoomed: `FINE_GRID` = **1R-3R at 0.1R**, because the wide chart's quarter-R axis
+calculation zoomed: `FINE_GRID` = **0R-3R at 0.1R**, because the wide chart's quarter-R axis
 resolves the 2R-3R band at five points and STARTS at 2R, so the band's left side was never
 drawn. TWO grids on purpose -- `CAP_GRID` (2R-10R, 0.25R) stays the dial's and the wide
-sweep's axis; `CAP_CHOICES` is their union (52 settings). `_variants.json` carries `caps`,
+sweep's axis; `CAP_CHOICES` is their union (62 settings). `_variants.json` carries `caps`,
 `fine` and `extra` over one `v` table. Solved risks are cached PER TOKEN (`leveredAt`) so the
 2R/2.5R/3R overlap is bisected once and both charts show the identical number. Cost measured
-before building: +0.1s backtest, ~+100 KB per page (394 KB, report 413 KB). NOT exported to
+before building: <1s backtest, ~+160 KB per page (451 KB, report 471 KB). NOT exported to
 charter (user: "for now we don't need it on our charts yet") -- `CHARTER_CAPS` unchanged.
 
-FINDING: the hotspot is a **PLATEAU, not a peak** -- allowed risk is flat at 1.39% right
-across **1R-2.3R**, then cliffs to 1.18% at 2.4R; inside it the capital line just saws
-($503k-$572k, best point 1.9R) because every cap there is the same bet at the same pain. 2R
-was never special, it was the old chart's left edge. **The plateau runs off the LEFT edge of
-the zoom too**, so 1R is not its start -- lower `FINE_MIN` to find the real beginning. The
-page's own prose says all of this, generated from the grid.
+FINDING: **the plateau starts at 1.3R.** Allowed risk climbs 0.19% at 0R -> 1.39% at 1.3R,
+holds to 2R, falls to 1.18% at 2.1R. Below 1.3R the cap is too tight for the winners to pay
+for the losers and capital falls away to $94k at 0R (1% win rate -- the target sits ON the
+entry). Flat allowed risk does NOT mean a flat result: across 1.3R-2R capital still climbs
+($203k -> $306k, upper half +28.6% over lower), because every cap there bets the same but a
+wider one lets winners run further. Best point 1.9R, +6.5% over its neighbours = noise. The
+page computes all of this from the grid, including the drift, so it cannot go stale.
+
+The 1R version of this chart is what FOUND the already-through gap bug: it reported its own
+left edge was still on the plateau, extending to 0R put a degenerate 0R cap at the top of the
+grid, and that was the tell. Keep 0R in the grid -- it is the sanity anchor.
 
 Variant rows travel PACKED (positional arrays against shared market/date/reason tables):
 `VAR_COLS` in `run_portfolio.py` and `unpackCap` in `build_equity_html.py` are two halves of

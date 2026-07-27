@@ -33,11 +33,11 @@
      "entry_date": "2026-02-06",
      "entry": 62630.0,
      "exit_date": "2026-02-07",
-     "exit": 70581.0,
+     "exit": 69020.0,
      "stop": 60074.0,
      "target": 69020.0,
      "reason": "target_r",
-     "r": 3.111,
+     "r": 2.5,
      "bars": 1
     },
     {
@@ -75,11 +75,11 @@
      "entry_date": "2026-04-27",
      "entry": 79740.0,
      "exit_date": "2026-04-28",
-     "exit": 77440.0,
+     "exit": 78525.0,
      "stop": 80226.0,
      "target": 78525.0,
      "reason": "target_r",
-     "r": 4.732,
+     "r": 2.5,
      "bars": 1
     },
     {
@@ -117,11 +117,11 @@
      "entry_date": "2026-05-14",
      "entry": 681.0,
      "exit_date": "2026-05-15",
-     "exit": 658.2,
+     "exit": 662.7,
      "stop": 688.3,
      "target": 662.7,
      "reason": "target_r",
-     "r": 3.123,
+     "r": 2.5,
      "bars": 1
     },
     {
@@ -183,11 +183,11 @@
      "entry_date": "2026-01-13",
      "entry": 5097.0,
      "exit_date": "2026-01-14",
-     "exit": 5253.0,
+     "exit": 5050.0,
      "stop": 5050.0,
      "target": 5214.0,
-     "reason": "target_r",
-     "r": 3.319,
+     "reason": "unknown_pl",
+     "r": -1.0,
      "bars": 1
     },
     {
@@ -267,11 +267,11 @@
      "entry_date": "2026-05-05",
      "entry": 486.4,
      "exit_date": "2026-05-06",
-     "exit": 478.2,
+     "exit": 483.6,
      "stop": 487.5,
      "target": 483.6,
      "reason": "target_r",
-     "r": 7.455,
+     "r": 2.5,
      "bars": 1
     },
     {
@@ -321,11 +321,11 @@
      "entry_date": "2026-06-05",
      "entry": 51744.0,
      "exit_date": "2026-06-08",
-     "exit": 50796.0,
+     "exit": 51479.0,
      "stop": 51850.0,
      "target": 51479.0,
      "reason": "target_r",
-     "r": 8.943,
+     "r": 2.5,
      "bars": 1
     },
     {
@@ -651,11 +651,11 @@
      "entry_date": "2026-07-08",
      "entry": 235.2,
      "exit_date": "2026-07-09",
-     "exit": 238.1,
+     "exit": 237.3,
      "stop": 234.36,
      "target": 237.3,
      "reason": "target_r",
-     "r": 3.452,
+     "r": 2.5,
      "bars": 1
     }
    ]
@@ -861,11 +861,11 @@
      "entry_date": "2026-01-07",
      "entry": 6957.43,
      "exit_date": "2026-01-08",
-     "exit": 6914.11,
+     "exit": 6936.76,
      "stop": 6965.7,
      "target": 6936.76,
      "reason": "target_r",
-     "r": 5.238,
+     "r": 2.5,
      "bars": 1
     },
     {
@@ -1017,11 +1017,11 @@
      "entry_date": "2026-03-31",
      "entry": 130.16,
      "exit_date": "2026-04-01",
-     "exit": 124.86,
+     "exit": 128.21,
      "stop": 130.94,
      "target": 128.21,
      "reason": "target_r",
-     "r": 6.795,
+     "r": 2.5,
      "bars": 1
     }
    ]

@@ -267,11 +267,11 @@
      "entry_date": "2026-05-05",
      "entry": 486.4,
      "exit_date": "2026-05-06",
-     "exit": 478.2,
+     "exit": 480.9,
      "stop": 487.5,
      "target": 480.9,
      "reason": "target_r",
-     "r": 7.455,
+     "r": 5.0,
      "bars": 1
     },
     {
@@ -321,11 +321,11 @@
      "entry_date": "2026-06-05",
      "entry": 51744.0,
      "exit_date": "2026-06-08",
-     "exit": 50796.0,
+     "exit": 51214.0,
      "stop": 51850.0,
      "target": 51214.0,
      "reason": "target_r",
-     "r": 8.943,
+     "r": 5.0,
      "bars": 1
     },
     {

@@ -1291,6 +1291,15 @@ function mountReport(root, DATA){
     const plat=g.slice(pa,pb+1);
     const pMin=plat.reduce((a,b)=>b.final<a.final?b:a), pMax=plat.reduce((a,b)=>b.final>a.final?b:a);
     const openLeft=pa===0, cliff=g[pb+1];
+    // Flat ALLOWED RISK does not imply a flat capital line -- inside the plateau every cap
+    // takes the same bet, but a wider one still lets its winners run further. Measure the
+    // drift across the plateau (upper half vs lower half) instead of asserting there is
+    // none: on this data the risk went flat at 1.3R while capital kept climbing to 1.9R,
+    // and a hardcoded "no trend" would have been simply false.
+    const mean=xs=>xs.reduce((s,p)=>s+p.final,0)/xs.length;
+    const half=Math.floor(plat.length/2);
+    const drift=plat.length>=4 ? 100*(mean(plat.slice(-half))-mean(plat.slice(0,half)))/
+                                 Math.max(mean(plat.slice(0,half)),1) : 0;
     // Peak-vs-neighbours: how much of the peak is a spike between two lower points. If the
     // best setting's neighbours are far below it, that is noise, not a plateau.
     const i=g.indexOf(best), nb=[g[i-1],g[i+1]].filter(Boolean);
@@ -1305,10 +1314,15 @@ function mountReport(root, DATA){
         `<b>${plat[0].cap}R&ndash;${plat[plat.length-1].cap}R</b>`+
         (cliff ? `, then drops to ${r2(cliff.risk)}% at ${cliff.cap}R and the capital line `+
                  `falls with it` : ``)+
-        `. Inside that stretch the same bet size is on every trade, so the line just saws `+
-        `&mdash; ${usd(pMin.final)} at ${pMin.cap}R to ${usd(pMax.final)} at ${pMax.cap}R, `+
-        `with no trend across it. <b>Everything on that plateau is the same bet at the same `+
-        `pain</b>; which tenth of an R tops it is decided by a handful of trades.`+
+        `. <b>Everything on that plateau is the same bet at the same pain</b>, from `+
+        `${usd(pMin.final)} at ${pMin.cap}R to ${usd(pMax.final)} at ${pMax.cap}R `+
+        (Math.abs(drift) < 8
+          ? `&mdash; and the line just saws across it with no real trend, so which tenth of `+
+            `an R tops it is decided by a handful of trades.`
+          : `&mdash; and it still <b>${drift>0?"rises":"falls"} across the plateau</b>, the `+
+            `upper half averaging <b>${drift>0?"+":""}${r1(drift)}%</b> against the lower. `+
+            `Flat allowed risk does not mean a flat result: every cap here bets the same, `+
+            `but a wider one still lets its winners run further before the ceiling bites.`)+
         (openLeft
           ? ` <b>And the plateau runs off the left edge of this chart</b>, so ${lo.cap}R is `+
             `not its start &mdash; only the last point still on it. Extend the grid below `+

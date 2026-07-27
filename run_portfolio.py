@@ -10,15 +10,15 @@
 #
 # Money management (confirmed with the user):
 #   - one account, starting STARTING_CAPITAL; cash balance changes ONLY when a trade closes.
-#   - a new trade risks 1% of LIQUID capital = cash balance - risk already tied up in the
-#     trades currently open. Each open trade ties up its own 1% until it closes.
+#   - a new trade risks RISK_PCT of LIQUID capital = cash balance - risk already tied up in
+#     the trades currently open. Each open trade ties up its own risk until it closes.
 #   - no cap on how many trades are open at once.
 #   - within a date: process ALL entries first (sized while that day's closing trades still
 #     tie up their risk), THEN the exits (which book P&L and grow the balance).
 #   - several entries on one date are sized in a fixed order (alphabetical by market), each
 #     off the base left by the earlier ones.
 #
-# An "open at end" position (data ended while it was open) ties up its 1% from entry until
+# An "open at end" position (data ended while it was open) ties up its risk from entry until
 # its market's last bar, then releases it with zero realised P&L -- its outcome is unknown.
 #
 # Outputs: output/<strategy>_portfolio_daily.xlsx  and  output/_equity_<strategy>.json
@@ -61,7 +61,7 @@ def data_json(strategy):
 
 
 def cost_in_r(trade):
-    """Round-trip slippage for one trade, expressed in R (fraction of the 1% risked)."""
+    """Round-trip slippage for one trade, expressed in R (a fraction of the risk taken)."""
     rpu = trade.get("risk_per_unit")
     if not rpu or rpu <= 0:
         return 0.0
@@ -368,7 +368,7 @@ def _streaks_and_avgs(raw):
     """Longest win/loss run (in exit order) and average win/loss in $ and %.
 
     % is each trade's P&L over the capital it was sized against (its liquid base at
-    entry) -- with 1% risk this is essentially the R multiple as a percent. Open-at-end
+    entry) -- it is the R multiple times RISK_PCT, near enough. Open-at-end
     trades are excluded (no realised outcome).
     """
     closed = [t for t in raw if t["exit_reason"] != "open_at_end"]

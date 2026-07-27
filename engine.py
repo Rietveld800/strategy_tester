@@ -26,8 +26,8 @@
 #   Entry trigger: the bar CLOSES below the first reversal. Entry fills at the first
 #           reversal price. (Close at or above the first reversal -> no trade.)
 #   Stop: one tick above the entry bar's high. Risk = stop - entry. Sizing makes that
-#           risk exactly 1% of current equity, so 1R = 1% (pure percentage model, no
-#           contracts). A stop-out is -1%.
+#           risk exactly RISK_PCT of current equity, so 1R = RISK_PCT (pure percentage
+#           model, no contracts). A stop-out is -1R.
 #   Rule 3 (min reward): the nearest bearish reversal below entry must be at least
 #           3.5R below entry, else refuse.
 #   Rule 4 (target): STRATEGY-SPECIFIC -- the one rule that differs between strategies.
@@ -40,7 +40,7 @@
 #           strategies.CAP_CHOICES grid in one pass so the reports can move it.
 #
 # One position per market at a time; a new signal while in a trade is ignored. After each
-# close, equity is recomputed and the next trade's 1% is taken on the new equity.
+# close, equity is recomputed and the next trade's risk is taken on the new equity.
 #
 # The LOOK-AHEAD RULE (critical). The array file dated D already reflects day D's own
 # intraday extremes and re-draws any levels D elected. So a bar is ALWAYS evaluated against
@@ -77,7 +77,12 @@ REFERENCE_MARKET = "Gold_Futures_COMEX"   # the market single-market runs use
 # No date window: it is data-driven. Entries start at the first bar whose PREVIOUS
 # file carries enough reversals, and run to the last available file.
 STARTING_CAPITAL = 100_000.0
-RISK_PCT = 1.0              # percent of equity risked per trade (1R)
+# Percent of equity risked per trade -- this IS 1R, so every R multiple in the outputs is
+# worth this many percent. It was a round 1.0 until 2026-07-27; it is now the risk that puts
+# quickfix's default cap (2.5R) at a 6% maximum drawdown, which is the budget the reports'
+# levered chart compares caps at. Nothing else assumes a particular value: the pages carry a
+# risk dial and every figure that depends on it is generated from this constant.
+RISK_PCT = 1.573
 FEES = 0.0                  # per-trade cost, in equity percent; 0 for now
 
 MIN_REVERSALS = 3          # Rule 1: at least this many tested reversals
@@ -252,9 +257,9 @@ def check_exit(policy, pos, bar, bull, bear):
     in which case only the stop can close the trade. On a later bar:
 
       - only the target in range   -> clean win at the target;
-      - only the stop in range      -> clean stop (-1%);
+      - only the stop in range      -> clean stop (-1R);
       - BOTH in range on one bar     -> the intraday order is unknowable, so we give the
-        benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1%.
+        benefit of the doubt to a loss: 'unknown_pl', exit_price None, booked -1R.
 
     'target_r' means the exit was the R CAP itself, at whatever cap the run used; a
     reversal exit is named for the side of the level that closed it.
@@ -362,7 +367,7 @@ def _close(pos, bar, i, exit_price, reason, equity, trades, equity_curve, dp):
     """Realize a closed trade, append it, update and record equity, return new equity.
 
     An 'unknown_pl' exit has no fill price: the path was ambiguous, so it is booked at
-    -1R (-1%) with exit_price null -- the benefit of the doubt goes to a loss.
+    -1R with exit_price null -- the benefit of the doubt goes to a loss.
     """
     if reason == "unknown_pl":
         r, exit_out = -1.0, None

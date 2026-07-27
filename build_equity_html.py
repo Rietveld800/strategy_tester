@@ -1207,7 +1207,12 @@ function mountReport(root, DATA){
   const capIn = $("capin"), capOff = $("capoff"), capHint = $("caphint");
   const DEFAULT_CAP = DATA.cap;
   // What the number box shows while "no cap" is ticked, so unticking returns somewhere sane.
-  let lastNum = DEFAULT_CAP === "none" ? snapCap(5) : DEFAULT_CAP;
+  // Taken from the box's own initial value rather than a magic number: for an uncapped page
+  // that value is the registry's default cap, so unticking lands on the setting the OTHER
+  // strategy uses instead of somewhere arbitrary. (It was hardcoded to 5, which stopped
+  // agreeing with the box the moment quickfix's default moved off 5R.)
+  let lastNum = DEFAULT_CAP !== "none" ? DEFAULT_CAP
+              : (capIn && capIn.value !== "" ? snapCap(Number(capIn.value)) : snapCap(5));
 
   // Everything on the page that quotes the cap is rewritten from strategies.py's own text,
   // shipped per cap -- the wording is generated in ONE place, not written twice.
@@ -1226,12 +1231,15 @@ function mountReport(root, DATA){
                                     VARIANTS.defaults[s.key] === CAP)[0];
     const same = "At this setting it is <b>" + (twin ? twin.title : "") + "</b>, trade for " +
                  "trade &mdash; with the cap exposed they are one family at two settings.";
+    // Careful with what this claims: the workbooks and JSON ledgers really are written at
+    // the default cap, but the charter hand-off is a SEPARATE chosen set of caps
+    // (CHARTER_CAPS in export_charter_trades.py) which need not include this one.
     capHint.innerHTML = CAP === DEFAULT_CAP
-      ? "This strategy's own Rule 4. The workbooks and the charter export are written at " +
-        "this setting."
+      ? "This strategy's own Rule 4. The workbooks and JSON ledgers are written at this " +
+        "setting."
       : "Changed from <b>" + VARIANTS.labels[DEFAULT_CAP] + "</b>. Every setting here is a " +
         "full backtest, so the trades themselves differ &mdash; not just their sizing. " +
-        "Files on disk still hold " + VARIANTS.labels[DEFAULT_CAP] + ". " +
+        "The workbooks on disk still hold " + VARIANTS.labels[DEFAULT_CAP] + ". " +
         (twin ? same : "");
   }
   function syncCapControl(){
@@ -1574,7 +1582,7 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__H1__", f"{strategy.title} &mdash; portfolio equity curve")
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(strategy))
-            .replace("__MECHANICS__", strategies.ENTRY_MECHANICS)
+            .replace("__MECHANICS__", strategies.entry_mechanics(eng.RISK_PCT))
             .replace("__PRICEONLY__", strategies.PRICE_ONLY_NOTE)
             .replace("__RISKBAR__", riskbar)
             .replace("__CAPMIN__", f"{strategies.CAP_MIN:g}")

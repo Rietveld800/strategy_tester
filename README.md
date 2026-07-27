@@ -166,6 +166,44 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
 - Slippage is unchanged and still charges the full 3-tick stop rate on a gapped stop. That is
   mildly conservative — the gap is already in the fill price — and is left alone deliberately:
   it is an order-type cost, not a re-pricing of the fill.
+
+**Why two strategies can split on the same bar** (audited 2026-07-27, after the question came
+up from reading the charter overlays side by side). `check_exit` is shared, so every strategy
+resolves an engulfing day the same way — but the gap test is against *each strategy's own
+target*, and those sit at different prices. Across the whole archive:
+
+| | days where BOTH stop and target were in the exit bar's range | booked `unknown_pl` (−1R) | booked a win | booked a stop |
+|---|---|---|---|---|
+| quickfix 2.5R | 9 | **5** | 3 (all gapped past the target) | 1 (−3.05R, gapped past the stop) |
+| quickfixpro | 7 | **6** | 1 (+0.27R, gapped) | 0 |
+
+Both strategies do give the doubt to the stop; the wins are the gap rule firing *first*,
+because the bar opened past the target and the limit was already filled before price ran back
+through the stop. The one date where the two split is **EURO_Futures, short, exit 2026-05-08**:
+
+```
+entry bar 2026-05-07, low 1.17425
+  quickfix 2.5R target   1.17440   <- computed: entry - 2.5 x risk
+  quickfixpro target     1.17424   <- entry bar low - 1 tick
+  exit bar 2026-05-08    O 1.17435  H 1.18085  L 1.17405  C 1.17985
+```
+
+The open landed **between the two targets** — 5 ticks past quickfix's, 11 ticks short of
+quickfixpro's — so quickfix gapped into profit at the open (+2.53R) while quickfixpro did not
+gap, traded through both levels, and booked −1R. One rule, two target prices 1.6 ticks apart.
+
+Structural point worth keeping: quickfix's target is a **computed** price
+(`entry − cap × risk`, landing wherever the arithmetic puts it) while quickfixpro's is a
+**real chart price** (entry bar low − 1 tick), so a computed target lands near the open by
+chance more often and wins these coin-flips somewhat more.
+
+**Open question, deliberately not changed.** The gap test is `open <= target` (short), so an
+open sitting *exactly on* the target counts as a gap. That happens once today —
+`USD_EUR_Cross_Rate` 2026-03-09, quickfixpro, open 0.8602 against a 0.8602 target, booked
++0.27R. Defensible (a resting limit fills when the market trades there) but it is not a gap.
+Requiring a **strict gap of at least one tick** would send that trade through to
+`unknown_pl` instead; it is a one-line change in `check_exit` and would need the risks
+re-solved.
 - A position still open on the last bar is resolved by whether that market is still being
   collected:
   - **active market → `open_at_end`** (unrealized, no P&L). The trade is genuinely still

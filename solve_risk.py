@@ -4,7 +4,7 @@
 # that strategy at engine.TARGET_DD (6%) maximum drawdown on the current data.
 #
 #   venv\Scripts\python.exe solve_risk.py            # every registered strategy
-#   venv\Scripts\python.exe solve_risk.py slowfix    # just one
+#   venv\Scripts\python.exe solve_risk.py quickfixpro   # just one
 #
 # Those numbers live as constants in `strategies.py` (`Strategy.risk_pct`) because everything
 # downstream -- the workbooks, the JSON ledgers, the pages' opening risk, the "1R = x%" line

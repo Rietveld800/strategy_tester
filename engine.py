@@ -483,8 +483,8 @@ def run_markets(picked, caps=None, progress=True):
     bars are parsed ONCE and reused -- which is also why the runners take a precomputed
     result list: a full refresh loads the archive once, not once per output file.
 
-    What is backtested is RULE 4 SETTINGS, not strategies: quickfix at 5R and slowfix at 5R
-    are the same run, computed once and shared. Each strategy is then just a pointer into
+    What is backtested is RULE 4 SETTINGS, not strategies: two strategies sharing a cap are
+    one run, computed once and shared. Each strategy is then just a pointer into
     that grid at its own default. `caps` defaults to strategies.CAP_CHOICES -- the grid the
     reports let you move the dial across -- and every `picked` strategy's own Rule 4 is
     added on top, which is how a strategy outside the cap family (Quickfixpro) gets run at

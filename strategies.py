@@ -14,14 +14,13 @@
 # --- Rule 4 comes in two SHAPES ----------------------------------------------------
 # 1. THE CAP FAMILY (`target_policy`) -- ride to the first opposite reversal beyond entry,
 #    but never past `cap` R. One policy with one number in it. Quickfix is that family at
-#    2.5R, Slowfix at no cap; the reports carry the cap as a DIAL across the whole
-#    CAP_CHOICES grid, so a page can be re-run at 4R, 6.75R or no cap at all.
+#    2.5R; the reports carry the cap as a DIAL across the whole CAP_CHOICES grid, so a page
+#    can be re-run at 1.7R, 6.75R or no cap at all.
 #
-#    The consequence, stated plainly: with the cap exposed, those two strategies are the
-#    SAME strategy at two settings. Set quickfix to no cap and it IS slowfix; set slowfix to
-#    2.5R and it IS quickfix, trade for trade. The registry keeps them as two entries
-#    because those two settings are the two the research is about, not because the rules
-#    underneath differ.
+#    The consequence, stated plainly: with the cap exposed, a 'strategy' in this family is
+#    just a dial position. Quickfix at no cap IS what used to be registered as Slowfix,
+#    trade for trade -- which is why that entry was retired (see REGISTRY): the dial
+#    already reaches it, and a second page for one setting earned nothing.
 #
 # 2. THE ENTRY BAR (`entry_bar_policy`) -- take profit one tick beyond the entry bar's own
 #    opposite extreme, fixed at entry. Quickfixpro. This is a genuinely different shape, not
@@ -58,43 +57,35 @@
 # Only OPPOSITE-side reversals may close a trade (bearish levels close a short, bullish
 # levels close a long); a same-side level is never an exit.
 
-# The caps the reports precompute, so the number can be moved without a rebuild: 2R to 10R
-# in quarter-R steps, plus the uncapped setting. Every one of them is a full backtest --
-# changing the cap changes the exits, and through "one position per market at a time" it
-# changes which later signals are taken as well, so it cannot be replayed in the browser
-# the way the risk percentage can.
-CAP_MIN, CAP_MAX, CAP_STEP = 2.0, 10.0, 0.25
-CAP_GRID = [round(CAP_MIN + i * CAP_STEP, 2)
-            for i in range(int(round((CAP_MAX - CAP_MIN) / CAP_STEP)) + 1)]
+# The caps the reports precompute, so the number can be moved without a rebuild. Every one is
+# a full backtest -- changing the cap changes the exits, and through "one position per market
+# at a time" it changes which later signals are taken as well, so it cannot be replayed in
+# the browser the way the risk percentage can.
+#
+# ONE grid, at two resolutions (2026-07-28). It runs 0R to 10R, at TENTH-R steps up to
+# CAP_FINE_TO and quarter-R above it: the interesting structure is all in the low end (the
+# levered plateau starts at 1.3R and the cliffs are between 2R and 3R), while above 5.5R the
+# family has flattened out and quarter-R is more resolution than the sample can carry.
+#
+# It replaced a pair of grids -- a 2R-10R dial axis and a separate 0R-3R detail grid for a
+# second chart. One grid, one axis, one chart section: the split existed only because the
+# dial could not reach below 2R, and this one can.
+#
+# 0R is kept deliberately even though it is degenerate (the ceiling sits ON the entry). It is
+# the sanity anchor: an already-through-target bug showed up on 2026-07-27 precisely because
+# a 0R cap came out best on the whole grid, which is impossible on its face.
+CAP_MIN, CAP_MAX, CAP_STEP = 0.0, 10.0, 0.1
+CAP_FINE_TO, CAP_COARSE_STEP = 5.5, 0.25
+CAP_GRID = ([round(i * CAP_STEP, 2)
+             for i in range(int(round(CAP_FINE_TO / CAP_STEP)) + 1)] +
+            [round(CAP_FINE_TO + i * CAP_COARSE_STEP, 2)
+             for i in range(1, int(round((CAP_MAX - CAP_FINE_TO) / CAP_COARSE_STEP)) + 1)])
 
-# The DETAIL grid: 0R to 3R in tenth-R steps, for the reports' zoomed chart.
-#
-# Why a second grid rather than a finer single one. The levered chart puts the sweet spot in
-# the 2R-3R band, and the quarter-R axis resolves that band at only five points -- too coarse
-# to say anything about its shape. Worse, the band's lower edge sits exactly at CAP_MIN, so
-# everything below 2R was never computed at all and the curve could have been still climbing
-# as it ran off the left of the chart. This grid answers both.
-#
-# It started at 1R and was extended DOWN TO 0R on 2026-07-27, because the 1R version answered
-# its own question with "the plateau runs off my left edge too": allowed risk was flat right
-# across 1R-2.3R, so 1R was the last point on the plateau rather than its start. Going to 0R
-# brackets it -- a 0R cap is the degenerate end of the family (the ceiling sits ON the entry,
-# so the trade takes the first chance to get out at breakeven or better), and the whole point
-# is that the curve must have somewhere to fall away on the left.
-#
-# It does NOT replace CAP_GRID. The dial keeps its quarter-R axis and the wide sweep keeps
-# its 2R-10R one, because those answer the other question -- what the whole family does. The
-# two grids overlap at 2R, 2.5R and 3R, which is what ties the zoomed chart to the wide one.
-FINE_MIN, FINE_MAX, FINE_STEP = 0.0, 3.0, 0.1
-FINE_GRID = [round(FINE_MIN + i * FINE_STEP, 2)
-             for i in range(int(round((FINE_MAX - FINE_MIN) / FINE_STEP)) + 1)]
-
-# Everything that is actually BACKTESTED: both grids, deduplicated, plus the uncapped run.
-# None = no ceiling, listed first because it is one end of the same scale. The fine grid adds
-# 28 settings the quarter-R one does not have, taking the total from 34 to 62 -- measured at
-# well under a second of backtest (the ~60s archive parse dominates and is unchanged) and
-# about +160 KB on each page.
-CAP_CHOICES = [None] + sorted(set(CAP_GRID) | set(FINE_GRID))
+# Everything that is actually BACKTESTED: the grid plus the uncapped run. None = no ceiling,
+# listed first because it is one end of the same scale. 74 caps + uncapped; the backtests
+# themselves are trivial next to the ~60s archive parse, and the cost that matters is the
+# ~420 KB the packed rows add to every page.
+CAP_CHOICES = [None] + CAP_GRID
 
 
 def cap_token(cap):
@@ -351,7 +342,7 @@ class Strategy:
     __slots__ = ("key", "title", "r4", "risk_pct")
 
     def __init__(self, key, title, rule4, risk_pct):
-        self.key = key          # file/CLI name: quickfix, slowfix, quickfixpro, ...
+        self.key = key          # file/CLI name: quickfix, quickfixpro, ...
         self.title = title      # display name on pages and sheets
         self.r4 = rule4         # this strategy's default Rule 4
         self.risk_pct = risk_pct  # % of liquid capital per trade -> TARGET_DD max drawdown
@@ -412,13 +403,17 @@ class Strategy:
 # it, so the old setting stays one click away rather than disappearing.
 QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(2.5),
                     risk_pct=1.175)
-SLOWFIX = Strategy(key="slowfix", title="Slowfix", rule4=cap_rule4(None),
-                   risk_pct=0.396)
-# Not a third cap: a different Rule 4 shape, so it carries no cap dial (see ENTRY_BAR).
+# Not a second cap: a different Rule 4 shape, so it carries no cap dial (see ENTRY_BAR).
 QUICKFIXPRO = Strategy(key="quickfixpro", title="Quickfixpro", rule4=ENTRY_BAR,
                        risk_pct=0.8)
 
-REGISTRY = [QUICKFIX, SLOWFIX, QUICKFIXPRO]
+# SLOWFIX -- the cap family at no cap -- was retired from the registry on 2026-07-28 (user):
+# once every cap became reachable on one dial, a whole registered strategy for the uncapped
+# end stopped earning its page. It was never a separate method, and nothing about it is lost:
+# "no cap" is still a setting of the dial, still the dashed reference line on both charts,
+# and still the worst point of the family at equal drawdown ($158,195 at 0.396% risk), which
+# is the finding that made showing it in full redundant. Its outputs were deleted with it.
+REGISTRY = [QUICKFIX, QUICKFIXPRO]
 BY_KEY = {s.key: s for s in REGISTRY}
 
 
@@ -435,6 +430,6 @@ def selected(argv):
     """Strategies named on the command line, or ALL of them when nothing is named.
 
     Every runner uses this, so `python run_all.py` regenerates everything while
-    `python run_all.py slowfix` redoes just the one.
+    `python run_all.py quickfixpro` redoes just the one.
     """
     return [get(a) for a in argv] if argv else list(REGISTRY)

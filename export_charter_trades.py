@@ -8,16 +8,14 @@
 #
 # WHAT GETS AN OVERLAY. Two lists, because Rule 4 comes in two shapes:
 #
-#   CHARTER_CAPS        a few settings of the CAP FAMILY. Not one file per strategy: quickfix
-#                       and slowfix are that family at two caps, so the useful comparison on
-#                       a price chart is a handful of caps (2026-07-27). Slowfix is not
-#                       exported at all -- it is the family at no cap, its trades are the
-#                       least interesting on the chart, and the reports already carry it.
+#   CHARTER_CAPS        a few settings of the CAP FAMILY. Not one file per strategy: a
+#                       cap-family strategy is just a dial position, so the useful comparison
+#                       on a price chart is a handful of caps (2026-07-27).
 #   CHARTER_STRATEGIES  strategies whose Rule 4 is NOT a cap, exported by KEY because there
 #                       is no cap number to name the file after. Quickfixpro today.
 #
-# (Slowfix remains a full strategy everywhere else -- the workbooks and the HTML reports are
-# unchanged. This is only about what charter draws.)
+# This list is INDEPENDENT of the reports' cap grid and need not sit on it -- 2.25R is
+# exported and is on no grid the reports draw. run_pipeline backtests whatever it names.
 #
 # Each trade carries the entry/exit the way it plots on price: entry at the first-reversal
 # price on the entry bar, exit at the fill level (R cap / entry-bar target / stop / opposite

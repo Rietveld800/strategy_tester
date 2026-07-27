@@ -31,8 +31,13 @@ def main(argv):
     for s in picked:
         run_all.write(s, results)
         run_portfolio.run(s, results)
-        export_charter_trades.export(s, results)
         print()
+    # The charter hand-off is per CAP, not per strategy (see export_charter_trades.py), so
+    # it is written once from the grid rather than inside the per-strategy loop.
+    for cap in export_charter_trades.CHARTER_CAPS:
+        export_charter_trades.export(cap, results)
+    export_charter_trades.prune(export_charter_trades.CHARTER_CAPS)
+    print()
     run_portfolio.write_variants(results)
     print()
     # Built last, and always for EVERY strategy that has results: the pages read the shared

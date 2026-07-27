@@ -119,12 +119,20 @@ resolve. Those are flattened at that bar's CLOSE with exit reason `data_end`
 (`CLOSE_OBSOLETE_AT_END` in `engine.py`); only ACTIVE markets still report `open_at_end`.
 Obsolescence is cross-market, so `run_markets` loads every market before backtesting any.
 
-Trades are handed to charter as `output/charter_trades_<strategy>.json`, one file per
-strategy in the same schema (this replaced the single `charter_trades.json`). Charter globs
-them, draws each as `trades_<key>`, and its **T** rail button opens a box with a checkbox per
-strategy — any combination can be shown at once. Colour still means the OUTCOME, so charter
-separates strategies by line dash + exit marker. A new strategy needs no charter change:
-export the file and rebuild the site.
+Trades are handed to charter **per CAP, not per strategy** (2026-07-27):
+`output/charter_trades_cap<NN>_<NN>.json`, zero-padded so filename order IS cap order. The
+set is `CHARTER_CAPS` in `export_charter_trades.py` — currently **2R, 2.25R, 5R**.
+**Slowfix is no longer exported to charter at all** (user, 2026-07-27) — it stays a full
+strategy everywhere else; this is only about what charter draws. The exporter PRUNES
+hand-off files it no longer owns, because charter globs the directory and a leftover file
+keeps being drawn.
+
+Charter globs them, draws each as `trades_<key>`, and its **T** rail button opens a box with
+a checkbox per cap (labelled with that cap's Rule 4 + trade count). All the caps are drawn
+IDENTICALLY — one dotted line, one round exit marker (`TRADE_STYLE`, was `TRADE_STYLES[i%4]`)
+— because they share Rules 1-3 and therefore enter on exactly the same bars; read them one
+tick at a time. Do NOT export the whole 34-cap grid: it is affordable in bytes (~1.1 MB on an
+8.1 MB site) but illegible, since 34 overlays stack 34 identical entry markers on one point.
 
 Not yet done: intraday price data (IBKR) to replace the daily-proxy fill assumptions.
 

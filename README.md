@@ -158,7 +158,7 @@ backtests.
 | `run_all.py` | Runs every market independently (each a fresh $100k) → `<strategy>_all_markets_daily.xlsx` (per-market summary + all trades). |
 | `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid**, packed for the pages. |
 | `build_equity_html.py` | Renders `_equity_<strategy>.json` into the standalone interactive report `output/equity_<strategy>.html`, including the strategy-switcher buttons. |
-| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<strategy>.json` (trade geometry keyed by market). |
+| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_cap<NN>_<NN>.json`, one file per **cap** in `CHARTER_CAPS` (2R, 2.25R, 5R), trade geometry keyed by market. Prunes hand-off files it no longer owns. |
 | `run_pipeline.py` | All four writers in one pass over the array archive (the fast way to regenerate everything). |
 
 Parsing is imported from `../charter/scripts/charting_core.py` (`parse_array`); do not
@@ -523,17 +523,18 @@ and `report.html` 160 KB → 258 KB.
 - **`_variants.json`** — the cap grid, shared by every page (intermediate).
 - **`_equity_<strategy>.json`** — that strategy's headline numbers at its default cap
   (intermediate).
-- **`charter_trades_<strategy>.json`** — the charter hand-off (below).
+- **`charter_trades_cap<NN>_<NN>.json`** — the charter hand-off, one file per exported
+  **cap** (below).
 
 Ledger note: the per-trade `target` field records **the Rule 4 level in force at entry**
 (it can move later). It replaced an old quickfix-only `target_5r` column, which could only
 ever describe one strategy — and now could not even describe one, since the cap is a dial.
 
-### Charter hand-off schema (`charter_trades_<strategy>.json`)
+### Charter hand-off schema (`charter_trades_cap<NN>_<NN>.json`)
 
 ```
 {
-  "meta": { "strategy": "quickfix", "title": "Quickfix", "rule4": "...",
+  "meta": { "strategy": "cap02_25", "title": "2.25R", "cap": "2.25", "rule4": "...",
             "timeframe": "daily", "n_markets": N, "n_trades": M, ... },
   "markets": {
     "Gold_Futures_COMEX": {
@@ -552,9 +553,31 @@ ever describe one strategy — and now could not even describe one, since the ca
 }
 ```
 
-**One file per strategy, all in the same schema** — charter globs
-`charter_trades_*.json` and picks up a new strategy on its next build with no code change.
-(This replaced the single `charter_trades.json` when slowfix was added.)
+**One file per CAP, all in the same schema** — charter globs `charter_trades_*.json` and
+picks up a new one on its next build with no code change. The names are **zero-padded**
+(`cap02_00`, `cap02_25`, `cap05_00`) so sorting the filenames sorts the caps: charter lists
+the boxes in filename order, and `cap10` would otherwise land before `cap2`.
+
+The set is chosen in `CHARTER_CAPS` at the top of `export_charter_trades.py` — today
+**2R, 2.25R and 5R**: the two the levered chart singles out, plus quickfix's documented
+default to read them against. `export_charter_trades.py` also **prunes** any
+`charter_trades_*.json` it no longer owns, because charter globs the directory and a file
+left over from an earlier set would go on being drawn.
+
+**Why not all 34 caps.** Bytes are not the obstacle (the whole grid would add ~1.1 MB to
+charter's 8.1 MB site, and no extra backtest — the pipeline already computes it). Legibility
+is. Rules 1–3 do not involve the cap, so **every cap takes the same setups**: all their entry
+triangles land on the same bar at the same price, and 34 overlays would stack 34 markers on
+one point and fan 34 exit lines from it. Charter also has one line style for these overlays
+and colour already means the outcome, so they cannot be told apart on the chart at all — they
+are read one tick at a time.
+
+**Per cap, not per strategy** (2026-07-27). This used to be one file per registered strategy
+(`charter_trades_quickfix.json`, `…_slowfix.json`). Now that Rule 4 is one family with the
+cap as its only parameter, the useful comparison on a price chart is a few caps. **Slowfix is
+no longer exported at all** — it is that family at no cap, its trades are the least
+interesting on the chart, and the reports still carry it in full. This is only about what
+charter draws; the workbooks, JSON ledgers and HTML reports are unchanged.
 
 `reason` was **`target_5r`** until the cap became a dial; it is now **`target_r`** — the exit
 means "the R cap was hit", and 5 is only one setting of it. charter colours both (green,
@@ -570,17 +593,19 @@ price pane behind a toggle. To refresh the overlay end to end:
    (append a market substring, e.g. `... gold`, for a fast single-market rebuild).
 3. In `../charter`: `venv\Scripts\python.exe serve.py`, open the site, and click the **T**
    button (green/red triangles) on the right rail. It opens the **Strategy trades box** —
-   one checkbox per strategy — so you can show quickfix, slowfix, both, or neither. Long
-   entry = up-triangle, short = down-triangle, exit = a marker on the exit bar; the
-   entry→exit line is green for a win, red for a stop, amber for an ambiguous (`unknown_pl`)
-   outcome, blue for a still-open trade. Daily timeframe only; markets with no trades show
-   nothing.
+   one checkbox per exported cap (2R, 2.25R, 5R), each labelled with its own Rule 4 and its
+   trade count — so you can show any combination or none. Long entry = up-triangle, short =
+   down-triangle, exit = a marker on the exit bar; the entry→exit line is green for a win,
+   red for a stop, amber for an ambiguous (`unknown_pl`) outcome, blue for a still-open
+   trade. Daily timeframe only; markets with no trades show nothing.
 
-**Colour is the outcome, in every strategy**, so charter separates strategies by **line dash
-and exit marker** (in file order: quickfix dotted/round, slowfix dashed/square). The box row
-carries that hint — it is the only legend. Because both strategies share entry rules, their
-entry triangles sit on exactly the same bar and price when both are shown; the exits and the
-lines are what differ.
+**Colour is the outcome**, and the caps are drawn **identically** — one dotted line, one
+round exit marker for all of them. There is nothing to tell them apart on the chart, on
+purpose: they are caps of one strategy and share Rules 1–3, so their entry triangles sit on
+exactly the same bar and price, and a different dash per cap would only decorate lines that
+start from the same point. **Read them one tick at a time**; the exits and the lines are
+what differ. (The old four-style set — dot/dash/long-dash/dash-dot — is in git if genuinely
+different strategies are ever drawn together again.)
 
 ---
 

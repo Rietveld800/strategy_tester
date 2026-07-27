@@ -146,9 +146,8 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   **day after** entry. The entry bar's high/low are already spent by the time its close
   confirms the trade, and by construction the stop sits one tick beyond that bar's own
   extreme, so it cannot trigger there either.
-- **A gap is filled at the OPEN** (user, 2026-07-27). If a later bar *opens* beyond the stop
-  or beyond the target, it gapped through that level and the trade fills at **that bar's
-  open**, not at the level. The open is the day's first price, so a level the bar opened past
+- **A gap is filled at the OPEN** (user, 2026-07-27). If a later bar **jumps over** the stop
+  or the target, the trade fills at **that bar's open**, not at the level. The open is the day's first price, so a level the bar opened past
   was taken at the open and nothing can have traded before it — the gap is the one case where
   a daily bar does tell us the intraday order. On the stop that is worse than the stop price
   (a gapped stop loses **more than 1R** — the worst on this data is −11.68R, on slowfix); on
@@ -156,6 +155,17 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   `open ≥ stop` and its target when `open ≤ target`; the long is the mirror. The two cannot
   both be true, since a short's target is below its entry and its stop above it, but the stop
   is tested first anyway, keeping the same doubt-goes-to-the-loss convention as below.
+- **A gap is measured against the PREVIOUS CLOSE, not the open alone** (fixed 2026-07-27,
+  same day it was introduced). A gap means price *jumped over* the level, so a short gaps its
+  target when `open <= target < prev_close`. Testing the open by itself was a real bug: a
+  short's entry bar closes **below** its entry by definition, so any target above that close
+  was already in the money before management started, every next open counted as a "gap", and
+  the trade was paid out at that open instead of at its target. It hit **9 of quickfix's 84
+  trades for about +24R of free profit**, and made a **0R cap the best setting on the whole
+  grid** — 78 of 88 trades paying an average +1.94R on a target sitting *on* the entry price.
+  An already-through target is not a gap: a resting limit there fills at the limit. The stop
+  needs no such guard, since it sits one tick beyond the entry bar's own extreme and no close
+  can be through it while the trade is open.
 - On each later bar, once gaps are resolved: **only the target in range → win; only the stop
   in range → loss; BOTH in range on one bar → `unknown_pl`**, booked as a **loss (−1R)** —
   without intraday data we cannot know which was hit first, so the doubt goes to the stop.
@@ -261,7 +271,7 @@ backtests.
 | `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid, plus every registered Rule 4 that is not a cap**, packed for the pages. |
 | `build_equity_html.py` | Renders `_equity_<strategy>.json` + the shared `_variants.json` into `output/equity_<strategy>.html`, plus `report.html` and `conclusions.html`. Refuses to build if the variant grid disagrees with a strategy's workbook. |
 | `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<key>.json` — one file per **cap** in `CHARTER_CAPS` (2R, 2.25R, 2.5R, 5R) plus one per strategy in `CHARTER_STRATEGIES` (quickfixpro), trade geometry keyed by market. Prunes hand-off files it no longer owns. |
-| `strategies.py` (grids) | `CAP_GRID` 2R&ndash;10R at 0.25R = the dial's axis and the wide sweep's; `FINE_GRID` 1R&ndash;3R at 0.1R = the zoomed chart's; `CAP_CHOICES` is their union plus the uncapped run, and is what gets backtested. |
+| `strategies.py` (grids) | `CAP_GRID` 2R&ndash;10R at 0.25R = the dial's axis and the wide sweep's; `FINE_GRID` 0R&ndash;3R at 0.1R = the zoomed chart's; `CAP_CHOICES` is their union plus the uncapped run, and is what gets backtested. |
 | `solve_risk.py` | Solves each strategy's default risk: the one that puts it at `engine.TARGET_DD` (6%) maximum drawdown. Prints the paste-ready `risk_pct` and flags a stale registry. Not part of the pipeline &mdash; it is how the constants in `strategies.py` are derived. |
 | `run_pipeline.py` | Every writer in one pass over the array archive (the fast way to regenerate everything): per-market xlsx, portfolio, the cap grid, the charter hand-off, then the pages. |
 
@@ -358,20 +368,22 @@ nothing depends on them being equal.
 | | quickfix (2.5R) | slowfix (no cap) | quickfixpro (entry bar) |
 |---|---|---|---|
 | Risk per trade | 1.175% | 0.396% | 0.800% |
-| Net return | **+290.83%** | +58.20% | +181.07% |
-| Gross return | +296.14% | +60.32% | +187.98% |
+| Net return | **+190.45%** | +58.20% | +181.07% |
+| Gross return | +200.90% | +60.32% | +187.98% |
 | Max drawdown | 6.00% | 6.00% | 6.00% |
-| **Return / drawdown** | **48.5x** | 9.7x | 30.2x |
+| **Return / drawdown** | **31.7x** | 9.7x | 30.2x |
 | Closed trades | 84 | 76 | 85 |
-| Win rate | 59.5% | 27.6% | **65.9%** |
-| Average winner | +3.23R | **+9.55R** | +3.02R |
+| Win rate | 58.3% | 27.6% | **65.9%** |
+| Average winner | +2.77R | **+9.55R** | +3.02R |
 | Average hold | 1.4 bars | 3.8 bars | **1.2 bars** |
 | Max concurrent | 5 | 8 | **4** |
 | Time in market | 52% | 87% | **45%** |
 | Longest losing run | 4 | 13 | 4 |
 
 Every drawdown is 6.00% by construction, so the return column *is* the ranking: **quickfix
-first at 48.5x, quickfixpro second at 30.2x, slowfix a distant third at 9.7x.**
+31.7x and quickfixpro 30.2x are effectively tied, with slowfix a distant third at 9.7x.**
+A 1.5-point gap on 84 trades is not a result; treat the top two as indistinguishable on this
+sample and pick between them on the other columns.
 
 Read as a family. Quickfix and slowfix are the same exits at two ceilings: slowfix's winners
 are nearly three times the size (+9.55R average) but it wins barely a quarter of the time,
@@ -380,16 +392,18 @@ hole. At equal drawdown it has to be sized down to 0.396% per trade, and that gi
 more than the big winners bring back. Its large headline return at a shared bet size was
 mostly leverage, and this table is what removes it.
 
-Quickfixpro is a different exit altogether and lands between them. It wins the most often
-(65.9%) and is by far the least exposed — 45% time in market, at most 4 concurrent positions,
-1.2 bars per trade — but its average winner (+3.02R) is no bigger than quickfix's (+3.23R),
-so quickfix's slightly better payoff wins out over the same 6% budget. Its real advantage is
-elsewhere: it earns 30x its drawdown while being in the market less than half the time.
+Quickfixpro is a different exit altogether and matches quickfix for a fraction of the
+exposure. It wins the most often (65.9%), its average winner (+3.02R) is slightly *larger*
+than quickfix's (+2.77R), and it is in the market 45% of the time against 52%, at most 4
+concurrent positions against 5, 1.2 bars per trade against 1.4. Same return per point of
+pain, less time at risk to get it.
 
 **Do not read this as a verdict.** It is ~7 months and 76–85 trades, and max drawdown — the
 thing every one of these risks is solved against — is the most sample-dependent statistic in
-the project. The ordering has already moved once: before gap fills were added, quickfixpro
-led on this same table.
+the project. This table has already been rewritten twice in one day by changes to the **fill
+model alone**, with the strategies untouched: quickfixpro led before gap fills, quickfix led
+by 18 points with the first version of them, and correcting that version's already-through
+bug brought the two back level. Read the fill assumptions as the biggest open risk here.
 
 **Return / drawdown is the ranking metric**, not total return. Risk per trade is a dial, so
 a shallower edge can be levered up to meet a given drawdown, while the reverse conversion
@@ -413,11 +427,11 @@ All at the reference risk, 1.175%:
 
 | cap | 2R | **2.5R** | 3.5R | 4.5R | 5R | 6R | 7R | 8.5R | 10R | none |
 |---|---|---|---|---|---|---|---|---|---|---|
-| return | +326% | **+291%** | +230% | +262% | +257% | +250% | +324% | +318% | +228% | +214% |
+| return | +154% | **+190%** | +178% | +233% | +234% | +239% | +315% | +318% | +228% | +214% |
 | max DD | 5.07% | **6.00%** | 5.85% | 6.83% | 6.81% | 10.76% | 10.15% | 10.14% | 16.74% | 16.74% |
-| ret/DD | 64.2x | **48.5x** | 39.3x | 38.3x | 37.7x | 23.3x | 32.0x | 31.3x | 13.6x | 12.8x |
+| ret/DD | 30.4x | **31.7x** | 30.5x | 34.2x | 34.3x | 22.2x | 31.1x | 31.3x | 13.6x | 12.8x |
 | trades | 88 | **84** | 80 | 79 | 79 | 79 | 79 | 77 | 76 | 76 |
-| win rate | 66% | **60%** | 48% | 44% | 42% | 38% | 38% | 35% | 32% | 28% |
+| win rate | 61% | **58%** | 48% | 44% | 42% | 38% | 38% | 35% | 32% | 28% |
 
 **Do not rank the caps off this table.** It compares them at one bet size, and at one bet
 size a wider cap is being handed a deeper drawdown for free — part of its bigger return is
@@ -435,7 +449,7 @@ See [Choosing the profit cap](#choosing-the-profit-cap--the-section-at-the-botto
 What this table *is* good for is the shape: **drawdown moves in plateaus** (5.1% → 6.8% →
 10.1% → 16.7%), because on ~80 trades the worst path is dominated by a handful of trades and
 only jumps when the cap crosses one of their exits. Win rate falls monotonically as the cap
-widens, from 66% at 2R to 28% uncapped. Both of those are structural and will hold; the
+widens, from 61% at 2R to 28% uncapped. Both of those are structural and will hold; the
 specific peaks will not.
 
 ---
@@ -455,7 +469,7 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
   shared, 4 this strategy's), the **Rule 4 cap dial**, equity + drawdown + open-positions
   panels, KPI + per-trade stat tiles, a sortable trade blotter, a per-market breakdown, and
   **Choosing the profit cap** plus **Inside the hotspot** at the bottom (the 2R–10R grid
-  levered to a constant 6% drawdown, then the same thing zoomed to 1R–3R at 0.1R, each with
+  levered to a constant 6% drawdown, then the same thing zoomed to 0R–3R at 0.1R, each with
   its own generated reading). The cap dial and that last section are **left out for a
   strategy outside the cap family** — quickfixpro's page has neither, because there is no
   number in its Rule 4 to dial and it is not a point on the cap axis. Everything else,
@@ -672,18 +686,18 @@ There was briefly a second chart above it showing the same grid at whatever risk
 set to. It was dropped: at one risk the comparison is the misleading one, and having both
 invited reading the wrong one first.
 
-**It reorders the family.** Levered to equal drawdown the tight caps win: **2R first**
-($546,464, 1.39% risk, 74.4x), 2.25R second ($495,908, 1.39%), **2.5R third** ($390,959,
-1.18%, 48.5x), and the uncapped run the **worst of the whole family** at $158,195 — it must
-be sized down to 0.396% per trade to hold 6%, and that gives away far more than its longer
-holds win back. Slowfix's higher headline return at a shared bet size is, on this measure,
-mostly leverage.
+**It reorders the family, and it flattens it.** Levered to equal drawdown the top of the
+grid is **3.75R ($306,713, 1.21% risk, 34.5x)**, then **2R ($299,000, 1.39%)**, **2.5R
+($290,519, 1.18%, 31.8x)** and **5R ($289,469, 1.03%)** — four settings inside 6% of each
+other, which is nothing on this sample. What the chart says clearly is the *bottom*: the
+uncapped run is the **worst of the whole family** at $158,195, because it must be sized down
+to 0.396% per trade to hold 6% and that gives away far more than its longer holds win back.
+Slowfix's higher headline return at a shared bet size is, on this measure, mostly leverage.
 
-**Quickfix's default cap is 2.5R and this chart's top point is 2R** (it was 2.5R until gap
-fills went in on 2026-07-27, which is why the default sits there). The default has been left
-alone deliberately: the finding this section makes is that the sweet spot is the **2R–3R
-band**, not any one quarter-R inside it, and on 76–88 trades the point that tops the band
-moves with the fill model. Change the default only if the band itself moves.
+**Quickfix's default cap of 2.5R has been left alone**, and the top point of this chart has
+now been 2.5R, then 2R, then 3.75R on three successive readings — each time because the
+**fill model** changed, never the strategies. That is the argument for reading a band rather
+than a point, and for not chasing the peak with the default.
 
 **The chart explains itself, from itself.** Under the plot, five short passages state the
 sweet spot, the risk each cap allows, return/drawdown, win rate, and the sample caveat. Every
@@ -692,9 +706,9 @@ go stale against the data the way a hand-written paragraph would — including t
 naming where the allowed risk holds flat and where it falls off a cliff, and a closing line
 tying the text back to whatever the dial is currently set to. What it says:
 
-- **The sweet spot sits between 2R and 3R.** Best is 2R today, but read the band, not the
-  point: inside 2R–3R the curve is choppy and single quarter-R settings drop well below their
-  neighbours, which on 76–88 trades is sample noise.
+- **The sweet spot sits between 2R and 3R.** Read the band, not the point: the top four
+  settings sit within 6% of each other and the curve is choppy throughout, which on 76–88
+  trades is sample noise.
 - **Risk allowed is the mechanism.** 2R carries 1.39% per trade inside 6%; the widest
   settings are held to 0.40% — 3.5× the position size for the same pain. Taking profit early
   stops a position becoming a deep loser, so the worst path is shallower and the same
@@ -706,7 +720,7 @@ tying the text back to whatever the dial is currently set to. What it says:
   size, and then the next cliff takes it back.
 - **Return/drawdown is confirmation, not evidence.** Drawdown is fixed at 6% by construction,
   so it is just return ÷ 6 and ranks the caps in exactly the order the capital line does.
-- **Win rate falls straight down the grid**, 65.9% at 2R to 27.6% uncapped, and that is what
+- **Win rate falls straight down the grid**, 61.4% at 2R to 27.6% uncapped, and that is what
   produces the drawdown difference: winning more often shortens the losing runs, and a
   shorter losing run is a shallower hole. A tight cap gives up the big winners to buy
   consistency, and at constant drawdown consistency is what pays.
@@ -731,40 +745,54 @@ Mechanics:
   (Deferring also turned out not to help: it made first paint later, not sooner.)
 - `TARGET_DD` in the chart's code is the one constant to change for another drawdown budget.
 
-#### Inside the hotspot — the zoomed chart (1R–3R at 0.1R)
+#### Inside the hotspot — the zoomed chart (0R–3R at 0.1R)
 
 The section immediately after it answers the question the wide chart raises and cannot
 settle. Its axis is quarter-R and **starts at 2R**, so the sweet spot it reports resolves at
 only five points and its left-hand side was never drawn at all. The zoom is the **same
-calculation on a tenth-R grid running down to 1R** — same `simulate()`, same `TARGET_DD`,
+calculation on a tenth-R grid running down to 0R** — same `simulate()`, same `TARGET_DD`,
 same plotter, same four panels — and the two grids overlap at 2R, 2.5R and 3R, which is what
 ties them together. The solved risk is cached **per cap token**, so those three shared points
 are bisected once and both charts read the identical number.
 
-**What it found (2026-07-27): the hotspot is a plateau, not a peak.** The risk a cap can
-carry inside 6% holds flat at **1.39% right across 1R–2.3R**, then falls to 1.18% at 2.4R.
-Inside that stretch every cap is the same bet at the same pain, so the capital line simply
-saws — $502,799 at 2.2R to $571,649 at 1.9R — with no trend across it. 2R was never special;
-it was the wide chart's left edge.
+**What it found (2026-07-27).** Run first at 1R–3R, the chart reported that its own left edge
+was still on the plateau — allowed risk flat all the way to 1R — so the grid was **extended
+down to 0R**. That immediately exposed the already-through gap bug above (a 0R cap came out
+best on the whole grid at $633k and an 88% win rate, which is not a strategy, it is the model
+paying out the overnight move). With the fill corrected the shape is coherent and the
+question is answered:
 
-**The plateau runs off the left edge of the zoom too**, so 1R is not where it starts, only
-the last point still on it. Extending `FINE_MIN` below 1R is the way to find the real
-beginning; the page says so itself, generated from the grid, whenever the plateau reaches the
-first point.
+- **The plateau starts at 1.3R.** Allowed risk climbs from 0.19% at 0R to **1.39% at 1.3R**,
+  holds there to 2R, then falls to 1.18% at 2.1R. Below 1.3R the cap is simply too tight for
+  the winners to pay for the losers, and the account cannot carry a full bet: capital falls
+  away steadily to **$94k at 0R**, where the target sits on the entry price and the win rate
+  is 1%. That is the left-hand edge the wide chart could never have shown.
+- **Flat allowed risk does not mean a flat result.** Across the 1.3R–2R plateau every cap
+  bets the same, but a wider one still lets its winners run further before the ceiling bites,
+  so capital still climbs — $203,424 at 1.3R to $306,421 at 1.9R, the upper half of the
+  plateau averaging **+28.6%** over the lower. The page computes that drift rather than
+  asserting a trend either way.
+- **The best point is 1.9R**, +6.5% above the average of its two neighbours — still noise at
+  0.1R resolution on 81–88 trades.
 
 Two grids, deliberately, not one finer one: `CAP_GRID` (2R–10R, 0.25R) stays the dial's axis
-and the wide sweep's, because that answers what the whole family does; `FINE_GRID` (1R–3R,
-0.1R) is the zoom's. `CAP_CHOICES` is their union plus the uncapped run — 52 settings, of
-which the 18 new ones cost **+0.1s of backtest** (the ~60s archive parse dominates and is
-unchanged) and **~+100 KB per page** (pages 284 → 394 KB, `report.html` 302 → 413 KB).
+and the wide sweep's, because that answers what the whole family does; `FINE_GRID` (0R–3R,
+0.1R) is the zoom's. `CAP_CHOICES` is their union plus the uncapped run — 62 settings, of
+which the 28 new ones cost **well under a second of backtest** (the ~60s archive parse
+dominates and is unchanged) and **~+160 KB per page** (pages 284 → 451 KB, `report.html`
+302 → 471 KB).
 
-The zoom carries **no uncapped reference line**: at $158,195 it sits far below a 1R–3R window
-and would flatten every curve to fit it in. And when the dial sits above 3R the chart has no
+The zoom carries **no uncapped reference line**: at $158,195 it sits below the window and
+would flatten every curve to fit it in. And when the dial sits above 3R the chart has no
 marker to place, so it says *"the dial is at 5R, outside this range"* rather than leaving a
 reader wondering where the marker went.
 
 `FINE_GRID` is **not** exported to charter (user, 2026-07-27 — "for now we don't need it on
 our charts yet"). `CHARTER_CAPS` is unchanged.
+
+The dial still runs 2R–10R in quarter-R steps, so the sub-2R settings are backtested but not
+reachable from the number box. Lowering `CAP_MIN` and widening what `snapCap` snaps to would
+fix that; left alone as scope, but worth doing if the 1.3R–2R plateau turns out to matter.
 
 Rows travel packed — positional arrays indexed against shared market/date/reason tables
 (`VAR_COLS` in `run_portfolio.py`, unpacked by `unpackCap` in `build_equity_html.py`; change

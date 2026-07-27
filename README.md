@@ -10,8 +10,13 @@ renders charts.** It reads the array (meta) xlsx files from `hyperliquid_bot` (v
 `charter`'s parser) and writes trades + equity as JSON / xlsx / standalone HTML reports.
 
 Two strategies are built today — **quickfix** (strategy 1) and **slowfix** (strategy 2).
-They share every rule except Rule 4, so they take **exactly the same trades** and differ
+They share every rule except Rule 4, so they take **exactly the same setups** and differ
 only in where those trades are closed.
+
+Rule 4 is a **single family with one number in it** — the profit cap in R — and that number
+is a **dial on the reports**: quickfix is the family at 5R, slowfix at no cap, and the pages
+re-run the whole backtest at any setting from 2R to 10R in quarter-R steps. See
+[The Rule 4 cap dial](#the-rule-4-cap-dial-on-the-reports).
 
 ---
 
@@ -57,16 +62,32 @@ Bearish ladder for entry, bullish for targets. Tested bearish reversals in
 Rule 2: refuse if `open <= second`. Trigger: **close above the first**. Stop = one tick
 below the entry bar's low. Rule 3: nearest bullish reversal above entry ≥ 3.5R up.
 
-### Rule 4 — what separates the strategies
+### Rule 4 — one family, one number
+
+Rule 4 is a single policy with a **profit cap in R** as its only parameter:
+
+> ride to the **first opposite reversal beyond entry**, but never past **`cap`R**.
 
 | Strategy | Rule 4 | Character |
 |---|---|---|
-| **quickfix** | Target = **5R**, or an opposite reversal that sits **closer** than 5R (then that reversal is the target). | Takes profit fast. 5R is a hard ceiling on every winner. |
-| **slowfix** | Target = **the first opposite reversal beyond entry**, however far away. **No 5R cap.** | Rides the move. Rule 3 keeps that level ≥ 3.5R away at entry, so a winner is at least 3.5R unless a nearer reversal appears later; a level 8R away is ridden to 8R. |
+| **quickfix** | The family at **cap = 5R**: take profit at 5R, or at an opposite reversal that sits **closer** than 5R (then that reversal is the target). | Takes profit fast. 5R is a hard ceiling on every winner. |
+| **slowfix** | The family at **cap = none**: the first opposite reversal beyond entry, however far away. | Rides the move. Rule 3 keeps that level ≥ 3.5R away at entry, so a winner is at least 3.5R unless a nearer reversal appears later; a level 8R away is ridden to 8R. |
 
-slowfix corner case: if **no** opposite reversal exists beyond entry (they were all
+The two used to be hand-written functions. Writing them as one family makes the cap a dial
+the reports can move — and makes the relationship explicit: **quickfix uncapped *is*
+slowfix, and slowfix at 5R *is* quickfix, trade for trade.** They are one strategy at the
+two settings the research is about, not two methods. The pages say so whenever a dial is
+moved onto another registered strategy's setting.
+
+Uncapped corner case: if **no** opposite reversal exists beyond entry (they were all
 elected), no target is in force and the trade simply **waits, holding**, until one appears.
-The stop stays in place throughout, so a position can never be stranded forever.
+The stop stays in place throughout, so a position can never be stranded forever. That is the
+only behaviour a capped run cannot produce — a ceiling is always somewhere.
+
+Note that identical Rule 4 *setups* do not mean identical *trades*: an earlier exit frees
+that market sooner, and one position per market at a time means a later signal can be taken
+that a longer hold would have blocked. Changing the cap changes the trade list, which is why
+each setting is a real backtest rather than something the page could recompute.
 
 ### Daily-proxy assumptions
 
@@ -132,10 +153,10 @@ backtests.
 
 | File | What it does |
 |---|---|
-| `engine.py` | The engine, shared by every strategy: `load_bars`, `infer_tick`, `market_dirs`, signal detection, the stop, exit resolution, `backtest(bars, tick, dp, strategy)` and `run_markets` (all markets, all strategies, one pass). Run directly for a single-market (gold) JSON ledger. |
-| `strategies.py` | The **registry**. Each strategy is its Rule 4 target policy plus the text its outputs label themselves with. `QUICKFIX`, `SLOWFIX`, `REGISTRY`. |
+| `engine.py` | The engine, shared by every strategy: `load_bars`, `infer_tick`, `market_dirs`, signal detection, the stop, exit resolution, `backtest(bars, tick, dp, policy)` and `run_markets` (all markets, **every cap in the grid**, one pass). Run directly for a single-market (gold) JSON ledger. |
+| `strategies.py` | The **registry** and Rule 4 itself: `target_policy(cap)` (the one family), `CAP_CHOICES` (the grid the reports dial across), and the cap-aware text every output labels itself with. Each strategy is a key, a title and a **default cap**. `QUICKFIX`, `SLOWFIX`, `REGISTRY`. |
 | `run_all.py` | Runs every market independently (each a fresh $100k) → `<strategy>_all_markets_daily.xlsx` (per-market summary + all trades). |
-| `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. |
+| `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid**, packed for the pages. |
 | `build_equity_html.py` | Renders `_equity_<strategy>.json` into the standalone interactive report `output/equity_<strategy>.html`, including the strategy-switcher buttons. |
 | `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<strategy>.json` (trade geometry keyed by market). |
 | `run_pipeline.py` | All four writers in one pass over the array archive (the fast way to regenerate everything). |
@@ -145,15 +166,18 @@ rewrite it here.
 
 ### Adding a strategy
 
-1. Write its Rule 4 target policy in `strategies.py` —
-   `policy(pos, bull, bear) -> (price_or_None, "target_5r" | "reversal")`, called on every
-   bar the trade is open.
-2. Add a `Strategy(...)` with its key, title, one-line `rule4`, page `lede` and `caveat`.
-3. Append it to `REGISTRY`.
-4. `venv\Scripts\python.exe run_pipeline.py`.
+If the new strategy is the same family at a different cap, it is one line:
 
-Every runner, every output filename and the pages' navigation buttons follow from the
-registry — there is nothing else to edit.
+1. `Strategy(key=..., title=..., cap=...)` in `strategies.py`, appended to `REGISTRY`.
+2. `venv\Scripts\python.exe run_pipeline.py`.
+
+Its Rule 4 text, lede, caveat, footers and navigation buttons are all generated from the
+cap, and a cap already in `CAP_CHOICES` costs no extra backtest — it is already in the grid.
+
+If Rule 4 needs a genuinely different *shape* (a trailing stop, a time exit, a target that
+is not "a reversal, capped"), that is a second family: write a new policy factory beside
+`target_policy`, and give `Strategy` a way to carry it. Everything downstream — runners,
+filenames, pages — already follows from the registry.
 
 ## Portfolio money management (`run_portfolio.py`)
 
@@ -177,14 +201,14 @@ trade's own risk distance. In dollars this equals ticks × tick × position size
 slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are omitted
 (negligible for liquid futures relative to slippage).
 
-### Where they stand (2026-07-25 data, 28 markets with trades)
+### Where they stand (2026-07-27 data, 28 markets with trades)
 
 | | quickfix | slowfix |
 |---|---|---|
-| Net return | +171.28% | +205.66% |
+| Net return | +171.16% | +205.53% |
 | Gross return | +179.95% | +215.13% |
 | Max drawdown | 5.85% | 12.66% |
-| **Return / drawdown** | **29.3x** | 16.2x |
+| **Return / drawdown** | **29.2x** | 16.2x |
 | Closed trades | 79 | 76 |
 | Win rate | 41.8% | 27.6% |
 | Average hold | 2.2 bars | 3.8 bars |
@@ -207,6 +231,29 @@ Caveat on both drawdown figures: ~7 months and 79/76 trades. Max drawdown is a s
 worst-path observation and the most sample-dependent statistic here. The structural reasons
 above will hold; the specific 5.85% will not — expect it to deepen as the sample grows.
 
+#### What the cap sweep shows (same data)
+
+Now that the cap is a dial, the whole 2R–10R grid can be read at once. **5R is the best
+return/drawdown setting on the grid**, which is a genuinely useful thing to have checked
+rather than assumed:
+
+| cap | 2R | 2.5R | 3.5R | 4.5R | **5R** | 6R | 7R | 8.5R | 10R | none |
+|---|---|---|---|---|---|---|---|---|---|---|
+| return | +84% | +108% | +125% | +165% | **+171%** | +181% | +244% | +246% | +212% | +206% |
+| max DD | 3.23% | 3.83% | 5.00% | 5.87% | **5.85%** | 8.73% | 8.72% | 8.71% | 12.66% | 12.66% |
+| ret/DD | 26.0x | 28.3x | 25.0x | 28.1x | **29.2x** | 20.7x | 28.0x | 28.3x | 16.8x | 16.2x |
+| trades | 88 | 84 | 80 | 79 | **79** | 79 | 79 | 77 | 76 | 76 |
+| win rate | 59% | 56% | 48% | 44% | **42%** | 38% | 38% | 35% | 32% | 28% |
+
+Read it carefully rather than as an optimisation. Return climbs fairly steadily with the
+cap; **drawdown moves in plateaus** (3.2% → 5.0% → 5.9% → 8.7% → 12.7%), because on a
+79-trade sample the worst path is dominated by a handful of trades and only jumps when the
+cap crosses one of their exits. Return/drawdown therefore peaks wherever return has climbed
+furthest *within* a plateau — 5R, 8.5R and 2.5R all sit just under a step. That is a
+property of this sample, not a law: the ordering of those peaks is exactly what a longer
+history is most likely to rearrange. The honest reading is that **5R is a reasonable place
+to be and nothing in 2R–10R beats it on this data**, not that 5R is optimal.
+
 ---
 
 ## Outputs (`output/`)
@@ -221,8 +268,10 @@ Per strategy, `<strategy>` being `quickfix`, `slowfix`, …
   averages, hold time, time in market, slippage), `equity_curve` (daily, with a chart),
   `trades` (gross/cost/net R, prices, P&L, running balance).
 - **`equity_<strategy>.html`** — standalone interactive report: the **four rules** (1–3
-  shared, 4 this strategy's), equity + drawdown + open-positions panels, KPI + per-trade
-  stat tiles, a sortable trade blotter, and a per-market breakdown. **Every page opens with
+  shared, 4 this strategy's), the **Rule 4 cap dial**, equity + drawdown + open-positions
+  panels, KPI + per-trade stat tiles, a sortable trade blotter, a per-market breakdown, and
+  **Choosing the profit cap** at the bottom (the whole 2R–10R grid levered to a constant 6%
+  drawdown, with its own reading). **Every page opens with
   the strategy switcher** — one button per registered strategy, current one filled, so you
   click straight from quickfix to slowfix. The buttons are generated from the registry, so a
   new strategy appears on every page as soon as the pages are rebuilt. It also carries the
@@ -332,8 +381,15 @@ entries-before-exits ordering and the market-name sizing order.
 
 - Nothing is persisted: the page always opens at the documented default (1%, from
   `engine.RISK_PCT`) so it agrees with the workbook. Reload to get back to it.
-- Risk-**independent** figures stay put as you move the dial — trade count, win rate, R
-  multiples, average hold, time in market, max concurrent. Only the money moves.
+- Risk-**independent** figures stay put as you move the dial — trade count, **win rate**, R
+  multiples, average hold, time in market, max concurrent. Only the money moves: final
+  capital, P&L, and max drawdown (deeper in percent as a bigger bet compounds harder), and
+  therefore return/drawdown.
+  **Win rate not moving is the point, not a bug.** Risk changes the dollar size of a
+  position; it cannot change whether that position was a winner. Win rate is counted off the
+  R multiples, which are fixed by price and reversals. The **cap** is the dial that changes
+  which trades win, because it moves the exits — which is exactly why the cap grid has to be
+  precomputed while risk can be replayed.
 - The page self-checks on load: at the default risk the replay must reproduce
   `run_portfolio.py`'s own final capital, and it logs a console warning if it ever does not.
   That is the guard against the JS port drifting from the Python.
@@ -348,16 +404,130 @@ risk**: return compounds exponentially with risk while drawdown is bounded near 
 ratio inflates absurdly (quickfix reads 29.3x at 1% and ~2000x at 10%). Compare strategies
 at the *same* setting, not across settings.
 
-Why `xd`, `gr` and `cr` are in `_equity_<strategy>.json` at 6 decimals: the replay needs the
+Why `xd`, `gr` and `cr` are in `_variants.json` at 6 decimals: the replay needs the
 risk-release day, the gross R and the cost R, and it compounds them across ~80 trades.
 Rounding R to 3 decimals put the page $13.56 away from the server's figure (measured
 2026-07-25); at 6 it agrees to the cent.
-- **`_equity_<strategy>.json`** — the data behind that page (intermediate).
+
+### The Rule 4 cap dial on the reports
+
+Beside Rule 4's card, every page carries a **profit cap** number box (2R–10R, quarter-R
+steps, plus a **no cap** tick) that switches the entire report to that setting: equity
+curve, drawdown, KPIs, per-trade stats, the blotter, the per-market table — and the prose.
+The Rule 4 card, the lede, the honesty note and the footer are all regenerated from the cap
+(their text comes from `strategies.py`, shipped per cap), so a page showing 4.25R never
+still claims a 5R ceiling.
+
+**Precomputed, not replayed — the opposite of the risk dial.** Risk works in the browser
+because the trades are capital-independent: risk changes the dollar sizing and nothing else.
+The cap changes the trades. Every exit moves, and because only one position per market runs
+at a time, an earlier exit frees that market for a signal a longer hold would have missed —
+so the trade list itself differs and there is nothing to replay from. `run_portfolio.py`
+therefore backtests **all 34 settings** and writes them to `_variants.json`; the page just
+swaps trade lists and re-runs the money management on top. Parsing the array archive is the
+slow part and is unchanged, so the grid rides along on the same pass.
+
+- **One dial per strategy, not per page.** Rule 4 is exactly what tells the strategies
+  apart, so a single shared dial would collapse quickfix and slowfix onto each other in a
+  multi-strategy report. Risk stays shared (one account, one money-management model);
+  the cap is per section, on both the interactive pages and `report.html`.
+- **The whole grid shares one day calendar**, so moving the dial does not shift the equity
+  curve's x-axis: 4R and 8R are drawn over exactly the same period.
+- **Nothing on disk changes.** The workbooks, the JSON ledgers and the charter hand-off are
+  always written at the strategy's **default** cap (quickfix 5R, slowfix none), and the page
+  says so under the dial. The dial is display-side exploration, exactly like risk.
+- **The page self-checks at every cap.** At the default risk its replay must reproduce
+  `run_portfolio.py`'s own final capital for the cap in force; it logs a console warning if
+  it ever does not. `build_equity_html.py` additionally refuses to build if the grid's figure
+  for a strategy's default cap disagrees with that strategy's workbook.
+- Moving the dial onto another registered strategy's default says so in as many words
+  ("at this setting it is Slowfix, trade for trade"), because that is what it is.
+
+#### Choosing the profit cap — the section at the bottom of the page
+
+The dial answers "what happens at 4R". The last section of every page answers "what happens
+at all of them", which is the question one setting cannot: **Final capital by profit cap,
+levered to a constant 6% drawdown**, over the whole 2R–10R grid.
+
+**Why levered rather than at one risk.** Risk per trade is a free variable, so comparing caps
+at a single risk compares them at unequal pain — an uncapped run is twice as deep in drawdown
+as a 5R one, and part of its bigger return is simply a bigger bet. Here the risk is **solved
+per cap** by bisection (max drawdown rises with risk) so every cap bottoms out in the same 6%
+hole, and the question becomes the one the ranking metric implies: for the same pain, which
+cap ends up with the most money? Four stacked panels — final capital, **the risk each cap
+allows**, return/drawdown, win rate — plus a hover tooltip with the full figures.
+
+There was briefly a second chart above it showing the same grid at whatever risk the dial was
+set to. It was dropped: at one risk the comparison is the misleading one, and having both
+invited reading the wrong one first.
+
+**It reorders the family.** At a fixed 1% the wide caps look best (7R–8.5R top the return).
+Levered to equal drawdown the ranking turns over: **2.5R wins** ($310,898, 1.57% risk,
+35.1x), 2R is second ($303,650, 1.87%), 5R third ($278,075, 1.03%), and the uncapped run is
+the **worst of the whole family** at $177,066 — it must be sized down to 0.46% per trade to
+hold 6%, and that gives away more than its longer holds win back. Slowfix's higher headline
+return is, on this measure, mostly leverage.
+
+**The chart explains itself, from itself.** Under the plot, five short passages state the
+sweet spot, the risk each cap allows, return/drawdown, win rate, and the sample caveat. Every
+number in that prose is **read out of the grid at render time**, not typed in, so it cannot
+go stale against the data the way a hand-written paragraph would — including the sentence
+naming where the allowed risk holds flat and where it falls off a cliff, and a closing line
+tying the text back to whatever the dial is currently set to. What it says:
+
+- **The sweet spot sits between 2R and 3R.** Best is 2.5R, but read the band, not the point:
+  inside 2R–3R the curve is choppy and single quarter-R settings drop well below their
+  neighbours, which on 76–88 trades is sample noise.
+- **Risk allowed is the mechanism.** 2R carries 1.87% per trade inside 6%; the widest
+  settings are held to 0.46% — 4.1× the position size for the same pain. Taking profit early
+  stops a position becoming a deep loser, so the worst path is shallower and the same
+  drawdown budget buys a bigger bet.
+- **It moves in plateaus, not smoothly** — 0.68% right across 5.25R–8.5R, then straight down
+  to 0.46%. On a sample this size the max drawdown is set by one worst run, so the number
+  only moves when the cap crosses that run's exits. That is why the capital line saws rather
+  than curves: while the allowed risk holds, a wider cap earns more at the same bet size, and
+  then the next cliff takes it back.
+- **Return/drawdown is confirmation, not evidence.** Drawdown is fixed at 6% by construction,
+  so it is just return ÷ 6 and ranks the caps in exactly the order the capital line does.
+- **Win rate falls straight down the grid**, 59.1% at 2R to 27.6% uncapped, and that is what
+  produces the drawdown difference: winning more often shortens the losing runs, and a
+  shorter losing run is a shallower hole. A tight cap gives up the big winners to buy
+  consistency, and at constant drawdown consistency is what pays.
+
+Mechanics:
+
+- It **does not follow the risk dial** — that is the point of it — so it is computed once per
+  page (~80 ms) and cached. The cap marker still moves with the dial.
+- **One `simulate()`.** The chart calls the same function the page runs on itself, with a
+  `lite` flag that skips the daily narrative (the per-day activity strings and the point
+  series — nearly all of the cost). A second stripped-down copy of the money management would
+  be free to drift, and the chart would quietly lie. It also checks that the bisection
+  converged: every point must sit within 0.05 of the target, or it warns in the console.
+- The **uncapped** run is a dashed reference line on every panel, never a point on the curve
+  — "no cap" is not 10.25R and does not belong on that axis. An uncapped page marks no point
+  and says so.
+- It **prints**; only the dial is `noprint`. It is a result, not a control.
+- It is drawn **synchronously at mount**. It was briefly deferred to an animation frame to
+  keep the solve off first paint; on a page whose cap was `none` the callback silently never
+  ran and the chart was simply missing — including from the printed PDF, with nothing to hint
+  at it. A chart that sometimes does not exist is a far worse trade than 80 ms of load time.
+  (Deferring also turned out not to help: it made first paint later, not sooner.)
+- `TARGET_DD` in the chart's code is the one constant to change for another drawdown budget.
+
+Rows travel packed — positional arrays indexed against shared market/date/reason tables
+(`VAR_COLS` in `run_portfolio.py`, unpacked by `unpackCap` in `build_equity_html.py`; change
+one side and you must change the other). 34 caps of named JSON fields would have added most
+of a megabyte of repeated key names to every page; packed, the pages went 102 KB → 250 KB
+and `report.html` 160 KB → 258 KB.
+
+- **`_variants.json`** — the cap grid, shared by every page (intermediate).
+- **`_equity_<strategy>.json`** — that strategy's headline numbers at its default cap
+  (intermediate).
 - **`charter_trades_<strategy>.json`** — the charter hand-off (below).
 
 Ledger note: the per-trade `target` field records **the Rule 4 level in force at entry**
-(it can move later). It replaced the old quickfix-only `target_5r` column, which could only
-ever describe one strategy.
+(it can move later). It replaced an old quickfix-only `target_5r` column, which could only
+ever describe one strategy — and now could not even describe one, since the cap is a dial.
 
 ### Charter hand-off schema (`charter_trades_<strategy>.json`)
 
@@ -373,7 +543,7 @@ ever describe one strategy.
           "entry_date": "YYYY-MM-DD", "entry": <price>,
           "exit_date": "YYYY-MM-DD"|null, "exit": <price>|null,
           "stop": <price>, "target": <price>,
-          "reason": "target_5r"|"stop"|"bullish_reversal"|"bearish_reversal"|"unknown_pl"
+          "reason": "target_r"|"stop"|"bullish_reversal"|"bearish_reversal"|"unknown_pl"
                     |"data_end"|"open_at_end",
           "r": <gross R multiple>|null, "bars": <int>|null }
       ]
@@ -385,6 +555,10 @@ ever describe one strategy.
 **One file per strategy, all in the same schema** — charter globs
 `charter_trades_*.json` and picks up a new strategy on its next build with no code change.
 (This replaced the single `charter_trades.json` when slowfix was added.)
+
+`reason` was **`target_5r`** until the cap became a dial; it is now **`target_r`** — the exit
+means "the R cap was hit", and 5 is only one setting of it. charter colours both (green,
+same as any target) so files exported before the rename still draw correctly.
 
 Trade geometry only — the entry plots at the first-reversal price on the entry bar, the exit
 at the fill level on the exit bar. `unknown_pl` exits at the stop; `data_end` exits at the
@@ -425,7 +599,13 @@ venv\Scripts\python.exe export_charter_trades.py    # -> output/charter_trades_<
 
 Every script takes optional strategy keys; with none it runs all of them. Reading the array
 archive is the slow part, so prefer `run_pipeline.py` for a full refresh — it parses the
-archive once and feeds all four writers.
+archive once and feeds all four writers, then rebuilds `report.html` and `conclusions.html`.
+
+Two things follow from the cap grid. `run_portfolio.py` backtests **all 34 caps** (that is
+what `_variants.json` is) while `run_all.py` and `export_charter_trades.py` ask for the
+strategies' own caps only, since their outputs are written at the default. And
+`build_equity_html.py` needs `_variants.json` to exist — run `run_portfolio.py` first, or
+just use `run_pipeline.py`.
 
 Requirements: `pandas`, `openpyxl` (see `requirements.txt`).
 

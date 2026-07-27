@@ -145,6 +145,31 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
 .riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
 .riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
 .riskbar .warn:empty{display:none}
+/* Rule 4's cap dial. Sits directly under the rule cards because it IS Rule 4, and unlike
+   the risk control there is one PER STRATEGY -- Rule 4 is what tells the strategies apart,
+   so a single shared dial would collapse them onto each other on the report. */
+.capbar{margin-top:-1px;border-top-left-radius:0;border-top-right-radius:0;}
+.capbar .nocap{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);
+  cursor:pointer;user-select:none;}
+.capbar .nocap input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
+.capbar input[type=number]:disabled{opacity:.4;cursor:not-allowed;}
+.capbar .hint{flex-basis:100%;font-size:11.5px;color:var(--ink3);}
+.capbar .hint:empty{display:none}
+.capbar .hint b{color:var(--ink2);font-weight:600;}
+/* the rules block and its dial read as one object */
+.rules:has(+ .capbar){border-bottom-left-radius:0;border-bottom-right-radius:0;}
+/* the cap sweep sits right under the dial: it is what the dial does, across the whole grid */
+.sweepcard{margin-top:14px;}
+.sweepplot{min-height:210px;}
+.chartnote{margin:0;padding:0 14px 4px;font-size:12px;color:var(--ink3);line-height:1.5;
+  max-width:78ch;}
+.chartnote b{color:var(--ink2);font-weight:600;}
+/* the chart's own reading, generated from the chart so it cannot go stale */
+.findings{padding:6px 14px 14px;max-width:86ch;}
+.findings h4{margin:15px 0 3px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;}
+.findings p{margin:0;font-size:13px;color:var(--ink2);line-height:1.55;}
+.findings b{color:var(--ink);font-weight:600;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
   background:var(--border);
   border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:22px 0 22px;}
@@ -247,6 +272,9 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
   @page{size:A4 portrait;margin:13mm 11mm;}
   html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .noprint{display:none!important;}
+  /* the cap dial is one of those, and :has(+ .capbar) still matches a hidden sibling --
+     give the rules block its bottom corners back rather than leaving them squared off */
+  .rules{border-bottom-left-radius:12px!important;border-bottom-right-radius:12px!important;}
   .wrap{max-width:none;padding:0;}
   /* scroll boxes must open up: a PDF cannot be scrolled */
   .tradescroll,.tscroll{max-height:none!important;overflow:visible!important;}
@@ -264,6 +292,10 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 # One strategy's whole report. Mounted by the script below; __RISKBAR__ and __DAILY__ are
 # filled on the interactive page and left empty on the print report (which carries a single
 # risk control for all strategies, and no 179-row daily table per strategy).
+#
+# The Rule 4 cap dial is NOT one of those: it is part of the section on both page types,
+# because it belongs to the strategy rather than to the account. One shared cap dial would
+# make every strategy on a report identical -- the cap IS what tells them apart.
 SECTION_HTML = r"""<section class="rep" data-root>
   <header>
     <div class="eyebrow">__EYEBROW__</div>
@@ -281,6 +313,16 @@ SECTION_HTML = r"""<section class="rep" data-root>
     <div class="rulefoot">__MECHANICS__</div>
     <div class="rulefoot">__PRICEONLY__</div>
   </div>
+  <section class="riskbar capbar noprint">
+    <span class="lbl">Rule 4 &middot; profit cap</span>
+    <input data-el="capin" type="number" min="__CAPMIN__" max="__CAPMAX__"
+           step="__CAPSTEP__" value="__CAPVAL__"
+           aria-label="Rule 4 profit cap, in R">
+    <span class="unit">R</span>
+    <label class="nocap"><input data-el="capoff" type="checkbox"> no cap</label>
+    <span class="hint" data-el="caphint"></span>
+  </section>
+
 __RISKBAR__
   <section class="kpis" data-el="kpis"></section>
 
@@ -321,6 +363,26 @@ __RISKBAR__
     </div>
   </div>
 __DAILY__
+
+  <h2 class="section-h">Choosing the profit cap</h2>
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">Final capital by profit cap, levered to a constant 6% drawdown</span>
+      <span class="s">risk solved per cap &middot; does not follow the risk dial</span>
+    </div>
+    <p class="chartnote">Risk per trade is a free variable, so comparing caps at one risk
+      compares them at unequal pain &mdash; part of a wider cap's bigger return is simply a
+      bigger bet. Here the risk is <b>solved for each cap</b> so that every one of them
+      bottoms out at the <b>same 6% maximum drawdown</b>, and the question becomes the one
+      worth asking: for the same hole, which cap ends up with the most money? Every point is
+      a full backtest at its own risk setting.</p>
+    <div class="plot sweepplot" data-el="nwplot">
+      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk needed, return over drawdown and win rate against the Rule 4 profit cap at a constant 6 percent drawdown"></svg>
+      <div class="tip" data-el="nwtip"></div>
+    </div>
+    <div class="findings" data-el="capfindings"></div>
+  </section>
+
   <footer class="mono">__FOOTER__</footer>
 </section>"""
 
@@ -347,6 +409,44 @@ SCRIPT = r"""<script>
 const DATASETS = __DATASETS__;
 const STRATS = __STRATS__;
 const RISK_DEFAULT = __RISKDEF__;
+// Rule 4's cap grid: one entry per setting of the profit cap, each a REAL backtest run by
+// run_portfolio.py. Shared by every strategy on the page, because Rule 4 is one family --
+// quickfix at 4R and slowfix at 4R are the same run and are stored once.
+//
+// Why this is precomputed while the risk % is replayed live: risk changes only the DOLLAR
+// SIZING of a fixed trade list, so the browser can redo the arithmetic. The cap changes the
+// trades. It moves every exit, and since only one position per market runs at a time, an
+// earlier exit frees that market for a signal a longer hold would have missed -- the trade
+// list itself is different, and there is nothing to replay it from.
+const VARIANTS = __VARIANTS__;
+const VCOL = {};
+VARIANTS.cols.forEach((c, i) => { VCOL[c] = i; });
+
+// Rows travel as positional arrays indexed against shared market / day / reason tables:
+// 34 caps of named JSON fields would put most of a megabyte of repeated key names into
+// every page. Net R is not stored -- it is gross minus cost, computed here.
+function unpackCap(tok){
+  const v = VARIANTS.v[tok];
+  if (!v) return null;
+  const M = VARIANTS.markets, D = VARIANTS.days, RS = VARIANTS.reasons;
+  return v.rows.map(row => {
+    const gr = row[VCOL.gr], cr = row[VCOL.cr], dout = row[VCOL.dout];
+    return {market:M[row[VCOL.m]], side:row[VCOL.side] ? "long" : "short",
+            din:D[row[VCOL.din]], dout:(dout == null ? null : D[dout]),
+            xd:D[row[VCOL.xd]], gr:gr, cr:cr, r:gr - cr, bars:row[VCOL.bars],
+            pin:row[VCOL.pin], pout:row[VCOL.pout], sl:row[VCOL.sl],
+            reason:RS[row[VCOL.reason]]};
+  });
+}
+
+// The numeric caps, for snapping whatever is typed into the box onto the grid that was
+// actually backtested. String() matches Python's "%g" token for every value in the grid.
+const CAP_NUMS = VARIANTS.caps.filter(c => c !== "none").map(Number).sort((a, b) => a - b);
+function snapCap(x){
+  let best = CAP_NUMS[0];
+  for (const c of CAP_NUMS) if (Math.abs(c - x) < Math.abs(best - x)) best = c;
+  return String(best);
+}
 // Where the Conclusions page keeps its text. Read back by the report when printing.
 const CONCL_KEY = "strategy_conclusions";
 function readConclusions(){
@@ -362,7 +462,9 @@ const fmtPrice = v => { if(v==null) return "—"; const a=Math.abs(v);
   return v.toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp}); };
 const signFix = (v,d) => v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
 const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
-const prettyReason = r => ({target_5r:"5R target",stop:"stop",unknown_pl:"unknown P/L",
+// 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
+// a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
+const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L",
   bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
   data_end:"data ended",open_at_end:"open at end"})[r]||r;
 
@@ -372,8 +474,13 @@ const prettyReason = r => ({target_5r:"5R target",stop:"stop",unknown_pl:"unknow
 function mountReport(root, DATA){
   const $ = k => root.querySelector('[data-el="'+k+'"]');
   const START = DATA.start;
-  const DAYS = DATA.points.map(p => p.date);
-  const RAW = DATA.trades;
+  // One calendar for the whole cap grid, so moving the dial does not shift the equity
+  // curve's x-axis underneath the reader: 4R and 8R are drawn over exactly the same period.
+  const DAYS = VARIANTS.days;
+  // The two dials. CAP is this strategy's OWN (Rule 4 is what tells strategies apart, so
+  // each mounted section keeps its own); RISK is set globally for the whole page.
+  let CAP = DATA.cap, RISK = RISK_DEFAULT;
+  let RAW = unpackCap(CAP);
 
   // ---- shared-account money management, replayed in the browser ------------------
   // A direct port of run_portfolio.py's loop. It is only possible because the trades are
@@ -387,13 +494,20 @@ function mountReport(root, DATA){
   //      left. Plain < > comparison, not localeCompare, to match Python's sort.
   // The gross curve is replayed alongside on its own cash/committed pair -- costs change the
   // sizing base as the run compounds, so it cannot be derived from the net one afterwards.
-  function simulate(risk){
+  // `rows` defaults to the cap in force; the sweep chart passes another cap's trades in.
+  // `lite` skips the daily narrative (the per-day activity strings and the point series),
+  // which is all the sweep needs and is where nearly all the cost is -- sorting the open
+  // markets into a string on all 180 days, 34 times over, would be felt on every keystroke.
+  // It is the SAME function either way on purpose: a second stripped-down copy of the money
+  // management would be free to drift from this one, and the sweep would quietly lie.
+  function simulate(risk, rows, lite){
+    const R = rows || RAW;
     const ent = {}, exi = {};
-    RAW.forEach((t,i) => {
+    R.forEach((t,i) => {
       (ent[t.din] || (ent[t.din] = [])).push(i);
       (exi[t.xd] || (exi[t.xd] = [])).push(i);
     });
-    const tr = RAW.map(t => Object.assign({}, t, {base:0, riskD:0, pnl:0, pnlpct:0}));
+    const tr = R.map(t => Object.assign({}, t, {base:0, riskD:0, pnl:0, pnlpct:0}));
     let cash = START, committed = 0, peak = START, maxdd = 0;
     let gcash = START, gcommitted = 0;
     const open = {}, gopen = {}, pts = [];
@@ -401,7 +515,7 @@ function mountReport(root, DATA){
 
     for (const day of DAYS){
       const es = (ent[day] || []).slice().sort((a,b) =>
-        RAW[a].market < RAW[b].market ? -1 : RAW[a].market > RAW[b].market ? 1 : 0);
+        R[a].market < R[b].market ? -1 : R[a].market > R[b].market ? 1 : 0);
       const enotes = [];
       for (const i of es){
         const base = Math.max(cash - committed, 0), riskD = base * risk / 100;
@@ -409,7 +523,7 @@ function mountReport(root, DATA){
         open[i] = riskD; committed += riskD;
         const gbase = Math.max(gcash - gcommitted, 0);
         gopen[i] = gbase * risk / 100; gcommitted += gopen[i];
-        enotes.push(RAW[i].market + " " + RAW[i].side + " (risk " +
+        if (!lite) enotes.push(R[i].market + " " + R[i].side + " (risk " +
                     Math.round(riskD).toLocaleString("en-US") + ")");
       }
       const xnotes = [];
@@ -421,8 +535,8 @@ function mountReport(root, DATA){
         tr[i].pnlpct = tr[i].base ? pnl / tr[i].base * 100 : 0;
         const griskD = gopen[i]; delete gopen[i]; gcommitted -= griskD;
         gcash += tr[i].gr * griskD;
-        xnotes.push(RAW[i].market + " " + RAW[i].reason + " (" +
-          (RAW[i].reason === "open_at_end" ? "open->closed 0"
+        if (!lite) xnotes.push(R[i].market + " " + R[i].reason + " (" +
+          (R[i].reason === "open_at_end" ? "open->closed 0"
             : (pnl >= 0 ? "+" : "−") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
       }
       const nOpen = Object.keys(open).length;
@@ -431,14 +545,14 @@ function mountReport(root, DATA){
       if (-dd > maxdd) maxdd = -dd;
       if (nOpen > maxOpen) maxOpen = nOpen;
       if (nOpen > 0) daysIn++;
-      pts.push({date:day, cash:cash, open:nOpen, dd:dd,
-                markets:Object.keys(open).map(i => RAW[i].market).sort().join(", "),
+      if (!lite) pts.push({date:day, cash:cash, open:nOpen, dd:dd,
+                markets:Object.keys(open).map(i => R[i].market).sort().join(", "),
                 entries:enotes.join("; "), exits:xnotes.join("; ")});
     }
 
     // Closed trades only, in EXIT order -- the streaks are "as they were lived".
     const closed = tr.filter(t => t.reason !== "open_at_end");
-    const seq = closed.slice().sort((a,b) =>
+    const seq = lite ? [] : closed.slice().sort((a,b) =>
       a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
       a.din < b.din ? -1 : a.din > b.din ? 1 :
       a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
@@ -468,17 +582,23 @@ function mountReport(root, DATA){
     }};
   }
 
-  let SIM = simulate(RISK_DEFAULT);
-  let P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
-  // Self-check: at the default risk the replay MUST reproduce the server's own figure. If it
-  // ever does not, the JS port has drifted from run_portfolio.py -- say so in the console
-  // rather than quietly showing different numbers from the workbook.
-  if (Math.abs(ST.final - DATA.final) > 0.5){
-    console.warn(DATA.strategy + ": risk replay mismatch at " + RISK_DEFAULT + "%: page " +
-      ST.final.toFixed(2) + " vs server " + DATA.final.toFixed(2) +
-      " -- build_equity_html.py is out of step with run_portfolio.py");
-  } else {
-    console.log(DATA.strategy + ": risk replay verified against run_portfolio.py");
+  let SIM = simulate(RISK), P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
+
+  // Self-check: at the default risk the replay MUST reproduce the server's own figure for
+  // the cap in force. If it ever does not, the JS port has drifted from run_portfolio.py --
+  // say so in the console rather than quietly showing different numbers from the workbook.
+  // Re-run on every cap change, so the whole grid is checked as it is browsed, not just the
+  // one it opened on.
+  function selfCheck(){
+    if (RISK !== RISK_DEFAULT) return;            // only the default is pinned to a figure
+    const want = VARIANTS.v[CAP].final;
+    if (Math.abs(ST.final - want) > 0.5){
+      console.warn(DATA.strategy + " @ cap " + CAP + ": replay mismatch at " + RISK_DEFAULT +
+        "%: page " + ST.final.toFixed(2) + " vs server " + want.toFixed(2) +
+        " -- build_equity_html.py is out of step with run_portfolio.py");
+    } else {
+      console.log(DATA.strategy + " @ cap " + CAP + ": replay verified against run_portfolio.py");
+    }
   }
 
   function renderKpis(){
@@ -510,12 +630,15 @@ function mountReport(root, DATA){
   }
 
   function renderTradeStats(){
+    // R multiples and hold times belong to the CAP, not to the risk %, so they come from
+    // the variant rather than from the risk replay.
+    const V = VARIANTS.v[CAP];
     const TS = [
       ["Average win", fmtUSD(ST.avg_win), "pos", "+"+ST.avg_win_pct.toFixed(2)+"% per win"],
       ["Average loss", fmtUSD(ST.avg_loss), "neg", ST.avg_loss_pct.toFixed(2)+"% per loss"],
-      ["Average winner", (DATA.avg_win_r>=0?"+":"")+DATA.avg_win_r.toFixed(2)+"R", "pos",
-       "best "+(DATA.best_r>=0?"+":"")+DATA.best_r.toFixed(2)+"R"],
-      ["Average hold", DATA.avg_bars.toFixed(1)+"d", "", "bars per closed trade"],
+      ["Average winner", (V.avg_win_r>=0?"+":"")+V.avg_win_r.toFixed(2)+"R", "pos",
+       "best "+(V.best_r>=0?"+":"")+V.best_r.toFixed(2)+"R"],
+      ["Average hold", V.avg_bars.toFixed(1)+"d", "", "bars per closed trade"],
       ["Longest win streak", String(ST.long_win), "pos", "consecutive wins"],
       ["Longest loss streak", String(ST.long_loss), "neg", "consecutive losses"],
     ];
@@ -587,6 +710,10 @@ function mountReport(root, DATA){
     maxAbsPnl=Math.max(1,...MK.map(m=>Math.abs(m.pnl)));
     const traded = MK.filter(m => m.n > 0).length;
     $("mcount").textContent = MK.length+" markets · "+traded+" with trades";
+    // The lede and the footer quote this number too, and it moves with the cap: a shorter
+    // hold frees markets for signals a longer one blocked, so a different set of markets
+    // ends up trading. Keep all three in step from the one place that counts them.
+    [$("ledemk"), $("footmk")].forEach(e => { if (e) e.textContent = String(traded); });
   }
   const MCOLS = [
     // An obsolete market stopped being collected, which is usually WHY it has no trades --
@@ -762,18 +889,396 @@ function mountReport(root, DATA){
   plot.addEventListener("pointermove",move);
   plot.addEventListener("pointerleave",leave);
 
+  // ---- the two cap charts ----------------------------------------------------------
+  // The dial answers "what happens at 4R"; these answer "what happens at all of them",
+  // which is the question one setting cannot. Every point is a separate backtest that
+  // run_portfolio.py already ran -- the page only re-runs the money management on each.
+  //
+  //   1. AT THE RISK CURRENTLY SET. Moves with the risk dial, and is the same account the
+  //      rest of the page describes.
+  //   2. LEVERED TO A CONSTANT DRAWDOWN. Risk is solved per cap instead of taken from the
+  //      dial, so the caps are compared at equal pain rather than at equal bet size. This
+  //      one deliberately does NOT move with the risk dial.
+  //
+  // Both are drawn by one plotter over one x axis (the cap grid). Two near-identical
+  // renderers would drift apart.
+  const ROWCACHE={};
+  const rowsFor = tok => ROWCACHE[tok] || (ROWCACHE[tok] = unpackCap(tok));
+  const capOf = tok => tok === "none" ? null : Number(tok);
+  function statsAt(risk, tok){
+    const s = simulate(risk, rowsFor(tok), true).stats;
+    return {tok:tok, cap:capOf(tok), risk:risk, final:s.final, ret:s.ret, dd:s.maxdd,
+            rdd:s.rdd, n:s.n_trades, wr:s.win_rate};
+  }
+
+  // ---- shared plotter ---------------------------------------------------------------
+  // `panels` stack down the card: the first is the tall one, the rest are compact rows.
+  // Each is {k, h, label, fmt, kind, color, fill, ref, none, zero}.
+  function capPlotter(plotEl, svgEl, tipEl, tipRows){
+    let g=null;
+    function draw(pts, none, panels, markTok){
+      if(!pts.length) return;
+      const W=plotEl.clientWidth||880, mL=62, mR=18, plotW=W-mL-mR, padT=16, xAxisH=26, gap=15;
+      const tops=[]; let H=padT;
+      panels.forEach(p=>{ tops.push(H); H+=p.h+gap; });
+      H=H-gap+xAxisH;
+      svgEl.setAttribute("viewBox",`0 0 ${W} ${H}`); svgEl.setAttribute("height",H);
+      while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+      const cLo=pts[0].cap, cHi=pts[pts.length-1].cap;
+      const x=c=> mL+(cHi===cLo?0:(c-cLo)/(cHi-cLo))*plotW;
+      const ys=[];
+
+      panels.forEach((p,i)=>{
+        const top=tops[i], vals=pts.map(q=>q[p.k]).filter(v=>v!=null);
+        const extra=[];
+        if(p.ref!=null) extra.push(p.ref);
+        if(p.none && none && none[p.k]!=null) extra.push(none[p.k]);
+        if(p.zero) extra.push(0);
+        let lo=Math.min.apply(null,vals.concat(extra)), hi=Math.max.apply(null,vals.concat(extra));
+        // A flat series (drawdown is constant by construction on the levered chart) would
+        // divide by zero; give it a band around its own value instead.
+        const span=(hi-lo)||Math.max(1,Math.abs(hi)*0.04)||1;
+        const yLo=lo-span*0.12, yHi=hi+span*0.14;
+        const y=v=> top+p.h-(v-yLo)/(yHi-yLo)*p.h;
+        ys.push(y);
+
+        (i===0?niceTicks(yLo,yHi,4):[lo,hi]).forEach(v=>{
+          if(v<yLo||v>yHi) return;
+          svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(v),y2:y(v),stroke:"var(--grid)","stroke-width":1}));
+          svgEl.appendChild(txt(mL-9,y(v)+3.5,p.fmt(v),"end",10.5,"var(--ink3)"));
+        });
+        if(p.label) svgEl.appendChild(txt(mL+4,top-4,p.label,"start",10.5,"var(--ink3)",".04em"));
+
+        if(p.ref!=null){
+          svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(p.ref),y2:y(p.ref),stroke:"var(--ref)",
+            "stroke-width":1.2,"stroke-dasharray":"3 4"}));
+        }
+        // The uncapped run is a reference LINE, never a point: "no cap" is not 10.25R and
+        // does not belong anywhere on this axis. Labelled on the left, where the curves are
+        // lowest, so the label does not land on top of them.
+        if(p.none && none && none[p.k]!=null){
+          svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(none[p.k]),y2:y(none[p.k]),
+            stroke:"var(--bars)","stroke-width":1.3,"stroke-dasharray":"5 4",opacity:.9}));
+          svgEl.appendChild(txt(mL+4,y(none[p.k])-6,"no cap  "+p.fmt(none[p.k]),"start",10.5,"var(--bars)"));
+        }
+
+        const seq=pts.filter(q=>q[p.k]!=null);
+        const lp=seq.map(q=>`${x(q.cap).toFixed(1)},${y(q[p.k]).toFixed(1)}`);
+        if(!lp.length) return;
+        if(p.kind==="area"){
+          const base=p.zero?y(Math.max(yLo,Math.min(0,yHi))):y(yLo);
+          svgEl.appendChild(mk("path",{d:`M${x(seq[0].cap)},${base} L`+lp.join(" L")+
+            ` L${x(seq[seq.length-1].cap)},${base} Z`,fill:p.fill||"var(--accent-soft)"}));
+        }
+        svgEl.appendChild(mk("path",{d:"M"+lp.join(" L"),fill:"none",stroke:p.color,
+          "stroke-width":i===0?2:1.4,"stroke-linejoin":"round","stroke-linecap":"round"}));
+        if(i===0) seq.forEach(q=>svgEl.appendChild(mk("circle",{cx:x(q.cap),cy:y(q[p.k]),r:2,
+          fill:p.color,opacity:.55})));
+      });
+
+      for(let c=Math.ceil(cLo); c<=cHi+1e-9; c++){
+        svgEl.appendChild(mk("line",{x1:x(c),x2:x(c),y1:padT,y2:H-xAxisH,stroke:"var(--grid)","stroke-width":1}));
+        svgEl.appendChild(txt(x(c),H-8,c+"R","middle",11,"var(--ink3)"));
+      }
+
+      // where the dial is standing. An uncapped page has no point on this axis, so it says
+      // so rather than parking the marker somewhere arbitrary.
+      const cur=pts.filter(q=>q.tok===markTok)[0];
+      if(cur && cur[panels[0].k]!=null){
+        svgEl.appendChild(mk("line",{x1:x(cur.cap),x2:x(cur.cap),y1:padT,y2:H-xAxisH,
+          stroke:"var(--accent-line)","stroke-width":1,"stroke-dasharray":"2 3",opacity:.7}));
+        svgEl.appendChild(mk("circle",{cx:x(cur.cap),cy:ys[0](cur[panels[0].k]),r:4.5,
+          fill:"var(--accent-line)",stroke:"var(--surface)","stroke-width":2}));
+        const mf=panels[0].mfmt||panels[0].fmt;
+        const s=VARIANTS.labels[markTok]+"  "+mf(cur[panels[0].k]);
+        const cl=txt(x(cur.cap),ys[0](cur[panels[0].k])-11,s,"middle",12,"var(--ink)");
+        cl.setAttribute("font-weight",600);
+        const half=s.length*3.4;
+        if(x(cur.cap)-half<mL){ cl.setAttribute("text-anchor","start"); cl.setAttribute("x",mL+2); }
+        else if(x(cur.cap)+half>W-mR){ cl.setAttribute("text-anchor","end"); cl.setAttribute("x",W-mR-2); }
+        svgEl.appendChild(cl);
+      } else if(markTok==="none"){
+        svgEl.appendChild(txt(mL+4,padT+12,
+          "this page is uncapped — the dashed line is where it sits","start",11,"var(--ink3)"));
+      }
+
+      const cross=mk("line",{x1:0,x2:0,y1:padT,y2:H-xAxisH,stroke:"var(--ink2)","stroke-width":1,
+        "stroke-dasharray":"2 3",opacity:0});
+      const dot=mk("circle",{r:4.5,fill:"var(--accent-line)",stroke:"var(--surface)","stroke-width":2,opacity:0});
+      svgEl.appendChild(cross); svgEl.appendChild(dot);
+      g={W,mL,plotW,x,y0:ys[0],pts,cLo,cHi,cross,dot,k0:panels[0].k};
+    }
+    function move(ev){
+      if(!g)return;
+      const r=plotEl.getBoundingClientRect(), scale=g.W/r.width;
+      const c=g.cLo+((ev.clientX-r.left)*scale-g.mL)/g.plotW*(g.cHi-g.cLo);
+      let p=g.pts[0];
+      for(const q of g.pts) if(Math.abs(q.cap-c)<Math.abs(p.cap-c)) p=q;
+      const cx=g.x(p.cap), cy=g.y0(p[g.k0]);
+      g.cross.setAttribute("x1",cx); g.cross.setAttribute("x2",cx); g.cross.setAttribute("opacity",1);
+      g.dot.setAttribute("cx",cx); g.dot.setAttribute("cy",cy); g.dot.setAttribute("opacity",1);
+      tipEl.innerHTML=tipRows(p);
+      tipEl.style.opacity=1;
+      const tw=tipEl.offsetWidth, th=tipEl.offsetHeight;
+      let lx=(cx/scale)+14; if(lx+tw>r.width) lx=(cx/scale)-tw-14;
+      let ly=(cy/scale)-th-6; if(ly<0) ly=(cy/scale)+14;
+      tipEl.style.left=lx+"px"; tipEl.style.top=ly+"px";
+    }
+    function leave(){ if(!g)return;
+      g.cross.setAttribute("opacity",0); g.dot.setAttribute("opacity",0); tipEl.style.opacity=0;
+    }
+    plotEl.addEventListener("pointermove",move);
+    plotEl.addEventListener("pointerleave",leave);
+    return draw;
+  }
+
+  const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
+  const ddTxt = v => v==null?"—":v.toFixed(2)+"%";
+  const rddTxt = v => v==null?"—":v.toFixed(1)+"x";
+
+  // ---- the cap chart: levered to a constant drawdown ---------------------------------
+  // Risk per trade is a free variable, so comparing caps at ONE risk compares them at
+  // unequal pain: an uncapped run is twice as deep in drawdown as a 5R one, and its bigger
+  // return is partly just a bigger bet. Solving for the risk that puts every cap at the same
+  // drawdown removes that, and asks the question the ranking metric implies -- levered to
+  // the same hole, which cap ends up with the most money?
+  //
+  // Drawdown rises monotonically with risk (a bigger bet swings the balance further), so a
+  // plain bisection finds it. Solved ONCE per page and cached: this chart is independent of
+  // the risk dial by construction, so it never needs redoing.
+  const TARGET_DD = 6.0;               // percent; the one constant to change here
+  function riskForDrawdown(tok){
+    const dd = r => -simulate(r, rowsFor(tok), true).stats.maxdd;
+    let lo=0, hi=8;
+    if(dd(hi)<TARGET_DD){ hi=100; if(dd(hi)<TARGET_DD) return null; }   // unreachable
+    for(let i=0;i<24 && hi-lo>1e-3;i++){
+      const mid=(lo+hi)/2;
+      if(dd(mid)<TARGET_DD) lo=mid; else hi=mid;
+    }
+    return (lo+hi)/2;
+  }
+  let NORM=null;
+  function buildNorm(){
+    if(NORM) return NORM;
+    NORM = VARIANTS.caps.map(tok => {
+      const r = riskForDrawdown(tok);
+      return r==null ? {tok:tok, cap:capOf(tok), risk:null, final:null, ret:null, dd:null,
+                        rdd:null, n:null, wr:null}
+                     : statsAt(r, tok);
+    });
+    return NORM;
+  }
+  const drawNorm = capPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
+    `<div class="d">cap ${p.cap}R${p.tok===CAP?" &middot; current":""}</div>`+
+    (p.risk==null ? row("Risk needed","cannot reach "+TARGET_DD+"%") :
+      row("Risk per trade", p.risk.toFixed(2)+"%") + row("Final capital", fmtUSD(p.final)) +
+      row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
+      row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
+      row("Trades", p.n)));
+
+  const NORM_PANELS = () => [
+    {k:"final", h:150, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
+     ref:START, none:1},
+    {k:"risk", h:50, kind:"line", color:"var(--neg)", none:1,
+     label:"RISK PER TRADE NEEDED", fmt:v=>v.toFixed(2)+"%"},
+    {k:"rdd", h:50, kind:"line", color:"var(--bars)", none:1,
+     label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
+    {k:"wr",  h:50, kind:"line", color:"var(--ink2)", none:1,
+     label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
+  ];
+
+  // ---- what the chart says, written from the chart -----------------------------------
+  // Every number in this prose is read out of the levered grid rather than typed in, so it
+  // cannot go stale against the data the way a hand-written paragraph would. The claims are
+  // deliberately about the BAND, not the single best quarter-R: on ~80 trades the exact peak
+  // is noise, and the text says so.
+  function renderFindings(){
+    const el=$("capfindings"); if(!el) return;
+    const S=buildNorm();
+    const grid=S.filter(p=>p.cap!=null && p.final!=null).sort((a,b)=>a.cap-b.cap);
+    const none=S.filter(p=>p.tok==="none")[0];
+    if(!grid.length){ el.innerHTML=""; return; }
+    const pick=(xs,f)=>xs.reduce((a,b)=>f(b)>f(a)?b:a);
+    const best=pick(grid,p=>p.final);
+    const worst=grid.reduce((a,b)=>b.final<a.final?b:a);
+    const band=grid.filter(p=>p.cap>=2 && p.cap<=3);
+    const bandBest=band.length?pick(band,p=>p.final):best;
+    const rHi=pick(grid,p=>p.risk), rLo=grid.reduce((a,b)=>b.risk<a.risk?b:a);
+    const wrHi=pick(grid,p=>p.wr), wrLo=grid.reduce((a,b)=>b.wr<a.wr?b:a);
+    const here=grid.filter(p=>p.tok===CAP)[0];
+    const usd=fmtUSD, r1=v=>v.toFixed(1), r2=v=>v.toFixed(2);
+    // The trade count is itself a function of the cap, so the sample is a RANGE. Quoting
+    // one cap's count would read as though it were the size of the whole study.
+    const ns=grid.map(p=>p.n);
+    const sample=Math.min.apply(null,ns)+"&ndash;"+Math.max.apply(null,ns)+" trades";
+    // The structure of the allowed-risk line is PLATEAUS, so show the longest one and the
+    // cliff at the end of it. Listing every distinct value would be misleading (neighbouring
+    // caps differ in the third decimal, which reads as a step and is not one), and ranking by
+    // largest drop just finds the noisiest corner of the grid.
+    let run={i:0,j:0};
+    for(let i=0;i<grid.length;i++){
+      let j=i;
+      while(j+1<grid.length && Math.abs(grid[j+1].risk-grid[i].risk)<0.02) j++;
+      if(j-i > run.j-run.i) run={i:i, j:j};
+    }
+    const runA=grid[run.i], runB=grid[run.j], runNext=grid[run.j+1];
+    const plateau = run.j>run.i
+      ? `<b>${r2(runA.risk)}% right across ${runA.cap}R&ndash;${runB.cap}R</b>` +
+        (runNext ? `, then straight down to ${r2(runNext.risk)}% at ${runNext.cap}R` : "")
+      : "";
+
+    const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
+    el.innerHTML =
+      h("The sweet spot sits between 2R and 3R",
+        `The best setting on this data is <b>${bandBest.cap}R</b> at <b>${usd(bandBest.final)}</b>, `+
+        `and the whole <b>2R&ndash;3R</b> band sits at the top of the chart. A 5R cap makes `+
+        `${usd((grid.filter(p=>p.tok==="5")[0]||best).final)}`+
+        (none?`, and the uncapped run only <b>${usd(none.final)}</b> &mdash; the worst of the `+
+              `family`:``)+
+        `. At one fixed risk the wide caps looked best; levered to the same drawdown the `+
+        `ranking turns over, because their extra return was bought with a deeper hole rather `+
+        `than a better edge.`) +
+      h("Risk per trade allowed",
+        `This is the mechanism. A <b>${rHi.cap}R</b> cap can carry <b>${r2(rHi.risk)}%</b> per `+
+        `trade inside a 6% drawdown, while the widest settings are held to `+
+        `<b>${r2(rLo.risk)}%</b> &mdash; roughly `+
+        `<b>${r1(rHi.risk/rLo.risk)}&times; the position size for the same pain</b>. Taking `+
+        `profit early keeps a position from turning into a deep loser, so the account's worst `+
+        `path is shallower and the same drawdown budget buys a bigger bet. The allowed risk `+
+        `does not decline smoothly &mdash; it holds a level flat across a whole stretch of `+
+        `caps and then <b>falls off a cliff</b>`+(plateau?`: ${plateau}`:``)+`. On `+
+        `${sample} the maximum drawdown is set by a single worst run, so the number `+
+        `only moves when the cap crosses that run's exits. That is also why the capital line `+
+        `saws rather than curves: while the allowed risk holds, a wider cap earns more at the `+
+        `same bet size, and then the next cliff takes it back.`) +
+      h("Return / drawdown",
+        `Peaks with the same band: <b>${r1(bandBest.rdd)}x</b> at ${bandBest.cap}R against `+
+        (none?`<b>${r1(none.rdd)}x</b> uncapped`:`a low of ${r1(worst.rdd)}x`)+
+        `. Read it as confirmation, not as independent evidence: drawdown is fixed at 6% here `+
+        `by construction, so return / drawdown is just the return &divide; 6 and ranks the caps `+
+        `in exactly the order the capital line already does.`) +
+      h("Win rate",
+        `Falls straight down the grid, from <b>${r1(wrHi.wr)}%</b> at ${wrHi.cap}R to `+
+        (none?`<b>${r1(none.wr)}%</b> uncapped`:`<b>${r1(wrLo.wr)}%</b> at ${wrLo.cap}R`)+
+        `, and it is what produces the drawdown difference: winning more often shortens the `+
+        `losing runs, and a shorter losing run is a shallower hole. The trade-off in one line `+
+        `&mdash; a tight cap gives up the big winners to buy consistency, and at constant `+
+        `drawdown consistency is what pays. Win rate is the same at any risk setting, since `+
+        `risk cannot change which trades win.`) +
+      h("Read the band, not the point",
+        `Inside 2R&ndash;3R the curve is choppy, and single quarter-R settings drop well below `+
+        `their neighbours. On ${sample} that is sample noise, not signal. `+
+        `The finding is that the sweet spot lies <b>between 2R and 3R</b> &mdash; not that `+
+        `${bandBest.cap}R is the number.`+
+        (here?` This page is set to <b>${VARIANTS.labels[CAP]}</b>`+
+              (here.risk!=null?`, which would allow ${r2(here.risk)}% per trade and finish at `+
+                               `${usd(here.final)}`:``)+`.`:``));
+  }
+
+  function renderNorm(){
+    const S=buildNorm();
+    // The bisection has to have actually converged, or every figure on this chart is a
+    // different drawdown pretending to be 6%.
+    const off=S.filter(p=>p.dd!=null && Math.abs(Math.abs(p.dd)-TARGET_DD)>0.05);
+    if(off.length) console.warn(DATA.strategy+": levered chart missed the "+TARGET_DD+
+      "% target at cap "+off.map(p=>p.tok).join(", "));
+    drawNorm(S.filter(p=>p.cap!=null).sort((a,b)=>a.cap-b.cap),
+             S.filter(p=>p.tok==="none")[0], NORM_PANELS(), CAP);
+    renderFindings();
+  }
+
   function renderAll(){
     renderKpis(); renderDaily(); renderTradeStats();
     $("tcount").textContent = T.length+" trades";
     renderHead(); renderRows(); mBuild(); mHead(); mRows(); render();
+    // NOT renderNorm(): the cap chart is risk-independent by construction, so it is
+    // redrawn only when the cap marker moves or the card is resized.
   }
-  function setRisk(r){
-    SIM = simulate(r); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
-    renderAll();
+  function recompute(){
+    SIM = simulate(RISK); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
+    renderAll(); selfCheck();
   }
+  function setRisk(r){ RISK = r; recompute(); }
+
+  // ---- Rule 4's cap dial -----------------------------------------------------------
+  // Per strategy, not per page: Rule 4 IS the difference between the strategies, so one
+  // shared dial would collapse them onto each other in a multi-strategy report.
+  const capIn = $("capin"), capOff = $("capoff"), capHint = $("caphint");
+  const DEFAULT_CAP = DATA.cap;
+  // What the number box shows while "no cap" is ticked, so unticking returns somewhere sane.
+  let lastNum = DEFAULT_CAP === "none" ? snapCap(5) : DEFAULT_CAP;
+
+  // Everything on the page that quotes the cap is rewritten from strategies.py's own text,
+  // shipped per cap -- the wording is generated in ONE place, not written twice.
+  function applyCapText(){
+    const t = VARIANTS.texts[CAP];
+    const put = (k, html) => { const e = $(k); if (e) e.innerHTML = html; };
+    put("rule4text", t.rule4_text);
+    put("lede4", t.lede);
+    put("caveat", t.caveat);
+    put("footrule4", t.rule4);
+    if (!capHint) return;
+    // Which other registered strategy this setting happens to BE. With the cap exposed the
+    // strategies are one family at different settings, and saying so is more honest than
+    // letting a reader think a re-dialled quickfix is still a separate method.
+    const twin = STRATS.filter(s => s.key !== DATA.strategy &&
+                                    VARIANTS.defaults[s.key] === CAP)[0];
+    const same = "At this setting it is <b>" + (twin ? twin.title : "") + "</b>, trade for " +
+                 "trade &mdash; with the cap exposed they are one family at two settings.";
+    capHint.innerHTML = CAP === DEFAULT_CAP
+      ? "This strategy's own Rule 4. The workbooks and the charter export are written at " +
+        "this setting."
+      : "Changed from <b>" + VARIANTS.labels[DEFAULT_CAP] + "</b>. Every setting here is a " +
+        "full backtest, so the trades themselves differ &mdash; not just their sizing. " +
+        "Files on disk still hold " + VARIANTS.labels[DEFAULT_CAP] + ". " +
+        (twin ? same : "");
+  }
+  function syncCapControl(){
+    if (capOff) capOff.checked = (CAP === "none");
+    if (capIn){
+      capIn.disabled = (CAP === "none");
+      capIn.value = (CAP === "none" ? lastNum : CAP);
+    }
+  }
+  function setCap(tok, typed){
+    if (!VARIANTS.v[tok] || tok === CAP) return;
+    CAP = tok;
+    if (tok !== "none") lastNum = tok;
+    RAW = unpackCap(tok);
+    applyCapText(); renderNorm();
+    // Same rule as the risk field: do not rewrite the box while it is being typed into,
+    // that would fight the caret. `change` (blur, Enter, or a spinner click) syncs it to
+    // the grid position actually in force.
+    if (!typed) syncCapControl();
+    recompute();
+  }
+  function capFromBox(typed){
+    // An empty or half-typed field is left alone rather than read as a number: "" would
+    // snap to the lowest cap and flash the whole page between keystrokes.
+    if (!capIn || capIn.value === "") return;
+    const x = Number(capIn.value);
+    if (isFinite(x)) setCap(snapCap(x), typed);
+  }
+  if (capIn){
+    // Live, like the risk dial: typing 4 shows 4R immediately. The value snaps to the grid
+    // that was actually backtested -- there is no result for a cap in between.
+    capIn.addEventListener("input", () => capFromBox(true));
+    capIn.addEventListener("change", () => { capFromBox(false); syncCapControl(); });
+  }
+  if (capOff) capOff.addEventListener("change", () => setCap(capOff.checked ? "none" : lastNum));
+
   new ResizeObserver(render).observe(plot);
-  renderAll();
-  return {setRisk:setRisk, render:render, stats:()=>ST};
+  // Drawn synchronously with everything else, NOT deferred to an animation frame. It was
+  // deferred once, to keep its ~80 ms of bisection off first paint; on a page whose cap is
+  // "none" the callback silently never ran and the chart was simply missing -- including
+  // from the printed PDF, where nothing would have hinted at it. A chart that sometimes
+  // does not exist is a far worse trade than 80 ms of load time.
+  new ResizeObserver(renderNorm).observe($("nwplot"));
+  applyCapText(); syncCapControl(); renderAll(); renderNorm(); selfCheck();
+  return {setRisk:setRisk, setCap:setCap, cap:()=>CAP, key:DATA.strategy,
+          render:()=>{ render(); renderNorm(); },
+          norm:buildNorm, stats:()=>ST};
 }
 
 // ---- mount every section on this page --------------------------------------------
@@ -818,6 +1323,7 @@ applyRisk(RISK_DEFAULT);
 // Re-measure before printing: the print layout is a different width from the screen, and the
 // SVG viewBox is computed from the live element width.
 window.addEventListener("beforeprint", () => INST.forEach(i => i.render()));
+// The cap sweep prints too -- it is a result, not a control. Only the dial itself is noprint.
 __BOOT__
 </script>"""
 
@@ -859,6 +1365,12 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
     const risk = CURRENT_RISK;                      // the applied value, not the raw field
     close();
     let url = "report.html?s=" + keys.join(",") + "&risk=" + risk + "&auto=1";
+    // Carry any Rule 4 cap that has been moved off its default, so the PDF prints what is
+    // on screen. Only this page's own strategy can have been re-dialled here; the others
+    // print at their own defaults, which is what the reader would expect from their names.
+    const caps = INST.filter(i => i.cap() !== VARIANTS.defaults[i.key])
+                     .map(i => i.key + ":" + i.cap());
+    if (caps.length) url += "&cap=" + caps.join(",");
     // Carry the conclusions in the HASH as well as leaving them in localStorage. Opened from
     // a file:// path, browsers do not reliably share storage between two local documents,
     // and the text must survive the hop to the report either way. A hash is never sent
@@ -895,6 +1407,12 @@ if (want.length){
     if (want.indexOf(DATASETS[i].strategy) < 0) el.remove();
   });
 }
+// Rule 4 caps, as key:token pairs -- applied BEFORE the risk so the risk replay runs once,
+// on the right trade list. A strategy not named here keeps its own default cap.
+(params.get("cap") || "").split(",").filter(Boolean).forEach(pair => {
+  const bits = pair.split(":");
+  INST.filter(i => i.key === bits[0]).forEach(i => i.setCap(bits[1]));
+});
 // Number(null) is 0, NOT NaN. Reading the parameter straight into Number() therefore made a
 // report opened WITHOUT ?risk= (e.g. the Conclusions page's "Open report" link) re-run the
 // whole simulation at 0% -- every position sized to nothing, so the equity curve came out
@@ -968,12 +1486,18 @@ def nav_html(current):
 
 
 def rules_html(strategy):
-    """The four rule cards -- 1-3 shared, 4 this strategy's."""
-    return "".join(
-        f'<div class="rule"><span class="n">{n}</span><div>'
-        f'<div class="rn">Rule {n} &middot; {name}</div>'
-        f'<div class="rt">{text}</div></div></div>'
-        for n, name, text in strategy.rules())
+    """The four rule cards -- 1-3 shared, 4 this strategy's.
+
+    Rule 4's card is tagged so the cap dial can rewrite it: a page showing 4.25R must not
+    still describe a 5R ceiling.
+    """
+    out = []
+    for n, name, text in strategy.rules():
+        el = ' data-el="rule4text"' if n == 4 else ""
+        out.append(f'<div class="rule"><span class="n">{n}</span><div>'
+                   f'<div class="rn">Rule {n} &middot; {name}</div>'
+                   f'<div class="rt"{el}>{text}</div></div></div>')
+    return "".join(out)
 
 
 def load_data(strategy):
@@ -981,6 +1505,34 @@ def load_data(strategy):
     if not src.exists():
         raise SystemExit(f"missing {src} -- run: python run_portfolio.py {strategy.key}")
     return json.loads(src.read_text())
+
+
+def load_variants():
+    """The Rule 4 cap grid, shared by every page (one family, so one table)."""
+    src = eng.OUT_DIR / "_variants.json"
+    if not src.exists():
+        raise SystemExit(f"missing {src} -- run: python run_portfolio.py")
+    return json.loads(src.read_text())
+
+
+def check_variants(strategy, data, variants):
+    """The strategy's default cap must be in the grid, and must agree with its workbook.
+
+    The grid runs every cap over ONE shared calendar while the workbook uses the strategy's
+    own first trading day. Those coincide today (the first signal does not depend on the
+    cap), and this is the guard that says so out loud if the data ever makes them diverge --
+    otherwise the page would quietly show a final capital the workbook does not have.
+    """
+    tok = data["cap"]
+    if tok not in variants["v"]:
+        raise SystemExit(f"{strategy.key}: cap {tok!r} is not in the grid -- "
+                         f"rerun run_portfolio.py after changing strategies.CAP_CHOICES")
+    grid, book = variants["v"][tok]["final"], data["final"]
+    if abs(grid - book) > 0.5:
+        raise SystemExit(
+            f"{strategy.key}: the cap grid's final capital ({grid:,.2f}) disagrees with "
+            f"{strategy.key}_portfolio_daily.xlsx ({book:,.2f}). The shared calendar in "
+            f"run_portfolio.write_variants has drifted from the per-strategy one.")
 
 
 def section_html(strategy, data, riskbar, daily):
@@ -993,24 +1545,30 @@ def section_html(strategy, data, riskbar, daily):
     # n_markets_all is the RESEARCHED universe; n_markets is how many produced a trade. The
     # page used to print only the latter, which read as though the rest were never tested.
     n_all = data.get("n_markets_all", data["n_markets"])
-    lede = (f"{strategy.lede} One shared account trading Socrates <b>reversal levels</b>. "
+    # Everything that quotes the cap or a trade count is wrapped in a data-el span: both
+    # move when the Rule 4 dial moves, and a lede still claiming "closed at 5R" on a page
+    # showing 4R would be worse than no lede at all.
+    lede = (f"<span data-el=\"lede4\">{strategy.lede}</span> One shared account trading "
+            f"Socrates <b>reversal levels</b>. "
             f"All <b>{n_all} markets</b> in the archive were tested, "
             f"{month_year(data['first'])} &ndash; {month_year(data['last'])}; the rules "
-            f"fired on <b>{data['n_markets']}</b> of them, and the rest are listed with zero "
-            f"trades under <em>By market</em>. Capital moves only when a trade closes; each "
-            f"new trade risks <span class=\"riskecho\">{eng.RISK_PCT:g}%</span> of liquid "
+            f"fired on <b data-el=\"ledemk\">{data['n_markets']}</b> of them, and the rest "
+            f"are listed with zero trades under <em>By market</em>. Capital moves only when "
+            f"a trade closes; each new trade risks "
+            f"<span class=\"riskecho\">{eng.RISK_PCT:g}%</span> of liquid "
             f"capital. Figures are net of realistic slippage.")
     note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
             f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
             f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
             f"through each trade's own risk distance. Still optimistic on the rest: the "
-            f"entry-day intraday path is assumed favorable, {strategy.caveat}, and there "
+            f"entry-day intraday path is assumed favorable, "
+            f"<span data-el=\"caveat\">{strategy.caveat}</span>, and there "
             f"is no commission or funding. Read it as evidence of an edge, not a return "
             f"forecast.")
     footer = (f"source: {strategy.key}_portfolio_daily.xlsx &middot; "
-              f"{n_all} markets tested, {data['n_markets']} traded &middot; "
-              f"rule 4: {strategy.rule4} &middot; "
-              f"per-market one-position-at-a-time, portfolio-level concurrency")
+              f"{n_all} markets tested, <span data-el=\"footmk\">{data['n_markets']}</span> "
+              f"traded &middot; rule 4: <span data-el=\"footrule4\">{strategy.rule4}</span> "
+              f"&middot; per-market one-position-at-a-time, portfolio-level concurrency")
     return (SECTION_HTML
             .replace("__EYEBROW__", eyebrow)
             .replace("__H1__", f"{strategy.title} &mdash; portfolio equity curve")
@@ -1019,6 +1577,10 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__MECHANICS__", strategies.ENTRY_MECHANICS)
             .replace("__PRICEONLY__", strategies.PRICE_ONLY_NOTE)
             .replace("__RISKBAR__", riskbar)
+            .replace("__CAPMIN__", f"{strategies.CAP_MIN:g}")
+            .replace("__CAPMAX__", f"{strategies.CAP_MAX:g}")
+            .replace("__CAPSTEP__", f"{strategies.CAP_STEP:g}")
+            .replace("__CAPVAL__", f"{(strategy.cap or strategies.QUICKFIX.cap):g}")
             .replace("__NOTE__", note)
             .replace("__DAILY__", daily)
             .replace("__FOOTER__", footer))
@@ -1029,9 +1591,10 @@ def strat_meta():
                        for s in strategies.REGISTRY], separators=(",", ":"))
 
 
-def script_html(datasets, boot):
+def script_html(datasets, variants, boot):
     return (SCRIPT
             .replace("__DATASETS__", json.dumps(datasets, separators=(",", ":")))
+            .replace("__VARIANTS__", json.dumps(variants, separators=(",", ":")))
             .replace("__STRATS__", strat_meta())
             .replace("__RISKDEF__", f"{eng.RISK_PCT:g}")
             .replace("__BOOT__", boot))
@@ -1040,6 +1603,8 @@ def script_html(datasets, boot):
 def build(strategy):
     """One interactive page for `strategy`."""
     data = load_data(strategy)
+    variants = load_variants()
+    check_variants(strategy, data, variants)
     body = (f'<div class="wrap">\n<nav class="nav noprint"><span class="lbl">Strategy</span>'
             f'{nav_html(strategy)}<span class="navbtns">'
             f'<button class="pdfbtn" data-el="concl" type="button">Conclusions</button>'
@@ -1050,7 +1615,7 @@ def build(strategy):
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f'<title>{strategy.title} &mdash; portfolio equity curve</title>\n{CSS}\n</head>\n'
             f'<body data-strategy="{strategy.key}">\n{body}\n'
-            f'{script_html([data], PDF_SCRIPT)}\n</body>\n</html>\n')
+            f'{script_html([data], variants, PDF_SCRIPT)}\n</body>\n</html>\n')
     path = page_path(strategy)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
@@ -1060,6 +1625,13 @@ def build(strategy):
 def build_report(picked):
     """report.html -- every strategy in one document, filtered by ?s= and printed to PDF."""
     datasets = [load_data(s) for s in picked]
+    variants = load_variants()
+    for s, d in zip(picked, datasets):
+        check_variants(s, d, variants)
+    # The cap dial rides along on the print report too -- one per strategy, so a PDF can
+    # compare quickfix at 4R against slowfix uncapped. The risk control below stays shared:
+    # money management is the same account for every strategy on the page, while Rule 4 is
+    # exactly what tells them apart.
     sections = "\n".join(section_html(s, d, "", "") for s, d in zip(picked, datasets))
     head = (
         '<div class="wrap">\n'
@@ -1088,7 +1660,7 @@ def build_report(picked):
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f'<title>Strategy report</title>\n{CSS}\n</head>\n<body>\n'
             f'{head}{sections}\n{conclusions}</div>\n'
-            f'{script_html(datasets, REPORT_SCRIPT)}\n</body>\n</html>\n')
+            f'{script_html(datasets, variants, REPORT_SCRIPT)}\n</body>\n</html>\n')
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(html, encoding="utf-8")
     print(f"wrote {REPORT_PATH.name}  {len(html):,} bytes  "

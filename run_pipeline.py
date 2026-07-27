@@ -24,14 +24,25 @@ import strategies
 def main(argv):
     picked = strategies.selected(argv)
     print(f"strategies: {', '.join(s.key for s in picked)}\n")
+    # The full cap grid: the pages carry a Rule 4 dial, and every position on it is a real
+    # backtest. It rides along on the one archive pass, so it costs backtest time only.
     results = eng.run_markets(picked)
     print()
     for s in picked:
         run_all.write(s, results)
         run_portfolio.run(s, results)
         export_charter_trades.export(s, results)
-        build_equity_html.build(s)
         print()
+    run_portfolio.write_variants(results)
+    print()
+    # Built last, and always for EVERY strategy that has results: the pages read the shared
+    # cap grid, so they must not be written before it exists.
+    for s in picked:
+        build_equity_html.build(s)
+    build_equity_html.build_conclusions()
+    build_equity_html.build_report(
+        [s for s in strategies.REGISTRY
+         if (eng.OUT_DIR / f"_equity_{s.key}.json").exists()])
 
 
 if __name__ == "__main__":

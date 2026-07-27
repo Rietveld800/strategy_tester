@@ -157,9 +157,9 @@ backtests.
 | `strategies.py` | The **registry** and Rule 4 itself: `target_policy(cap)` (the one family), `CAP_CHOICES` (the grid the reports dial across), and the cap-aware text every output labels itself with. Each strategy is a key, a title and a **default cap**. `QUICKFIX`, `SLOWFIX`, `REGISTRY`. |
 | `run_all.py` | Runs every market independently (each a fresh $100k) → `<strategy>_all_markets_daily.xlsx` (per-market summary + all trades). |
 | `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid**, packed for the pages. |
-| `build_equity_html.py` | Renders `_equity_<strategy>.json` into the standalone interactive report `output/equity_<strategy>.html`, including the strategy-switcher buttons. |
+| `build_equity_html.py` | Renders `_equity_<strategy>.json` + the shared `_variants.json` into `output/equity_<strategy>.html`, plus `report.html` and `conclusions.html`. Refuses to build if the cap grid disagrees with a strategy's workbook. |
 | `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_cap<NN>_<NN>.json`, one file per **cap** in `CHARTER_CAPS` (2R, 2.25R, 2.5R, 5R), trade geometry keyed by market. Prunes hand-off files it no longer owns. |
-| `run_pipeline.py` | All four writers in one pass over the array archive (the fast way to regenerate everything). |
+| `run_pipeline.py` | Every writer in one pass over the array archive (the fast way to regenerate everything): per-market xlsx, portfolio, the cap grid, the charter hand-off, then the pages. |
 
 Parsing is imported from `../charter/scripts/charting_core.py` (`parse_array`); do not
 rewrite it here.
@@ -318,9 +318,12 @@ only — no timing, cycle or aggregate signal is involved**. That last line exis
 page used to describe "time-and-price reversal signals", which misled a first-time reader:
 the umbrella method is "time and price meet", but these strategies are the price half alone.
 
-The text lives in `strategies.py` (`SHARED_RULES`, `ENTRY_MECHANICS`, `PRICE_ONLY_NOTE`, and
-each strategy's `rule4_text`), so a new strategy writes only its own Rule 4 and gets the rest.
-All of it is phrased for the short side, with the long stated as the exact mirror.
+The text lives in `strategies.py` (`SHARED_RULES`, `entry_mechanics(risk_pct)`,
+`PRICE_ONLY_NOTE`, and `rule4_text(cap)`), so a new strategy writes nothing at all — its Rule
+4 wording follows from its cap. All of it is phrased for the short side, with the long stated
+as the exact mirror. Two of those are **functions, not constants**, because they quote numbers
+that are dials: `entry_mechanics` states 1R as a percentage of capital (it said a hardcoded
+"1R = 1%" until the risk moved off 1%), and `rule4_text` states the cap.
 
 ### PDF export
 

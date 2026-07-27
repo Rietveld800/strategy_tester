@@ -4,15 +4,15 @@
     "timeframe": "daily",
     "strategy": "slowfix",
     "start": "2025-12-05",
-    "end": "2026-07-23",
+    "end": "2026-07-24",
     "starting_capital": 100000.0,
-    "risk_pct": 1.0,
+    "risk_pct": 1.573,
     "tick": 0.1,
     "fees": 0.0,
     "min_reversals": 3,
     "min_rr": 3.5,
-    "target_rr": 5.0,
-    "rule4": "target = the first opposite reversal beyond entry, no 5R cap"
+    "target_cap": null,
+    "rule4": "target = the first opposite reversal beyond entry, no cap"
   },
   "trades": [
     {
@@ -28,9 +28,9 @@
       "exit_price": 4202.0,
       "exit_reason": "bearish_reversal",
       "r_multiple": 11.506,
-      "pnl_pct": 11.506,
+      "pnl_pct": 18.099,
       "equity_before": 100000.0,
-      "equity_after": 111506.02
+      "equity_after": 118098.98
     },
     {
       "id": 2,
@@ -45,9 +45,9 @@
       "exit_price": 4420.6,
       "exit_reason": "stop",
       "r_multiple": -1.0,
-      "pnl_pct": -1.0,
-      "equity_before": 111506.02,
-      "equity_after": 110390.96
+      "pnl_pct": -1.573,
+      "equity_before": 118098.98,
+      "equity_after": 116241.28
     },
     {
       "id": 3,
@@ -62,9 +62,9 @@
       "exit_price": 5035.0,
       "exit_reason": "bearish_reversal",
       "r_multiple": 4.2457,
-      "pnl_pct": 4.2457,
-      "equity_before": 110390.96,
-      "equity_after": 115077.87
+      "pnl_pct": 6.6785,
+      "equity_before": 116241.28,
+      "equity_after": 124004.49
     },
     {
       "id": 4,
@@ -79,9 +79,9 @@
       "exit_price": 4758.0,
       "exit_reason": "bullish_reversal",
       "r_multiple": 14.6875,
-      "pnl_pct": 14.6875,
-      "equity_before": 115077.87,
-      "equity_after": 131979.93
+      "pnl_pct": 23.1034,
+      "equity_before": 124004.49,
+      "equity_after": 152653.79
     },
     {
       "id": 5,
@@ -96,9 +96,9 @@
       "exit_price": 4758.5,
       "exit_reason": "stop",
       "r_multiple": -1.0,
-      "pnl_pct": -1.0,
-      "equity_before": 131979.93,
-      "equity_after": 130660.13
+      "pnl_pct": -1.573,
+      "equity_before": 152653.79,
+      "equity_after": 150252.55
     },
     {
       "id": 6,
@@ -113,9 +113,9 @@
       "exit_price": 4292.9,
       "exit_reason": "stop",
       "r_multiple": -1.0,
-      "pnl_pct": -1.0,
-      "equity_before": 130660.13,
-      "equity_after": 129353.53
+      "pnl_pct": -1.573,
+      "equity_before": 150252.55,
+      "equity_after": 147889.07
     },
     {
       "id": 7,
@@ -130,9 +130,9 @@
       "exit_price": 4046.1,
       "exit_reason": "stop",
       "r_multiple": -1.0,
-      "pnl_pct": -1.0,
-      "equity_before": 129353.53,
-      "equity_after": 128059.99
+      "pnl_pct": -1.573,
+      "equity_before": 147889.07,
+      "equity_after": 145562.78
     },
     {
       "id": 8,
@@ -148,8 +148,8 @@
       "exit_reason": "open_at_end",
       "r_multiple": null,
       "pnl_pct": null,
-      "equity_before": 128059.99,
-      "equity_after": 128059.99
+      "equity_before": 145562.78,
+      "equity_after": 145562.78
     }
   ],
   "equity_curve": [
@@ -159,31 +159,31 @@
     },
     {
       "date": "2025-12-19",
-      "equity": 111506.02
+      "equity": 118098.98
     },
     {
       "date": "2026-01-05",
-      "equity": 110390.96
+      "equity": 116241.28
     },
     {
       "date": "2026-03-09",
-      "equity": 115077.87
+      "equity": 124004.49
     },
     {
       "date": "2026-05-07",
-      "equity": 131979.93
+      "equity": 152653.79
     },
     {
       "date": "2026-05-12",
-      "equity": 130660.13
+      "equity": 150252.55
     },
     {
       "date": "2026-06-09",
-      "equity": 129353.53
+      "equity": 147889.07
     },
     {
       "date": "2026-06-24",
-      "equity": 128059.99
+      "equity": 145562.78
     }
   ]
 }

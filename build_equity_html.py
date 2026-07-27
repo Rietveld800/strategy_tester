@@ -145,6 +145,9 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
 .riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
 .riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
 .riskbar .warn:empty{display:none}
+.riskbar .hint{font-size:11.5px;color:var(--ink3);}
+.riskbar .hint:empty{display:none}
+.riskbar .hint b{color:var(--ink2);font-weight:600;}
 /* Rule 4's cap dial. Sits directly under the rule cards because it IS Rule 4, and unlike
    the risk control there is one PER STRATEGY -- Rule 4 is what tells the strategies apart,
    so a single shared dial would collapse them onto each other on the report. */
@@ -289,13 +292,15 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 }
 </style>"""
 
-# One strategy's whole report. Mounted by the script below; __RISKBAR__ and __DAILY__ are
-# filled on the interactive page and left empty on the print report (which carries a single
-# risk control for all strategies, and no 179-row daily table per strategy).
+# One strategy's whole report. Mounted by the script below; __DAILY__ is filled on the
+# interactive page and left empty on the print report (no 179-row daily table per strategy).
 #
-# The Rule 4 cap dial is NOT one of those: it is part of the section on both page types,
-# because it belongs to the strategy rather than to the account. One shared cap dial would
-# make every strategy on a report identical -- the cap IS what tells them apart.
+# The Rule 4 cap dial and the RISK dial are both part of the section on both page types,
+# because both belong to the strategy rather than to the document. One shared cap dial would
+# make every strategy on a report identical -- the cap IS what tells them apart -- and one
+# shared risk box could not show three numbers, since each strategy's default risk is the one
+# that puts THAT strategy at the 6% drawdown budget. (Risk was page-level until 2026-07-27,
+# when the defaults stopped being the same number.)
 SECTION_HTML = r"""<section class="rep" data-root>
   <header>
     <div class="eyebrow">__EYEBROW__</div>
@@ -398,9 +403,10 @@ CAPCHART_HTML = r"""
 RISKBAR_HTML = r"""
   <section class="riskbar noprint">
     <span class="lbl">Risk per trade</span>
-    <input data-el="riskin" type="number" min="0" max="100" step="0.1" value="1"
+    <input data-el="riskin" type="number" min="0" max="100" step="0.1" value="__RISKVAL__"
            aria-label="Risk per trade, percent of liquid capital">
     <span class="unit">% of liquid capital</span>
+    <span class="hint" data-el="riskhint"></span>
     <span class="warn" data-el="riskwarn"></span>
   </section>
 """
@@ -417,7 +423,11 @@ DAILY_HTML = r"""
 SCRIPT = r"""<script>
 const DATASETS = __DATASETS__;
 const STRATS = __STRATS__;
-const RISK_DEFAULT = __RISKDEF__;
+// The REFERENCE risk: what the shared variant grid in _variants.json is priced at, and the
+// only risk at which the pages' own figures are pinned to a server figure. It is NOT what a
+// page opens at -- each strategy opens at its own default (DATA.risk_pct), the risk that puts
+// that strategy at the 6% drawdown budget.
+const REF_RISK = __REFRISK__;
 // Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
 // strategy on the page: quickfix at 4R and slowfix at 4R are the same run and are stored
 // once. `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra`
@@ -490,11 +500,13 @@ function mountReport(root, DATA){
   // One calendar for the whole cap grid, so moving the dial does not shift the equity
   // curve's x-axis underneath the reader: 4R and 8R are drawn over exactly the same period.
   const DAYS = VARIANTS.days;
-  // The two dials. CAP is this strategy's OWN Rule 4 setting (Rule 4 is what tells the
-  // strategies apart, so each mounted section keeps its own); RISK is set globally for the
-  // whole page. A strategy whose Rule 4 is not in the cap family has no dial to turn -- its
-  // section is built without one, and IN_FAMILY says so for everything downstream.
-  let CAP = DATA.r4, RISK = RISK_DEFAULT;
+  // Both dials belong to the STRATEGY, so each mounted section keeps its own. CAP is its
+  // Rule 4 setting (Rule 4 is what tells the strategies apart); RISK starts at the risk that
+  // puts THIS strategy at the 6% drawdown budget, which differs per strategy -- that is the
+  // whole point, the pages open at equal pain rather than equal bet size. A strategy whose
+  // Rule 4 is not in the cap family has no cap dial to turn -- its section is built without
+  // one, and IN_FAMILY says so for everything downstream.
+  let CAP = DATA.r4, RISK = DATA.risk_pct;
   const IN_FAMILY = VARIANTS.caps.indexOf(CAP) >= 0;
   let RAW = unpackCap(CAP);
 
@@ -600,17 +612,23 @@ function mountReport(root, DATA){
 
   let SIM = simulate(RISK), P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
 
-  // Self-check: at the default risk the replay MUST reproduce the server's own figure for
+  // Self-check: at the REFERENCE risk the replay MUST reproduce the server's own figure for
   // the cap in force. If it ever does not, the JS port has drifted from run_portfolio.py --
   // say so in the console rather than quietly showing different numbers from the workbook.
   // Re-run on every cap change, so the whole grid is checked as it is browsed, not just the
   // one it opened on.
+  //
+  // It re-simulates at REF_RISK rather than checking the live figures, because the page no
+  // longer opens at the reference: each strategy opens at its OWN risk, and only the grid's
+  // reference price is pinned to a server number. Checking "if the dial happens to sit on the
+  // reference" would silently never fire on two of the three strategies. One extra lite
+  // simulate is cheap, and the guard now runs everywhere.
   function selfCheck(){
-    if (RISK !== RISK_DEFAULT) return;            // only the default is pinned to a figure
     const want = VARIANTS.v[CAP].final;
-    if (Math.abs(ST.final - want) > 0.5){
-      console.warn(DATA.strategy + " @ cap " + CAP + ": replay mismatch at " + RISK_DEFAULT +
-        "%: page " + ST.final.toFixed(2) + " vs server " + want.toFixed(2) +
+    const got = simulate(REF_RISK, null, true).stats.final;
+    if (Math.abs(got - want) > 0.5){
+      console.warn(DATA.strategy + " @ cap " + CAP + ": replay mismatch at " + REF_RISK +
+        "%: page " + got.toFixed(2) + " vs server " + want.toFixed(2) +
         " -- build_equity_html.py is out of step with run_portfolio.py");
     } else {
       console.log(DATA.strategy + " @ cap " + CAP + ": replay verified against run_portfolio.py");
@@ -1219,7 +1237,52 @@ function mountReport(root, DATA){
     SIM = simulate(RISK); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
     renderAll(); selfCheck();
   }
-  function setRisk(r){ RISK = r; recompute(); }
+  // ---- the risk dial ---------------------------------------------------------------
+  // PER STRATEGY, like the cap dial, and for the same kind of reason. Each strategy's
+  // default is the risk that puts THAT strategy at the 6% drawdown budget, so the three
+  // defaults are three different numbers and one shared box could not show them. Opening
+  // every page at one bet size would instead show three different depths of hole and invite
+  // ranking them on return alone, which flatters whichever was allowed to dig deepest.
+  //
+  // Everything that needs the live value reads RISK, never the input's raw .value -- an
+  // empty or half-typed field reads as "" and Number("") is 0, which would silently mean
+  // "size every position to nothing" rather than "unchanged".
+  const riskIn = $("riskin"), riskWarn = $("riskwarn"), riskHint = $("riskhint");
+  const DEFAULT_RISK = DATA.risk_pct;
+  function setRisk(v, typed){
+    let r = (v === "" || v === null || v === undefined) ? NaN : Number(v);
+    if (!isFinite(r)) r = RISK;
+    r = Math.min(100, Math.max(0, r));
+    RISK = r;
+    // Do not rewrite the field while it is being typed into -- that would fight the caret.
+    if (riskIn && !typed) riskIn.value = String(r);
+    root.querySelectorAll(".riskecho").forEach(e => { e.textContent = r + "%"; });
+    recompute();
+    if (riskHint){
+      riskHint.innerHTML = Math.abs(r - DEFAULT_RISK) < 1e-9
+        ? "This strategy's own default &mdash; the risk that holds it to a <b>" +
+          TARGET_DD + "% maximum drawdown</b>, which is how the strategies are compared."
+        : "Changed from <b>" + DEFAULT_RISK + "%</b>, this strategy's " + TARGET_DD +
+          "%-drawdown risk. The workbooks on disk still hold " + DEFAULT_RISK + "%.";
+    }
+    if (riskWarn){
+      // Above a few percent the sizing model stops describing anything tradeable: it assumes
+      // any position size fills at these prices, and it has no margin, no liquidity limit and
+      // no ruin -- a losing streak just shrinks the base forever instead of ending the account.
+      riskWarn.textContent = r > 5
+        ? "At " + r + "% per trade the model ignores margin, liquidity and ruin: 1R = " + r +
+          "% of the account, and the " + ST.long_loss + "-trade losing streak below is " +
+          "survived only because positions shrink with the balance. Read as arithmetic, " +
+          "not a plan."
+        : "";
+    }
+  }
+  if (riskIn){
+    // An empty field mid-edit (select-all then retype) is left alone rather than read as 0 --
+    // otherwise the whole section would flash to a flat curve between keystrokes.
+    riskIn.addEventListener("input", () => { if (riskIn.value !== "") setRisk(riskIn.value, true); });
+    riskIn.addEventListener("change", () => setRisk(riskIn.value, false));
+  }
 
   // ---- Rule 4's cap dial -----------------------------------------------------------
   // Per strategy, not per page: Rule 4 IS the difference between the strategies, so one
@@ -1306,8 +1369,11 @@ function mountReport(root, DATA){
   // from the printed PDF, where nothing would have hinted at it. A chart that sometimes
   // does not exist is a far worse trade than 80 ms of load time.
   if ($("nwplot")) new ResizeObserver(renderNorm).observe($("nwplot"));
-  applyCapText(); syncCapControl(); renderAll(); renderNorm(); selfCheck();
-  return {setRisk:setRisk, setCap:setCap, cap:()=>CAP, key:DATA.strategy,
+  // setRisk seeds the box, the risk echoes and the hint, and recomputes + self-checks on
+  // the way -- so it stands in for the old renderAll()/selfCheck() pair here.
+  applyCapText(); syncCapControl(); setRisk(RISK); renderNorm();
+  return {setRisk:r => setRisk(r, false), setCap:setCap, cap:()=>CAP, key:DATA.strategy,
+          risk:()=>RISK, defaultRisk:()=>DEFAULT_RISK,
           render:()=>{ render(); renderNorm(); },
           norm:buildNorm, stats:()=>ST};
 }
@@ -1316,40 +1382,8 @@ function mountReport(root, DATA){
 const ROOTS = Array.prototype.slice.call(document.querySelectorAll("[data-root]"));
 const INST = ROOTS.map((el,i) => mountReport(el, DATASETS[i]));
 
-// ---- risk control (one per page, drives every mounted strategy) -------------------
-const riskIn = document.querySelector('[data-el="riskin"]');
-const riskWarn = document.querySelector('[data-el="riskwarn"]');
-// The risk actually in force. Everything that needs the current value reads THIS, never the
-// input's raw .value -- an empty or half-typed field reads as "" and Number("") is 0, which
-// would silently mean "size every position to nothing" instead of "unchanged".
-let CURRENT_RISK = RISK_DEFAULT;
-function applyRisk(v, typed){
-  let r = (v === "" || v === null || v === undefined) ? NaN : Number(v);
-  if (!isFinite(r)) r = CURRENT_RISK;
-  r = Math.min(100, Math.max(0, r));
-  CURRENT_RISK = r;
-  // Do not rewrite the field while it is being typed into -- that would fight the caret.
-  if (riskIn && !typed) riskIn.value = String(r);
-  INST.forEach(inst => inst.setRisk(r));
-  document.querySelectorAll(".riskecho").forEach(e => { e.textContent = r + "%"; });
-  if (riskWarn){
-    // Above a few percent the sizing model stops describing anything tradeable: it assumes
-    // any position size fills at these prices, and it has no margin, no liquidity limit and
-    // no ruin -- a losing streak just shrinks the base forever instead of ending the account.
-    const worst = Math.max.apply(null, INST.map(i => i.stats().long_loss));
-    riskWarn.textContent = r > 5
-      ? "At " + r + "% per trade the model ignores margin, liquidity and ruin: 1R = " + r +
-        "% of the account, and the " + worst + "-trade losing streak below is survived only " +
-        "because positions shrink with the balance. Read as arithmetic, not a plan."
-      : "";
-  }
-}
-if (riskIn){
-  // An empty field mid-edit (select-all then retype) is left alone rather than treated as 0 --
-  // otherwise the whole page would flash to a flat curve between keystrokes.
-  riskIn.addEventListener("input", () => { if (riskIn.value !== "") applyRisk(riskIn.value, true); });
-}
-applyRisk(RISK_DEFAULT);
+// Each section owns its own risk box and seeds it at mount (see `setRisk` in mountReport),
+// so there is nothing page-level left to wire up here.
 
 // Re-measure before printing: the print layout is a different width from the screen, and the
 // SVG viewBox is computed from the live element width.
@@ -1393,9 +1427,14 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
   function ok(){
     const keys = STRATS.map(s => s.key).filter(k => picked[k]);
     if (!keys.length) return;                       // nothing ticked: refuse rather than open a blank report
-    const risk = CURRENT_RISK;                      // the applied value, not the raw field
     close();
-    let url = "report.html?s=" + keys.join(",") + "&risk=" + risk + "&auto=1";
+    let url = "report.html?s=" + keys.join(",") + "&auto=1";
+    // Any risk moved off its strategy's own default, as key:value pairs -- the same shape as
+    // the cap parameter. A strategy not named keeps its own default, which since 2026-07-27
+    // is its 6%-drawdown risk rather than one number shared by the page.
+    const risks = INST.filter(i => Math.abs(i.risk() - i.defaultRisk()) > 1e-9)
+                      .map(i => i.key + ":" + i.risk());
+    if (risks.length) url += "&risk=" + risks.join(",");
     // Carry any Rule 4 cap that has been moved off its default, so the PDF prints what is
     // on screen. Only this page's own strategy can have been re-dialled here; the others
     // print at their own defaults, which is what the reader would expect from their names.
@@ -1444,15 +1483,23 @@ if (want.length){
   const bits = pair.split(":");
   INST.filter(i => i.key === bits[0]).forEach(i => i.setCap(bits[1]));
 });
+// `risk` takes either key:value pairs (what Export PDF writes, now that each strategy has
+// its own default) or a BARE NUMBER, which applies to every strategy on the page -- that is
+// still the honest way to ask "compare them all at 2%", and it keeps older links working.
+//
 // Number(null) is 0, NOT NaN. Reading the parameter straight into Number() therefore made a
 // report opened WITHOUT ?risk= (e.g. the Conclusions page's "Open report" link) re-run the
 // whole simulation at 0% -- every position sized to nothing, so the equity curve came out
-// flat at exactly the starting capital. Only apply a risk when one was actually supplied.
-const rpRaw = params.get("risk");
-const rp = (rpRaw === null || rpRaw.trim() === "") ? NaN : Number(rpRaw);
-if (isFinite(rp) && rp >= 0){
-  if (riskIn) riskIn.value = String(rp);
-  applyRisk(rp);
+// flat at exactly the starting capital. Hence the empty-string guard before any Number().
+const rpRaw = (params.get("risk") || "").trim();
+if (rpRaw && rpRaw.indexOf(":") === -1){
+  const rp = Number(rpRaw);
+  if (isFinite(rp) && rp >= 0) INST.forEach(i => i.setRisk(rp));
+} else if (rpRaw){
+  rpRaw.split(",").filter(Boolean).forEach(pair => {
+    const bits = pair.split(":"), r = Number(bits[1]);
+    if (isFinite(r) && r >= 0) INST.filter(i => i.key === bits[0]).forEach(i => i.setRisk(r));
+  });
 }
 document.querySelectorAll(".repcount").forEach(e => {
   const n = document.querySelectorAll("[data-root]").length;
@@ -1559,12 +1606,17 @@ def check_variants(strategy, data, variants):
     if tok not in variants["v"]:
         raise SystemExit(f"{strategy.key}: Rule 4 {tok!r} is not in the grid -- "
                          f"rerun run_portfolio.py after changing strategies.py")
-    grid, book = variants["v"][tok]["final"], data["final"]
+    # Both sides at the REFERENCE risk. The grid is shared by every page so it cannot be
+    # priced per strategy, and the workbook is written at the strategy's own risk -- so the
+    # workbook also carries `ref_final`, the same account replayed at the reference, purely
+    # so this guard compares like with like instead of flagging the risk difference.
+    grid, book = variants["v"][tok]["final"], data["ref_final"]
     if abs(grid - book) > 0.5:
         raise SystemExit(
             f"{strategy.key}: the variant grid's final capital ({grid:,.2f}) disagrees with "
-            f"{strategy.key}_portfolio_daily.xlsx ({book:,.2f}). The shared calendar in "
-            f"run_portfolio.write_variants has drifted from the per-strategy one.")
+            f"{strategy.key}_portfolio_daily.xlsx ({book:,.2f}), both at the reference risk "
+            f"{eng.RISK_PCT:g}%. The shared calendar in run_portfolio.write_variants has "
+            f"drifted from the per-strategy one.")
 
 
 def section_html(strategy, data, riskbar, daily):
@@ -1587,8 +1639,10 @@ def section_html(strategy, data, riskbar, daily):
             f"fired on <b data-el=\"ledemk\">{data['n_markets']}</b> of them, and the rest "
             f"are listed with zero trades under <em>By market</em>. Capital moves only when "
             f"a trade closes; each new trade risks "
-            f"<span class=\"riskecho\">{eng.RISK_PCT:g}%</span> of liquid "
-            f"capital. Figures are net of realistic slippage.")
+            f"<span class=\"riskecho\">{strategy.risk_pct:g}%</span> of liquid "
+            f"capital &mdash; the risk that holds this strategy to a {eng.TARGET_DD:g}% "
+            f"maximum drawdown, so every strategy is shown at the same pain. Figures are "
+            f"net of realistic slippage.")
     note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
             f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
             f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
@@ -1610,11 +1664,12 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__H1__", f"{strategy.title} &mdash; portfolio equity curve")
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(strategy))
-            .replace("__MECHANICS__", strategies.entry_mechanics(eng.RISK_PCT))
+            .replace("__MECHANICS__", strategies.entry_mechanics(strategy.risk_pct))
             .replace("__PRICEONLY__", strategies.PRICE_ONLY_NOTE)
             .replace("__CAPBAR__", CAPBAR_HTML if strategy.r4.in_grid else "")
             .replace("__CAPCHART__", CAPCHART_HTML if strategy.r4.in_grid else "")
             .replace("__RISKBAR__", riskbar)
+            .replace("__RISKVAL__", f"{strategy.risk_pct:g}")
             .replace("__CAPMIN__", f"{strategies.CAP_MIN:g}")
             .replace("__CAPMAX__", f"{strategies.CAP_MAX:g}")
             .replace("__CAPSTEP__", f"{strategies.CAP_STEP:g}")
@@ -1634,7 +1689,7 @@ def script_html(datasets, variants, boot):
             .replace("__DATASETS__", json.dumps(datasets, separators=(",", ":")))
             .replace("__VARIANTS__", json.dumps(variants, separators=(",", ":")))
             .replace("__STRATS__", strat_meta())
-            .replace("__RISKDEF__", f"{eng.RISK_PCT:g}")
+            .replace("__REFRISK__", f"{eng.RISK_PCT:g}")
             .replace("__BOOT__", boot))
 
 
@@ -1666,11 +1721,13 @@ def build_report(picked):
     variants = load_variants()
     for s, d in zip(picked, datasets):
         check_variants(s, d, variants)
-    # The cap dial rides along on the print report too -- one per strategy, so a PDF can
-    # compare quickfix at 4R against slowfix uncapped. The risk control below stays shared:
-    # money management is the same account for every strategy on the page, while Rule 4 is
-    # exactly what tells them apart.
-    sections = "\n".join(section_html(s, d, "", "") for s, d in zip(picked, datasets))
+    # Both dials ride along on the print report, one per strategy: a PDF can compare
+    # quickfix at 4R against slowfix uncapped, and each section opens at its own
+    # 6%-drawdown risk. The risk box used to be shared, on the reasoning that a like-for-like
+    # comparison needs one bet size -- but equal DRAWDOWN is the like-for-like this project
+    # ranks on, and one box cannot show three different defaults.
+    sections = "\n".join(section_html(s, d, RISKBAR_HTML, "")
+                         for s, d in zip(picked, datasets))
     head = (
         '<div class="wrap">\n'
         '<nav class="nav noprint"><span class="lbl">Report</span>'
@@ -1680,7 +1737,7 @@ def build_report(picked):
         'page into images (large file, no selectable text)</span>'
         '<span class="navbtns">'
         '<button class="pdfbtn" data-el="printnow" type="button">Print / Save as PDF</button>'
-        '</span></nav>\n' + RISKBAR_HTML + "\n")
+        '</span></nav>\n')
     # Sits after every strategy, so it is the last thing in the PDF. Hidden until the script
     # finds text; removed outright when there is none, so an unused field never prints.
     conclusions = (
@@ -1753,8 +1810,7 @@ def build_conclusions():
         '<div class="wrap">\n'
         '<nav class="nav"><span class="lbl">Back to</span>' + back +
         '<span class="navbtns">'
-        f'<a class="pdfbtn" href="report.html?risk={eng.RISK_PCT:g}" target="_blank">'
-        f'Open report</a>'
+        '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
         '</span></nav>\n'
         '<header>\n'
         '  <div class="eyebrow">Report &middot; conclusions</div>\n'

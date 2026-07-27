@@ -301,7 +301,8 @@ PRICE_ONLY_NOTE = (
 
 
 class Strategy:
-    """One strategy = one DEFAULT Rule 4, plus the name its outputs label themselves with.
+    """One strategy = one DEFAULT Rule 4 and its own default RISK, plus the name its outputs
+    label themselves with.
 
     For a cap-family strategy the cap is a default, not a fixed property: every file on disk
     (workbooks, the charter hand-off, the JSON ledgers) is written at it and the pages open
@@ -309,16 +310,24 @@ class Strategy:
     strategy whose Rule 4 is not in the family has nothing to move: its page shows that one
     setting, because that IS the strategy.
 
+    `risk_pct` is the risk that puts THIS strategy at the project's drawdown budget
+    (`engine.TARGET_DD`, 6%), solved by `solve_risk.py`. It is per strategy because a
+    drawdown budget is the thing the reader actually chooses: opening every page at one bet
+    size would show three different depths of hole and invite ranking them on return alone.
+    Re-solve it whenever the rules, the fill model or the data change, and paste the number
+    back here -- it is a measured constant, and stale is the failure mode to watch for.
+
     Everything the outputs quote comes off the Rule 4 object, so nothing can go stale
     against it.
     """
 
-    __slots__ = ("key", "title", "r4")
+    __slots__ = ("key", "title", "r4", "risk_pct")
 
-    def __init__(self, key, title, rule4):
+    def __init__(self, key, title, rule4, risk_pct):
         self.key = key          # file/CLI name: quickfix, slowfix, quickfixpro, ...
         self.title = title      # display name on pages and sheets
         self.r4 = rule4         # this strategy's default Rule 4
+        self.risk_pct = risk_pct  # % of liquid capital per trade -> TARGET_DD max drawdown
 
     @property
     def token(self):
@@ -361,16 +370,26 @@ class Strategy:
         return f"<Strategy {self.key} rule4={self.r4.token}>"
 
 
+# --- the registry -------------------------------------------------------------------
+# Every `risk_pct` below is MEASURED, not chosen: it is the risk that puts that strategy at
+# engine.TARGET_DD (6%) maximum drawdown on the current data, printed by `solve_risk.py`.
+# Re-run that script and paste the numbers back after any change to the rules, the fill
+# model or the archive -- they moved when gap fills were added on 2026-07-27, and they will
+# move again as the sample grows. engine.RISK_PCT (the reference the shared variant grid is
+# priced at) tracks quickfix's number.
+#
 # quickfix's default cap was 5R until 2026-07-27. It is 2.5R because that is where the
 # reports' levered chart puts it: solve for the risk that holds every cap to the same 6%
 # drawdown and 2.5R comes out top of the grid, while 5R gives up about a tenth of the final
-# capital for the same pain. engine.RISK_PCT is set to the risk that setting needs. The dial
-# still reaches 5R, and the charter hand-off still draws it, so the old setting stays one
-# click away rather than disappearing.
-QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(2.5))
-SLOWFIX = Strategy(key="slowfix", title="Slowfix", rule4=cap_rule4(None))
+# capital for the same pain. The dial still reaches 5R, and the charter hand-off still draws
+# it, so the old setting stays one click away rather than disappearing.
+QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(2.5),
+                    risk_pct=1.175)
+SLOWFIX = Strategy(key="slowfix", title="Slowfix", rule4=cap_rule4(None),
+                   risk_pct=0.396)
 # Not a third cap: a different Rule 4 shape, so it carries no cap dial (see ENTRY_BAR).
-QUICKFIXPRO = Strategy(key="quickfixpro", title="Quickfixpro", rule4=ENTRY_BAR)
+QUICKFIXPRO = Strategy(key="quickfixpro", title="Quickfixpro", rule4=ENTRY_BAR,
+                       risk_pct=0.8)
 
 REGISTRY = [QUICKFIX, SLOWFIX, QUICKFIXPRO]
 BY_KEY = {s.key: s for s in REGISTRY}

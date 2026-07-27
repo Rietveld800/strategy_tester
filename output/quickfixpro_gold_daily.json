@@ -6,7 +6,7 @@
     "start": "2025-12-05",
     "end": "2026-07-24",
     "starting_capital": 100000.0,
-    "risk_pct": 1.573,
+    "risk_pct": 0.8,
     "tick": 0.1,
     "fees": 0.0,
     "min_reversals": 3,
@@ -26,12 +26,12 @@
       "stop": 4409.6,
       "risk_per_unit": 16.6,
       "target": 4337.9,
-      "exit_price": 4337.9,
+      "exit_price": 4258.5,
       "exit_reason": "target_bar",
-      "r_multiple": 3.3193,
-      "pnl_pct": 5.2212,
+      "r_multiple": 8.1024,
+      "pnl_pct": 6.4819,
       "equity_before": 100000.0,
-      "equity_after": 105221.22
+      "equity_after": 106481.93
     },
     {
       "id": 2,
@@ -46,9 +46,9 @@
       "exit_price": 4338.7,
       "exit_reason": "target_bar",
       "r_multiple": 1.9674,
-      "pnl_pct": 3.0947,
-      "equity_before": 105221.22,
-      "equity_after": 108477.51
+      "pnl_pct": 1.5739,
+      "equity_before": 106481.93,
+      "equity_after": 108157.86
     },
     {
       "id": 3,
@@ -63,9 +63,9 @@
       "exit_price": 5272.8,
       "exit_reason": "target_bar",
       "r_multiple": 1.1209,
-      "pnl_pct": 1.7632,
-      "equity_before": 108477.51,
-      "equity_after": 110390.15
+      "pnl_pct": 0.8967,
+      "equity_before": 108157.86,
+      "equity_after": 109127.73
     },
     {
       "id": 4,
@@ -80,9 +80,9 @@
       "exit_price": 4485.7,
       "exit_reason": "target_bar",
       "r_multiple": 5.2326,
-      "pnl_pct": 8.2309,
-      "equity_before": 110390.15,
-      "equity_after": 119476.3
+      "pnl_pct": 4.1861,
+      "equity_before": 109127.73,
+      "equity_after": 113695.94
     },
     {
       "id": 5,
@@ -97,9 +97,9 @@
       "exit_price": null,
       "exit_reason": "unknown_pl",
       "r_multiple": -1.0,
-      "pnl_pct": -1.573,
-      "equity_before": 119476.3,
-      "equity_after": 117596.93
+      "pnl_pct": -0.8,
+      "equity_before": 113695.94,
+      "equity_after": 112786.37
     },
     {
       "id": 6,
@@ -114,9 +114,9 @@
       "exit_price": null,
       "exit_reason": "unknown_pl",
       "r_multiple": -1.0,
-      "pnl_pct": -1.573,
-      "equity_before": 117596.93,
-      "equity_after": 115747.14
+      "pnl_pct": -0.8,
+      "equity_before": 112786.37,
+      "equity_after": 111884.08
     },
     {
       "id": 7,
@@ -131,9 +131,9 @@
       "exit_price": 4241.4,
       "exit_reason": "target_bar",
       "r_multiple": 2.4323,
-      "pnl_pct": 3.8261,
-      "equity_before": 115747.14,
-      "equity_after": 120175.7
+      "pnl_pct": 1.9459,
+      "equity_before": 111884.08,
+      "equity_after": 114061.2
     },
     {
       "id": 8,
@@ -148,9 +148,9 @@
       "exit_price": 4078.2,
       "exit_reason": "target_bar",
       "r_multiple": 3.2822,
-      "pnl_pct": 5.1629,
-      "equity_before": 120175.7,
-      "equity_after": 126380.31
+      "pnl_pct": 2.6258,
+      "equity_before": 114061.2,
+      "equity_after": 117056.2
     },
     {
       "id": 9,
@@ -165,9 +165,9 @@
       "exit_price": 4029.0,
       "exit_reason": "target_bar",
       "r_multiple": 2.1327,
-      "pnl_pct": 3.3547,
-      "equity_before": 126380.31,
-      "equity_after": 130620.04
+      "pnl_pct": 1.7062,
+      "equity_before": 117056.2,
+      "equity_after": 119053.36
     }
   ],
   "equity_curve": [
@@ -177,39 +177,39 @@
     },
     {
       "date": "2025-12-19",
-      "equity": 105221.22
+      "equity": 106481.93
     },
     {
       "date": "2026-01-02",
-      "equity": 108477.51
+      "equity": 108157.86
     },
     {
       "date": "2026-03-03",
-      "equity": 110390.15
+      "equity": 109127.73
     },
     {
       "date": "2026-03-25",
-      "equity": 119476.3
+      "equity": 113695.94
     },
     {
       "date": "2026-05-12",
-      "equity": 117596.93
+      "equity": 112786.37
     },
     {
       "date": "2026-06-09",
-      "equity": 115747.14
+      "equity": 111884.08
     },
     {
       "date": "2026-06-12",
-      "equity": 120175.7
+      "equity": 114061.2
     },
     {
       "date": "2026-07-01",
-      "equity": 126380.31
+      "equity": 117056.2
     },
     {
       "date": "2026-07-20",
-      "equity": 130620.04
+      "equity": 119053.36
     }
   ]
 }

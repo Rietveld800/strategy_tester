@@ -164,13 +164,13 @@
      "side": "short",
      "entry_date": "2026-07-24",
      "entry": 706.0,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-07-27",
+     "exit": 695.4,
      "stop": 711.3,
      "target": 695.4,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "target_r",
+     "r": 2.0,
+     "bars": 1
     }
    ]
   },
@@ -314,13 +314,13 @@
      "side": "short",
      "entry_date": "2026-07-24",
      "entry": 488.1,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-07-27",
+     "exit": 480.1,
      "stop": 492.1,
      "target": 480.1,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "target_r",
+     "r": 2.0,
+     "bars": 1
     }
    ]
   },

@@ -173,6 +173,12 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
   color:var(--ink3);font-weight:600;}
 .findings p{margin:0;font-size:13px;color:var(--ink2);line-height:1.55;}
 .findings b{color:var(--ink);font-weight:600;}
+/* the one finding the whole report exists to make, marked as such (user, 2026-07-28).
+   print-color-adjust:exact is already set on the page, so it survives the PDF. */
+.hl{background:#FFE86B;color:#16201C;padding:1px 5px;border-radius:4px;font-weight:700;}
+@media (prefers-color-scheme:dark){.hl{background:#F2D34A;color:#16201C;}}
+:root[data-theme="dark"] .hl{background:#F2D34A;color:#16201C;}
+:root[data-theme="light"] .hl{background:#FFE86B;color:#16201C;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
   background:var(--border);
   border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:22px 0 22px;}
@@ -311,7 +317,7 @@ SECTION_HTML = r"""<section class="rep" data-root>
   <div class="rules">
     <div class="rhead">
       <div class="t">How a trade is found</div>
-      <div class="s">Described for a short; the long side is the exact mirror &mdash; bearish
+      <div class="s">Described for a short; the long side is the exact mirror, bearish
         levels for the entry, bullish for the target.</div>
     </div>
     <div class="rulegrid">__RULES__</div>
@@ -388,7 +394,7 @@ CAPCHART_HTML = r"""
     </div>
     <p class="chartnote">What each cap actually did on the same fixed bet. Every point is a
       full backtest; the risk is pinned so the <b>drawdown is free to move</b>, which is what
-      makes the wider caps look good here &mdash; part of their return is the deeper hole
+      makes the wider caps look good here, part of their return is the deeper hole
       they were allowed to dig. Rank them on the chart below, not this one.</p>
     <div class="plot sweepplot" data-el="fxplot">
       <svg data-el="fxsvg" role="img" aria-label="Final capital, max drawdown, risk, return over drawdown and win rate against the Rule 4 profit cap at a constant 1 percent risk"></svg>
@@ -1188,21 +1194,24 @@ function mountReport(root, DATA){
         `<b>${plat[0].cap}R&ndash;${plat[plat.length-1].cap}R</b> is the band: every cap on it `+
         `is allowed the same <b>${r2(best.risk)}%</b> per trade`+
         (cliff?`, and at ${cliff.cap}R that falls to ${r2(cliff.risk)}%`:``)+
-        `. Best point <b>${best.cap}R</b> at <b>${usd(best.final)}</b>`+
+        `. <span class="hl">Best point ${best.cap}R</span> at <b>${usd(best.final)}</b>`+
         (none?`; uncapped is the worst of the family at ${usd(none.final)}, sized down to `+
               `${r2(none.risk)}%`:``)+`.`) +
+      // Both passages below are the USER'S OWN WORDS (2026-07-28), pasted verbatim per the
+      // project's working agreement -- so unlike the passage above they are static, not read
+      // out of the grid. If the data moves, these have to be revisited by hand; that is the
+      // trade being made for saying it in the author's voice.
       h("Why",
-        `Taking profit early stops a position becoming a deep loser, so the worst path is `+
-        `shallower and the same 6% budget buys a bigger bet &mdash; <b>${r2(rHi.risk)}%</b> at `+
-        `${rHi.cap}R against <b>${r2(rLo.risk)}%</b> at ${rLo.cap}R, `+
-        `<b>${r1(rHi.risk/rLo.risk)}&times;</b> the position size for the same pain. That is `+
-        `the whole mechanism; the capital line follows it.`) +
+        `<b>Taking profit early prevents long loss streaks. And so the drawdown is naturally `+
+        `lower at the same amount of risk taken. A lower drawdown allows for taking more `+
+        `risk which results in the highest return for the same drawdown.</b>`) +
       h("How much to trust it",
-        `${sample}, and the allowed risk moves in steps rather than smoothly &mdash; on a `+
-        `sample this size one worst run sets the drawdown, so the number only shifts when a `+
-        `cap crosses that run's exits. Read the band, not the point.`+
-        (here&&here.risk!=null?` This page is at <b>${VARIANTS.labels[CAP]}</b>: `+
-          `${r2(here.risk)}% per trade, ${usd(here.final)}.`:``));
+        `The sample size is still small. Over time longer loss streaks are expected to `+
+        `happen. But the signal is clear: Keeping the position as long till it hits the next `+
+        `reversal or gets stopped out is the less profitable strategy of all. Taking profit `+
+        `early but not too early seems to be the conclusion. The sweet spot is found at `+
+        `1.9R for this dataseries. The longer the trade is kept after 1.9R, the lower the `+
+        `profit for the same drawdown.`);
   }
 
   // ---- the fixed-risk chart: what each cap really did on the same bet ----------------
@@ -1253,7 +1262,7 @@ function mountReport(root, DATA){
     const ddLo=g.reduce((a,b)=>Math.abs(b.dd)<Math.abs(a.dd)?b:a);
     const r1=v=>v.toFixed(1);
     el.innerHTML = `<h4>Why this one cannot rank them</h4><p>`+
-      `Best here is <b>${best.cap}R</b> at <b>${fmtUSD(best.final)}</b> &mdash; but its `+
+      `Best here is <b>${best.cap}R</b> at <b>${fmtUSD(best.final)}</b>, but its `+
       `drawdown is <b>${r1(Math.abs(best.dd))}%</b>, against ${r1(Math.abs(ddLo.dd))}% at `+
       `${ddLo.cap}R. Across the grid the hole runs from ${r1(Math.abs(ddLo.dd))}% to `+
       `<b>${r1(Math.abs(ddHi.dd))}%</b> on the same bet, so these caps are not being asked `+
@@ -1318,7 +1327,7 @@ function mountReport(root, DATA){
     recompute();
     if (riskHint){
       riskHint.innerHTML = Math.abs(r - DEFAULT_RISK) < 1e-9
-        ? "This strategy's own default &mdash; the risk that holds it to a <b>" +
+        ? "This strategy's own default, the risk that holds it to a <b>" +
           TARGET_DD + "% maximum drawdown</b>, which is how the strategies are compared."
         : "Changed from <b>" + DEFAULT_RISK + "%</b>, this strategy's " + TARGET_DD +
           "%-drawdown risk. The workbooks on disk still hold " + DEFAULT_RISK + "%.";
@@ -1371,7 +1380,7 @@ function mountReport(root, DATA){
     const twin = STRATS.filter(s => s.key !== DATA.strategy &&
                                     VARIANTS.defaults[s.key] === CAP)[0];
     const same = "At this setting it is <b>" + (twin ? twin.title : "") + "</b>, trade for " +
-                 "trade &mdash; with the cap exposed they are one family at two settings.";
+                 "trade, with the cap exposed they are one family at two settings.";
     // Careful with what this claims: the workbooks and JSON ledgers really are written at
     // the default cap, but the charter hand-off is a SEPARATE chosen set of caps
     // (CHARTER_CAPS in export_charter_trades.py) which need not include this one.
@@ -1379,7 +1388,7 @@ function mountReport(root, DATA){
       ? "This strategy's own Rule 4. The workbooks and JSON ledgers are written at this " +
         "setting."
       : "Changed from <b>" + VARIANTS.labels[DEFAULT_CAP] + "</b>. Every setting here is a " +
-        "full backtest, so the trades themselves differ &mdash; not just their sizing. " +
+        "full backtest, so the trades themselves differ, not just their sizing. " +
         "The workbooks on disk still hold " + VARIANTS.labels[DEFAULT_CAP] + ". " +
         (twin ? same : "");
   }
@@ -1691,25 +1700,23 @@ def section_html(strategy, data, riskbar, daily):
     # Everything that quotes the cap or a trade count is wrapped in a data-el span: both
     # move when the Rule 4 dial moves, and a lede still claiming "closed at 5R" on a page
     # showing 4R would be worse than no lede at all.
-    lede = (f"<span data-el=\"lede4\">{strategy.lede}</span> One shared account trading "
-            f"Socrates <b>reversal levels</b>. "
+    lede = (f"<span data-el=\"lede4\">{strategy.lede}</span> "
             f"All <b>{n_all} markets</b> in the archive were tested, "
-            f"{month_year(data['first'])} &ndash; {month_year(data['last'])}; the rules "
-            f"fired on <b data-el=\"ledemk\">{data['n_markets']}</b> of them, and the rest "
-            f"are listed with zero trades under <em>By market</em>. Capital moves only when "
-            f"a trade closes; each new trade risks "
+            f"<b>{month_year(data['first'])} &ndash; {month_year(data['last'])}</b>; the "
+            f"rules fired on <b data-el=\"ledemk\">{data['n_markets']}</b> of them, and the "
+            f"rest are listed with zero trades under <em>By market</em>. Capital moves only "
+            f"when a trade closes; each new trade risks "
             f"<span class=\"riskecho\">{strategy.risk_pct:g}%</span> of liquid "
-            f"capital &mdash; the risk that holds this strategy to a {eng.TARGET_DD:g}% "
-            f"maximum drawdown, so every strategy is shown at the same pain. Figures are "
-            f"net of realistic slippage.")
+            f"capital, the risk that holds this strategy to a {eng.TARGET_DD:g}% "
+            f"maximum drawdown. Figures are net of realistic slippage.")
+    # Supplied verbatim by the user (2026-07-28), em dashes and all -- which is why this one
+    # sentence keeps them while the rest of the report does not. Everything that used to
+    # follow it (the intraday-path caveat, commission, "evidence of an edge") was cut on the
+    # same instruction; the caveat text still exists in strategies.py for the rules block.
     note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
             f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
             f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
-            f"through each trade's own risk distance. Still optimistic on the rest: the "
-            f"entry-day intraday path is assumed favorable, "
-            f"<span data-el=\"caveat\">{strategy.caveat}</span>, and there "
-            f"is no commission or funding. Read it as evidence of an edge, not a return "
-            f"forecast.")
+            f"through each trade's own risk distance.")
     footer = (f"source: {strategy.key}_portfolio_daily.xlsx &middot; "
               f"{n_all} markets tested, <span data-el=\"footmk\">{data['n_markets']}</span> "
               f"traded &middot; rule 4: <span data-el=\"footrule4\">{strategy.rule4}</span> "
@@ -1720,7 +1727,7 @@ def section_html(strategy, data, riskbar, daily):
     # chart of somebody else's strategy would both be worse than their absence.
     return (SECTION_HTML
             .replace("__EYEBROW__", eyebrow)
-            .replace("__H1__", f"{strategy.title} &mdash; portfolio equity curve")
+            .replace("__H1__", f"{strategy.title} equity curve optimized")
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(strategy))
             .replace("__MECHANICS__", strategies.entry_mechanics(strategy.risk_pct))
@@ -1765,7 +1772,7 @@ def build(strategy):
             + section_html(strategy, data, RISKBAR_HTML, DAILY_HTML) + "\n</div>")
     html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-            f'<title>{strategy.title} &mdash; portfolio equity curve</title>\n{CSS}\n</head>\n'
+            f'<title>{strategy.title} equity curve optimized</title>\n{CSS}\n</head>\n'
             f'<body data-strategy="{strategy.key}">\n{body}\n'
             f'{script_html([data], variants, PDF_SCRIPT)}\n</body>\n</html>\n')
     path = page_path(strategy)
@@ -1792,7 +1799,7 @@ def build_report(picked):
         '<nav class="nav noprint"><span class="lbl">Report</span>'
         '<span style="font-size:13px;color:var(--ink2)">'
         '<span class="repcount"></span> &middot; in the print dialog choose destination '
-        '<b>Save as PDF</b> &mdash; not "Microsoft Print to PDF", which rasterises every '
+        '<b>Save as PDF</b>, not "Microsoft Print to PDF", which rasterises every '
         'page into images (large file, no selectable text)</span>'
         '<span class="navbtns">'
         '<button class="pdfbtn" data-el="printnow" type="button">Print / Save as PDF</button>'
@@ -1875,7 +1882,7 @@ def build_conclusions():
         '  <div class="eyebrow">Report &middot; conclusions</div>\n'
         '  <h1>Conclusions</h1>\n'
         '  <p class="lede">Whatever you write here is printed at the <b>end of the exported '
-        'PDF</b>, after the last strategy. Both fields are optional &mdash; an empty one is '
+        'PDF</b>, after the last strategy. Both fields are optional, an empty one is '
         'left out of the report entirely. The text is saved in this browser as you type; it '
         'is not written to any file and never leaves your machine.</p>\n'
         '</header>\n'

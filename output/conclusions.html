@@ -149,6 +149,12 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
   color:var(--ink3);font-weight:600;}
 .findings p{margin:0;font-size:13px;color:var(--ink2);line-height:1.55;}
 .findings b{color:var(--ink);font-weight:600;}
+/* the one finding the whole report exists to make, marked as such (user, 2026-07-28).
+   print-color-adjust:exact is already set on the page, so it survives the PDF. */
+.hl{background:#FFE86B;color:#16201C;padding:1px 5px;border-radius:4px;font-weight:700;}
+@media (prefers-color-scheme:dark){.hl{background:#F2D34A;color:#16201C;}}
+:root[data-theme="dark"] .hl{background:#F2D34A;color:#16201C;}
+:root[data-theme="light"] .hl{background:#FFE86B;color:#16201C;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
   background:var(--border);
   border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:22px 0 22px;}
@@ -270,11 +276,11 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 </head>
 <body>
 <div class="wrap">
-<nav class="nav"><span class="lbl">Back to</span><a href="equity_quickfix.html">Quickfix</a><a href="equity_quickfixpro.html">Quickfixpro</a><span class="navbtns"><a class="pdfbtn" href="report.html" target="_blank">Open report</a></span></nav>
+<nav class="nav"><span class="lbl">Back to</span><a href="equity_quickfix.html">Quickfix</a><span class="navbtns"><a class="pdfbtn" href="report.html" target="_blank">Open report</a></span></nav>
 <header>
   <div class="eyebrow">Report &middot; conclusions</div>
   <h1>Conclusions</h1>
-  <p class="lede">Whatever you write here is printed at the <b>end of the exported PDF</b>, after the last strategy. Both fields are optional &mdash; an empty one is left out of the report entirely. The text is saved in this browser as you type; it is not written to any file and never leaves your machine.</p>
+  <p class="lede">Whatever you write here is printed at the <b>end of the exported PDF</b>, after the last strategy. Both fields are optional, an empty one is left out of the report entirely. The text is saved in this browser as you type; it is not written to any file and never leaves your machine.</p>
 </header>
 <div class="cfield">
   <label for="cgeneral">General conclusions</label>

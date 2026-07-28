@@ -42,17 +42,17 @@ import strategies
 # fan 33 exit lines from it. Charter also draws every overlay identically, and colour already
 # means the outcome. Four caps is what stays readable.
 #
-# 2R, 2.25R and 2.5R are the levered sweet spot the reports single out -- 2.5R is quickfix's
-# documented default, so it has to be here: the charts would otherwise draw every cap except
-# the one the strategy actually runs at. 5R is what that default used to be, kept as the
+# 1.9R FIRST, because it is quickfix's documented default: it has to be here, or the charts
+# draw every cap except the one the strategy actually runs at. (It was added on 2026-07-28
+# when the default moved there from 2.5R -- if the default moves again, move this with it.)
+# 2R, 2.25R and 2.5R bracket it, the levered band the reports single out; 5R is a wider
 # comparison the tight caps are worth reading against.
-CHARTER_CAPS = [2.0, 2.25, 2.5, 5.0]
+CHARTER_CAPS = [1.9, 2.0, 2.25, 2.5, 5.0]
 
-# Strategies outside the cap family, exported whole. Quickfixpro earns its overlay by being a
-# different SHAPE rather than another setting: its exits are the entry bar's own low, so
-# unlike the caps its lines do not fan out from the entry point along one axis -- they stop
-# inside the entry bar. That is worth seeing against the caps on the same price pane.
-CHARTER_STRATEGIES = ["quickfixpro"]
+# Strategies outside the cap family, exported whole. EMPTY since 2026-07-28: Quickfixpro was
+# the only one and was retired (user). The list stays because the export handles a strategy
+# and a cap through exactly the same code path, so re-adding one is a single key.
+CHARTER_STRATEGIES = []
 
 
 def charter_key(cap):

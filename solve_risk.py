@@ -77,11 +77,21 @@ def main(argv):
         shown = round(risk, 3)
         with rp.at_risk(shown):
             st = rp.account(raw, all_days, first_day)[1]
-        ok = abs(shown - s.risk_pct) < 1e-9
-        print(f"{s.key:12} risk_pct={shown:<6g} -> ${st['final']:>10,.0f} "
+
+        # STALE means "the registered risk no longer hits the target", NOT "it differs from
+        # my solve in the third decimal". The registry carries deliberately round numbers
+        # (quickfix is 1.39, this solver says 1.391) and demanding an exact match would leave
+        # the tool permanently complaining about a rounding difference that moves the drawdown
+        # by nothing. Same 0.05 tolerance the report's own chart uses on its bisection.
+        with rp.at_risk(s.risk_pct):
+            reg = rp.account(raw, all_days, first_day)[1]
+        ok = abs(reg["max_dd"] - eng.TARGET_DD) <= 0.05
+        print(f"{s.key:12} solved {shown:<6g} -> ${st['final']:>10,.0f} "
               f"({st['ret']:+8.2f}%)  maxDD {st['max_dd']:5.2f}%  "
-              f"ret/DD {st['ret'] / st['max_dd']:5.1f}x"
-              + ("" if ok else f"   REGISTRY SAYS {s.risk_pct:g} -- UPDATE IT"))
+              f"ret/DD {st['ret'] / st['max_dd']:5.1f}x")
+        print(f"{'':12} registry {s.risk_pct:<6g} -> ${reg['final']:>9,.0f} "
+              f"({reg['ret']:+8.2f}%)  maxDD {reg['max_dd']:5.2f}%  "
+              + ("still on target" if ok else "OFF TARGET -- UPDATE IT"))
         if not ok:
             stale.append((s, shown))
 

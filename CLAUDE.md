@@ -34,34 +34,23 @@ Strategy department of a four-part trading system. Read `README.md` and
 
 ## Status (2026-07-27)
 
-TWO strategies are built and documented — **quickfix** and **quickfixpro**. They share every
-rule except Rule 4, so they take exactly the same setups and differ only in the exit.
+ONE strategy is built and documented: **quickfix**, the cap family at **1.9R** with
+**1.39%** risk per trade (user, 2026-07-28). Those are the levered-optimal point: 1.9R tops
+the constant-6%-drawdown chart, and 1.39% is the risk that puts it there.
 
-**SLOWFIX WAS RETIRED 2026-07-28** (user: "doesn't make sense anymore to still show it"). It
-was the cap family at no cap — i.e. a dial position, never a separate method — and once the
-dial reached every setting a whole page for one position earned nothing. "No cap" is still a
-dial setting and the dashed reference line on both charts. Its outputs were deleted. Do not
-reinstate it as a Strategy; if someone wants to see it, move the dial.
+**BOTH SIBLING STRATEGIES HAVE BEEN RETIRED.** Do not reinstate either without being asked.
+- **slowfix** (2026-07-28) was the cap family at no cap, i.e. a dial position, never a
+  separate method. "No cap" is still a dial setting and the dashed reference line on both
+  charts, and still the worst point of the family at equal drawdown ($158,195 at 0.396%).
+- **quickfixpro** (2026-07-28, user: "it has no longer value") took profit one tick beyond
+  the entry bar's own extreme, fixed at entry: a genuinely different Rule 4 SHAPE, not a cap,
+  so `in_grid=False` and its page carried neither the cap dial nor the cap charts. Removed
+  from the report AND from charter (`CHARTER_STRATEGIES` is now empty). Its policy was
+  deleted rather than left as unreachable code; it is in git, and `strategies.py`'s header
+  says how to add a second shape back.
 
-**Rule 4 has TWO SHAPES**, and the distinction runs through the whole pipeline:
-
-1. **The cap family.** "Ride to the first opposite reversal beyond entry, but never past
-   `cap`R." One number in it. quickfix is that family at cap **2.5R** (was 5R until
-   2026-07-27). A cap-family "strategy" is just a dial position — say that plainly.
-2. **The entry bar** — **quickfixpro** (2026-07-27, user's spec). Take profit **one tick
-   beyond the entry bar's own opposite extreme**, fixed at entry and never moving: a short
-   exits one tick below the entry bar's low. Stop and target are the two sides of the entry
-   bar, so the bet is that the low breaks before the high — the initial energy of the move.
-   NO reversal level and NO R ceiling, so it is **not a cap setting**: its page has **no cap
-   dial and no cap-chart section**. Exit reason `target_bar`. Rule 3's 3.5R filter still
-   applies unchanged (it is Rule 3, not Rule 4), which is what keeps the setups identical;
-   it just no longer describes the target. A winner is worth whatever the bar measured —
-   +3.02R average, up to 9.52R. Both-in-range days are `unknown_pl` at −1R.
-
-A **`Rule4`** in `strategies.py` is ONE setting: policy + variant token + `in_grid` + prose.
-A `Strategy` is a key, a title, a default `Rule4` and its own `risk_pct`. `in_grid` is the
-flag that makes the pages drop the cap dial and the cap charts automatically, and the policy
-signature returns its own exit reason (the engine only resolves `"reversal"` into a side).
+So a "strategy" here is now just a dial position. The `Rule4` / `in_grid` machinery stays,
+because it is what makes the pages drop the cap dial and cap charts for a non-cap shape.
 
 **GAP FILLS** (user, 2026-07-27). A bar that JUMPS OVER the stop or the target fills at
 **that bar's OPEN**, not at the level — the open is the day's first price, so it is the one
@@ -83,7 +72,7 @@ bar's own extreme, so no close can be through it while the trade is open). Do no
 through both. This changed every published number and every solved risk; slippage still
 charges the full 3-tick stop rate on a gapped stop, deliberately.
 
-AUDITED when the user asked why quickfix and quickfixpro disagree on an engulfing bar (see
+AUDITED when the user asked why quickfix and the retired quickfixpro disagreed on an engulfing bar (see
 README "Why two strategies can split on the same bar"): `check_exit` IS shared and both give
 the doubt to the stop (quickfix 5 of 9 such days -> `unknown_pl`, quickfixpro 6 of 7). The
 wins are the GAP rule firing first. They split on exactly one date, EURO_Futures 2026-05-08,
@@ -94,8 +83,8 @@ USD_EUR_Cross_Rate 2026-03-09 quickfixpro +0.27R); requiring a strict one-tick g
 and not taken.
 
 **RISK PER TRADE IS PER STRATEGY** (user, 2026-07-27): each strategy's default is the risk
-that puts THAT strategy at `engine.TARGET_DD` (6%) max drawdown — quickfix **1.175%**,
-quickfixpro **0.8%**. They are MEASURED constants in `strategies.py`
+that puts THAT strategy at `engine.TARGET_DD` (6%) max drawdown — quickfix **1.39%**.
+It is a MEASURED constant in `strategies.py`
 (`Strategy.risk_pct`), derived by **`solve_risk.py`** — re-run it and paste the numbers back
 after any change to the rules, the fill model or the archive, or the reports quietly go
 stale. So **1R = the strategy's own percentage**; any text saying "1R = 1%" or "1R = 1.573%"
@@ -106,13 +95,11 @@ the REFERENCE risk the shared variant grid is priced at and the pages self-check
 tracks quickfix's number but nothing depends on them being equal. `run_portfolio.at_risk()`
 is the context manager that sets the money management's risk for one run and restores it.
 
-At their own 6% risks on 2026-07-27 data: **quickfix $290,446 / 31.7x / 58.3% wr; quickfixpro
-$281,067 / 30.2x / 65.9% wr.** They are effectively TIED (1.5 points of ret/DD on ~85 trades
-is not a result); quickfixpro gets there on 45% time in market against 52%, and is ahead on
-every non-return column. This table was rewritten TWICE in one day by changes
-to the FILL MODEL alone, strategies untouched — treat the fill assumptions as the biggest
-open risk and never present the ordering as settled. See `README.md` for the full rules, money-management/slippage model, outputs and the
-charter hand-off.
+At 1.9R / 1.39% on 2026-07-28 data: **$306,160, +206.16%, 6.00% DD, 34.4x, 84 trades.**
+Published figures were rewritten repeatedly in two days by changes to the FILL MODEL alone,
+strategies untouched -- treat the fill assumptions as the biggest open risk and never present
+any of it as settled. See `README.md` for the full rules, money-management/slippage model,
+outputs and the charter hand-off.
 
 The cap is a **DIAL on the reports** — **0R to 10R**, tenth-R steps to 5.5R (`CAP_FINE_TO`)
 and quarter-R above, plus no cap. ONE grid (2026-07-28): it is the dial's axis and both
@@ -178,7 +165,8 @@ if you change the money management in `run_portfolio.py`, change `simulate()` in
 `build_equity_html.py` to match. Nothing is persisted and no file changes.
 
 **Choosing the profit cap** is the LAST section of every CAP-FAMILY page (after By market /
-Daily data, before the footer; quickfixpro has neither it nor the dial). ONE section with TWO
+Daily data, before the footer; a non-cap shape would carry neither it nor the dial). ONE
+section with TWO
 charts over the same 0R-10R grid (merged 2026-07-28, user: "1 section, less explaining, more
 to the point"):
 
@@ -210,7 +198,8 @@ Variant rows travel PACKED (positional arrays against shared market/date/reason 
 one format — change one and you must change the other. The whole grid shares one day
 calendar so the equity curve's x-axis does not shift as the dial moves. `_variants.json`
 holds `caps` (the single cap axis -- the dial's and both charts') and `extra` (settings that
-are not caps, e.g. quickfixpro's `bar`) in one `v` table: same packing, same replay.
+are not caps; EMPTY today, since quickfixpro was the only one) in one `v` table: same
+packing, same replay.
 
 Obsolete markets (last daily bar > `OBSOLETE_AFTER_DAYS` behind the newest across all
 markets) have stopped being collected, so a position open on their last bar can never
@@ -220,15 +209,16 @@ Obsolescence is cross-market, so `run_markets` loads every market before backtes
 
 Trades are handed to charter **per OVERLAY** as `output/charter_trades_<key>.json`, chosen by
 two lists in `export_charter_trades.py`:
-- `CHARTER_CAPS` — **2R, 2.25R, 2.5R, 5R**, filenames zero-padded (`cap02_25`) so filename
-  order IS cap order. It MUST contain quickfix's default cap, or the charts draw every cap
-  except the one the strategy runs at. Per CAP, not per strategy, since 2026-07-27;
+- `CHARTER_CAPS` — **1.9R, 2R, 2.25R, 2.5R, 5R**, filenames zero-padded (`cap02_25`) so
+  filename order IS cap order. It MUST contain quickfix's default cap, or the charts draw
+  every cap except the one the strategy runs at -- 1.9R was added on 2026-07-28 for exactly
+  that reason when the default moved there. MOVE IT IF THE DEFAULT MOVES. Per CAP, not per strategy, since 2026-07-27;
   the uncapped setting is not exported at all. The list is INDEPENDENT of the reports' grid
   and need not sit on it: 2.25R is exported and is on no grid the reports draw, so
   `run_pipeline` backtests whatever `CHARTER_CAPS` names on top of the grid.
-- `CHARTER_STRATEGIES` — **quickfixpro**, exported whole and named by its key (which sorts
-  after every `cap…`). It earns an overlay by being a different Rule 4 SHAPE, not another
-  setting: its exits stop inside the entry bar instead of fanning out along the cap axis.
+- `CHARTER_STRATEGIES` — **EMPTY** since quickfixpro was retired (2026-07-28). Kept because
+  the export handles a whole strategy and a cap through the same code path, so re-adding one
+  is a single key.
 
 The exporter PRUNES hand-off files it no longer owns, because charter globs the directory and
 a leftover file keeps being drawn.

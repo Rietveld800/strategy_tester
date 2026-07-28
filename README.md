@@ -349,19 +349,28 @@ nothing depends on them being equal.
 
 ### Where it stands (2026-07-28 data, 28 markets with trades, at 1.9R / 1.39%)
 
+**A DATED SNAPSHOT, NOT A SPECIFICATION.** Every figure in this section moves with each new
+array day, so it is stale by definition the morning after it is written, and **it is not
+meant to be updated per bar** — doing that would be a daily chore with no reader on the other
+end. `output/report.html` is regenerated on every run and is the live answer; this table is
+here so the README means something to somebody who has not opened the report. Refresh it when
+a number is quoted in a decision, or when the rules or the fill model change. What must stay
+current is the *structure* — the rules, the defaults, the invariants below — none of which a
+new bar touches.
+
 | | quickfix (1.9R) |
 |---|---|
 | Risk per trade | 1.39% |
-| Net return | **+206.16%** |
-| Gross return | +221.40% |
+| Net return | **+222.04%** |
+| Gross return | +238.26% |
 | Max drawdown | 6.00% |
-| **Return / drawdown** | **34.4x** |
-| Closed trades | 88 |
-| Win rate | 63.6% |
-| Average winner | +2.19R |
+| **Return / drawdown** | **37.0x** |
+| Closed trades | 90 |
+| Win rate | 64.4% |
+| Average winner | +2.15R |
 | Average hold | 1.2 bars |
 | Max concurrent | 5 |
-| Time in market | 48% |
+| Time in market | 49% |
 | Longest losing run | 4 |
 
 The drawdown is 6.00% by construction: 1.39% is the risk solved to put 1.9R exactly there.
@@ -369,9 +378,10 @@ Both numbers come off the cap chart at the bottom of the report, which is the wh
 that section.
 
 The uncapped end of the family is far behind: $158,195 at 0.396% risk, 9.7x. It wins barely a
-quarter of the time with winners nearly three times the size, and that combination produces
-long losing runs (13 straight against 4), which is a deep hole; held to the same 6% it must
-be sized right down, and that gives away far more than the big winners bring back. That is
+quarter of the time (28%) with winners four times the size (+9.51R against +2.15R), and that
+combination produces long losing runs (13 straight against 4), which is a deep hole; held to
+the same 6% it must be sized right down, and that gives away far more than the big winners
+bring back. That is
 visible on the cap chart rather than as a strategy of its own.
 
 **Return / drawdown is the ranking metric**, not total return. Risk per trade is a dial, so a
@@ -394,13 +404,13 @@ target.
 
 All at the reference risk, 1.39%:
 
-| cap | 2R | **2.5R** | 3.5R | 4.5R | 5R | 6R | 7R | 8.5R | 10R | none |
+| cap | 2R | 2.5R | 3.5R | 4.5R | 5R | 6R | 7R | 8.5R | 10R | none |
 |---|---|---|---|---|---|---|---|---|---|---|
-| return | +199% | +249% | +231% | +308% | +309% | +314% | +424% | +425% | +294% | +266% |
+| return | +215% | +273% | +263% | +333% | +337% | +348% | +475% | +486% | +294% | +266% |
 | max DD | 6.00% | 7.09% | 6.92% | 7.99% | 7.97% | 12.61% | 11.88% | 11.86% | 19.48% | 19.48% |
-| ret/DD | 33.1x | 35.1x | 33.4x | 38.6x | 38.8x | 24.9x | 35.7x | 35.9x | 15.1x | 13.7x |
-| trades | 88 | 84 | 80 | 79 | 79 | 79 | 79 | 77 | 76 | 76 |
-| win rate | 61% | 58% | 48% | 44% | 42% | 38% | 38% | 35% | 32% | 28% |
+| ret/DD | 35.9x | 38.5x | 38.0x | 41.7x | 42.3x | 27.6x | 40.0x | 41.0x | 15.1x | 13.7x |
+| trades | 90 | 86 | 82 | 80 | 80 | 80 | 80 | 78 | 76 | 76 |
+| win rate | 62% | 59% | 49% | 45% | 42% | 39% | 39% | 36% | 32% | 28% |
 
 **Do not rank the caps off this table.** It compares them at one bet size, and at one bet
 size a wider cap is being handed a deeper drawdown for free — part of its bigger return is
@@ -411,14 +421,14 @@ strategies changed between those readings — only the dial did.
 
 The comparison that survives is the **levered one**: solve for the risk that holds every cap
 to the same drawdown, and the caps are being asked the same question. That chart lives at the
-bottom of every cap-family report page and it puts **2.5R first**, which is why it is
+bottom of every cap-family report page and it puts **1.9R first**, which is why it is
 quickfix's default.
 See [Choosing the profit cap](#choosing-the-profit-cap--the-section-at-the-bottom-of-the-page).
 
-What this table *is* good for is the shape: **drawdown moves in plateaus** (5.1% → 6.8% →
-10.1% → 16.7%), because on ~80 trades the worst path is dominated by a handful of trades and
+What this table *is* good for is the shape: **drawdown moves in plateaus** (~6% → 8% → 12% →
+19.5%), because on ~80 trades the worst path is dominated by a handful of trades and
 only jumps when the cap crosses one of their exits. Win rate falls monotonically as the cap
-widens, from 61% at 2R to 28% uncapped. Both of those are structural and will hold; the
+widens, from 62% at 2R to 28% uncapped. Both of those are structural and will hold; the
 specific peaks will not.
 
 ---
@@ -692,7 +702,7 @@ the same 0R–10R grid**, stacked, read top to bottom:
    drawdown rises monotonically with risk) so every cap bottoms out in the same hole.
 
 **Why both, in that order.** The first is honest about what happened but cannot rank
-anything: with the bet fixed, the drawdown fans out from 4.3% to 28.0% across the grid, so a
+anything: with the bet fixed, the drawdown fans out from 6.0% to 36.7% across the grid, so a
 wider cap's bigger return is partly just the deeper hole it was allowed to dig. Seeing that
 fan is what makes the second chart's point land. The second asks the question the ranking
 metric implies — for the same pain, which cap ends up with the most money? — and it is the
@@ -707,9 +717,9 @@ capital line in different units.
 covered everything at tenth-R resolution there was nothing left to zoom into.)
 
 **It reorders the family, and it flattens it.** Levered to equal drawdown the top of the grid
-is **1.9R ($306,421, 1.391% risk, 34.4x)** — which is quickfix's default, so the strategy now
-sits on the point its own chart picks — then **2R ($299,000, 1.391%)**, **3.7R ($291,206,
-1.211%)**, **2.5R ($290,519, 1.175%)** and **5R ($289,469, 1.027%)**. Five settings inside 6%
+is **1.9R ($322,267, 1.391% risk, 37.0x)** — which is quickfix's default, so the strategy now
+sits on the point its own chart picks — then **3.7R ($316,945, 1.211%)**, **2R ($315,290,
+1.391%)**, **3.5R ($308,848, 1.205%)** and **2.5R ($307,283, 1.175%)**. Five settings inside 5%
 of each other, which is nothing on this sample. What the chart says clearly is the *bottom*:
 the uncapped run is the **worst of the whole family** at $158,195, because it must be sized
 down to 0.396% per trade to hold 6%.

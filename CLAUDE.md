@@ -210,7 +210,17 @@ NO EM DASHES in report prose (user, 2026-07-28) -- use a comma. The only survivo
 explicitly fine) and `&ndash;` ranges like "Dec 2025 &ndash; Jul 2026".
 
 The DAILY CALENDAR (`DAILY_HTML`: date, total capital, drawdown, positions open, that day's
-entries and exits) is on BOTH page types and PRINTS. It was a collapsed
+entries and exits) is on BOTH page types and PRINTS. Activity is coloured PURPLE for opened
+and BLUE for closed (`--opened` / `--closed`, user 2026-07-28) -- NOT the page's green/red,
+which mean won and lost, and an entry has no outcome yet.
+
+TABLE WIDTHS: `table.trades` is `table-layout:fixed`, so widths come from the header row and
+nowhere else. `COLS`/`MCOLS` carried a `w` percentage that was NEVER EMITTED, so every column
+got an equal share and the printed blotter wrapped market names while Side and Bars sat half
+empty. Widths are now written onto each `<th>` and must sum to 100. On top of that the print
+stylesheet drops `table.trades` to 9px / 3-4px padding, because twelve columns do not fit A4
+portrait at screen size -- verified at the real print width. Shrink the type, do not starve a
+column to feed another. It was a collapsed
 `<details class="noprint">` on the interactive page only and absent from report.html, so the
 PDF never carried it and the user went looking; do not put it back behind a disclosure.
 

@@ -454,11 +454,15 @@ Per strategy, `<strategy>` being `quickfix` today.
 ### The daily calendar
 
 Every trading day, in order: date, **total capital**, drawdown, positions open, and the
-entries and exits booked that day (entries green, exits red, an em dash where nothing
-happened). It scrolls inside its own box on screen and the print stylesheet opens it out, so
+entries and exits booked that day. **Purple = a position opened, blue = a position closed**
+(an em dash where nothing happened). Deliberately not the green/red used everywhere else on
+the page: there green and red mean *won* and *lost*, and an entry has no outcome yet, so
+colouring it green said something untrue. It scrolls inside its own box on screen and the print stylesheet opens it out, so
 it runs to several pages of the PDF.
 
-**It is on both page types and it prints** (user, 2026-07-28). It used to be a collapsed
+**It is on both page types and it prints** (user, 2026-07-28). Its `Activity` column carries
+61% of the width, because it is the column with something to say; date, capital, drawdown and
+open share the rest. It used to be a collapsed
 `<details class="noprint">` on the interactive page only and was left out of `report.html`
 altogether, on the reasoning that a 180-row table per strategy would bloat the PDF; the
 effect was that the calendar simply was not there when it was wanted. One markup block,
@@ -495,6 +499,23 @@ The text lives in `strategies.py` (`SHARED_RULES`, `entry_mechanics(risk_pct)`,
 as the exact mirror. Two of those are **functions, not constants**, because they quote numbers
 that are dials: `entry_mechanics` states 1R as a percentage of capital (it said a hardcoded
 "1R = 1%" until the risk moved off 1%), and `rule4_text` states the cap.
+
+### Table widths in the PDF
+
+`table.trades` is `table-layout: fixed`, so **column widths come from the header row and
+nowhere else**. `COLS` and `MCOLS` have carried a `w` percentage from the start and it was
+never emitted into the markup, so every column silently got an equal share: in the printed
+blotter the market names wrapped onto two lines while `Side` and `Bars` sat half empty (found
+by reading an exported PDF, 2026-07-28). The widths are now written onto each `<th>`, and the
+daily table carries its own in `DAILY_HTML`. They sum to 100 — keep it that way.
+
+Widths alone were not enough. The blotter is **twelve columns** and does not fit 188 mm of A4
+portrait at screen type size: measured at the real print width a quarter of the market names
+still wrapped and the date, R and P&L columns overflowed their cells. The print stylesheet
+therefore drops `table.trades` to 9px with 3–4px cell padding. That fits everything with only
+the single longest market name (`Chicago_SRW_Wheat_Futures_CBOT`, 30 characters) taking two
+lines, on 6 of 90 rows. Shrinking the type is the right lever here; starving one column to
+feed another only moves the problem.
 
 ### PDF export
 

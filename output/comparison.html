@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Strategy comparison</title>
+<style>
+:root{
+  --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
+  --grid:rgba(20,32,28,.09); --border:rgba(20,32,28,.11);
+  --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
+  --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
+  --bars:#5C7D8A; --pos:#0F7B57;
+  --opened:#7B1FA2; --closed:#1565C0;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0D1512; --surface:#121C18; --ink:#E9EFEB; --ink2:#9BAAA3; --ink3:#66756E;
+    --grid:rgba(233,239,235,.08); --border:rgba(233,239,235,.11);
+    --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
+    --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
+    --bars:#79A0B2; --pos:#3CC796;
+    --opened:#C77DFF; --closed:#64B5F6;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
+  --grid:rgba(20,32,28,.09); --border:rgba(20,32,28,.11);
+  --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
+  --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
+  --bars:#5C7D8A; --pos:#0F7B57;
+  --opened:#7B1FA2; --closed:#1565C0;
+}
+:root[data-theme="dark"]{
+  --bg:#0D1512; --surface:#121C18; --ink:#E9EFEB; --ink2:#9BAAA3; --ink3:#66756E;
+  --grid:rgba(233,239,235,.08); --border:rgba(233,239,235,.11);
+  --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
+  --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
+  --bars:#79A0B2; --pos:#3CC796;
+  --opened:#C77DFF; --closed:#64B5F6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.5;-webkit-font-smoothing:antialiased;}
+.mono{font-family:"SF Mono","JetBrains Mono","Cascadia Code",Consolas,"Roboto Mono",ui-monospace,monospace;
+  font-variant-numeric:tabular-nums;}
+.wrap{max-width:1080px;margin:0 auto;padding:clamp(20px,4vw,44px) clamp(16px,4vw,32px) 56px;}
+/* strategy switcher: one button per strategy, current one filled */
+.nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:26px;
+  padding-bottom:18px;border-bottom:1px solid var(--border);}
+.nav .lbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin-right:4px;}
+.nav a{display:inline-flex;flex-direction:column;gap:1px;padding:7px 14px;border-radius:9px;
+  border:1px solid var(--border);background:var(--surface);color:var(--ink2);
+  text-decoration:none;font-size:13px;font-weight:600;transition:border-color .12s,color .12s;}
+.nav a .sub{font-size:10.5px;font-weight:500;color:var(--ink3);letter-spacing:0;}
+.nav a:hover{border-color:var(--accent);color:var(--ink);}
+.nav a.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.nav a.on .sub{color:rgba(255,255,255,.82);}
+.navbtns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+.pdfbtn{padding:8px 14px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink2);font-size:13px;font-weight:600;cursor:pointer;
+  font-family:inherit;}
+.pdfbtn:hover{border-color:var(--accent);color:var(--ink);}
+/* conclusions editor */
+.cfield{margin-top:22px;}
+.cfield label{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin-bottom:7px;}
+.cfield textarea{width:100%;min-height:230px;padding:14px 16px;font:15px/1.6 inherit;
+  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  color:var(--ink);background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;resize:vertical;}
+.cfield textarea:focus{outline:none;border-color:var(--accent);}
+.cbar{display:flex;align-items:center;gap:12px;margin-top:18px;}
+.cbar .status{font-size:12px;color:var(--ink3);}
+/* conclusions as printed at the end of the report */
+.concl{margin-top:38px;padding-top:6px;}
+.conclbody{white-space:pre-wrap;font-size:14px;color:var(--ink2);line-height:1.65;
+  padding:14px 18px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;}
+header{margin-bottom:26px;}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:600;margin-bottom:12px;}
+h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spacing:-.02em;
+  text-wrap:balance;font-weight:650;}
+/* No max-width: the lede and the honesty note run the full column so their left and right
+   edges line up with the rule cards, KPI row and tables below them. */
+.lede{color:var(--ink2);font-size:15px;margin:0;}
+/* the four rules, so a first-time reader can follow the report */
+.rules{margin:24px 0 0;border:1px solid var(--border);border-radius:12px;
+  background:var(--surface);overflow:hidden;}
+.rules .rhead{padding:12px 16px 10px;border-bottom:1px solid var(--border);}
+.rules .rhead .t{font-weight:650;font-size:14px;letter-spacing:-.01em;}
+.rules .rhead .s{font-size:12px;color:var(--ink3);margin-top:2px;}
+.rulegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);}
+@media(max-width:720px){.rulegrid{grid-template-columns:1fr}}
+.rule{background:var(--surface);padding:12px 16px 14px;display:flex;gap:11px;}
+.rule .n{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);
+  color:var(--accent);font-size:11.5px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;margin-top:1px;}
+.rule .rn{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin-bottom:3px;}
+.rule .rt{font-size:13px;color:var(--ink2);line-height:1.5;}
+.rule b{color:var(--ink);font-weight:600;}
+.rulefoot{padding:12px 16px;border-top:1px solid var(--border);font-size:13px;
+  color:var(--ink2);line-height:1.5;}
+.rulefoot b{color:var(--ink);font-weight:600;}
+.rulefoot + .rulefoot{border-top:1px dashed var(--border);}
+/* risk control: re-runs the shared-account simulation in the browser */
+.riskbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:22px 0 0;
+  padding:12px 16px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;}
+.riskbar .lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;}
+.riskbar input[type=number]{width:92px;padding:5px 7px;font-size:14px;font-weight:600;
+  color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-variant-numeric:tabular-nums;}
+/* The up/down buttons ARE the control here, so they must always be visible. Chrome renders
+   the spinners only while the field is hovered or focused; forcing the appearance and
+   opacity keeps them on permanently. */
+.riskbar input[type=number]::-webkit-outer-spin-button,
+.riskbar input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance:inner-spin-button;opacity:1;margin:0;height:26px;}
+.riskbar .unit{font-size:13px;color:var(--ink2);margin-left:-6px;}
+.riskbar .warn{flex-basis:100%;font-size:11.5px;color:var(--neg);}
+.riskbar .warn:empty{display:none}
+.riskbar .hint{font-size:11.5px;color:var(--ink3);}
+.riskbar .hint:empty{display:none}
+.riskbar .hint b{color:var(--ink2);font-weight:600;}
+/* Rule 4's cap dial. Sits directly under the rule cards because it IS Rule 4, and unlike
+   the risk control there is one PER STRATEGY -- Rule 4 is what tells the strategies apart,
+   so a single shared dial would collapse them onto each other on the report. */
+.capbar{margin-top:-1px;border-top-left-radius:0;border-top-right-radius:0;}
+.capbar .nocap{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);
+  cursor:pointer;user-select:none;}
+.capbar .nocap input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
+.capbar input[type=number]:disabled{opacity:.4;cursor:not-allowed;}
+.capbar .hint{flex-basis:100%;font-size:11.5px;color:var(--ink3);}
+.capbar .hint:empty{display:none}
+.capbar .hint b{color:var(--ink2);font-weight:600;}
+/* the rules block and its dial read as one object */
+.rules:has(+ .capbar){border-bottom-left-radius:0;border-bottom-right-radius:0;}
+/* the cap sweep sits right under the dial: it is what the dial does, across the whole grid */
+.sweepcard{margin-top:14px;}
+.sweepplot{min-height:330px;}
+.chartnote{margin:0;padding:0 14px 4px;font-size:12px;color:var(--ink3);line-height:1.5;
+  max-width:78ch;}
+.chartnote b{color:var(--ink2);font-weight:600;}
+/* the chart's own reading, generated from the chart so it cannot go stale */
+.findings{padding:6px 14px 14px;max-width:86ch;}
+.findings h4{margin:15px 0 3px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;}
+.findings p{margin:0;font-size:13px;color:var(--ink2);line-height:1.55;}
+.findings b{color:var(--ink);font-weight:600;}
+/* the one finding the whole report exists to make, marked as such (user, 2026-07-28).
+   print-color-adjust:exact is already set on the page, so it survives the PDF. */
+.hl{background:#FFE86B;color:#16201C;padding:1px 5px;border-radius:4px;font-weight:700;}
+@media (prefers-color-scheme:dark){.hl{background:#F2D34A;color:#16201C;}}
+:root[data-theme="dark"] .hl{background:#F2D34A;color:#16201C;}
+:root[data-theme="light"] .hl{background:#FFE86B;color:#16201C;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:22px 0 22px;}
+.kpi{background:var(--surface);padding:14px 16px 15px;display:flex;flex-direction:column;gap:5px;}
+.kpi .k{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:600;}
+.kpi .v{font-size:clamp(17px,2.2vw,21px);font-weight:600;letter-spacing:-.01em;}
+.kpi .v.pos{color:var(--pos)}.kpi .v.neg{color:var(--neg)}
+.kpi .sub{font-size:11px;color:var(--ink3);}
+@media(max-width:460px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:16px clamp(10px,2vw,18px) 10px;}
+.charthead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2px 6px 10px;}
+.charthead .t{font-weight:600;font-size:14px;letter-spacing:-.01em;}
+.charthead .s{font-size:12px;color:var(--ink3);}
+.plot{position:relative;width:100%;touch-action:none;}
+.plot svg{display:block;width:100%;height:auto;}
+text{font-family:"SF Mono",Consolas,ui-monospace,monospace;}
+.tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:12px;min-width:180px;
+  max-width:260px;box-shadow:0 8px 26px rgba(0,0,0,.18);z-index:5;}
+.tip .d{font-weight:600;margin-bottom:6px;letter-spacing:-.01em;}
+.tip .row{display:flex;justify-content:space-between;gap:14px;color:var(--ink2);margin:2px 0;}
+.tip .row b{color:var(--ink);font-weight:600;}
+.tip .ev{margin-top:7px;padding-top:7px;border-top:1px solid var(--border);font-size:11px;color:var(--ink2);}
+.tip .ev .in{color:var(--pos)}.tip .ev .out{color:var(--neg)}
+.tip .mk{margin-top:6px;font-size:11px;color:var(--ink3);line-height:1.35;}
+.note{margin:22px 0 0;padding:14px 18px;background:var(--accent-soft);
+  border-left:3px solid var(--accent);border-radius:0 8px 8px 0;font-size:13.5px;color:var(--ink2);}
+.note b{color:var(--ink);font-weight:600;}
+details{margin-top:22px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);}
+summary{cursor:pointer;padding:13px 16px;font-weight:600;font-size:13px;list-style:none;color:var(--ink2);}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"\25B8  ";color:var(--accent);}
+details[open] summary::before{content:"\25BE  ";}
+.tscroll{max-height:340px;overflow:auto;border-top:1px solid var(--border);}
+table{border-collapse:collapse;width:100%;font-size:12px;}
+th,td{padding:6px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);}
+th{position:sticky;top:0;background:var(--surface);color:var(--ink3);font-weight:600;text-align:right;
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;}
+th:first-child,td:first-child{text-align:left;}
+tbody tr:hover{background:var(--accent-soft);}
+td.neg{color:var(--neg)}td.pos{color:var(--pos)}
+.section-h{font-size:16px;font-weight:650;letter-spacing:-.01em;margin:34px 2px 12px;}
+.stats4{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+@media(max-width:640px){.stats4{grid-template-columns:repeat(2,1fr)}}
+.tradecard{margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);}
+.tradescroll{max-height:470px;overflow-y:auto;overflow-x:hidden;}
+table.trades{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;table-layout:fixed;}
+table.trades th,table.trades td{padding:6px 7px;}
+table.trades th{position:sticky;top:0;background:var(--surface);cursor:pointer;user-select:none;z-index:1;}
+table.trades th:hover{color:var(--ink);}
+table.trades th.sorted{color:var(--accent);}
+table.trades .ar{font-size:9px;margin-left:2px;}
+table.trades td.l,table.trades th.l{text-align:left;}
+table.trades td.act{white-space:normal;font-size:11px;}
+/* the two text columns (market, reason) wrap; the rest stay one line */
+table.trades td:first-child,table.trades th:first-child,
+table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
+.tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:20px;
+  background:var(--grid);color:var(--ink3);font-size:9.5px;letter-spacing:.04em;
+  text-transform:uppercase;font-weight:600;vertical-align:1px;}
+.dbar{position:relative;height:5px;margin-top:4px;border-radius:3px;background:var(--grid);}
+.dbar i{position:absolute;top:0;height:100%;border-radius:3px;}
+.dbar .z{position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:var(--border);}
+footer{margin-top:30px;font-size:12px;color:var(--ink3);}
+/* modal: strategy picker for the PDF export */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.34);z-index:40;display:flex;
+  align-items:center;justify-content:center;padding:20px;}
+.dlg{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px 16px;max-width:460px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3);}
+.dlg h4{margin:0 0 4px;font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.dlg p{margin:0 0 12px;font-size:12.5px;color:var(--ink3);}
+.dlglist{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.dlgrow{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;}
+.dlgrow + .dlgrow{border-top:1px solid var(--border);}
+.dlgrow:hover{background:var(--accent-soft);}
+.dlgrow input{margin:0;cursor:pointer;accent-color:var(--accent);}
+.dlgrow .nm{font-size:13.5px;font-weight:600;}
+.dlgrow .sb{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:1px;}
+.dlgbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+.dlgbtns button{padding:7px 14px;font-size:13px;font-weight:600;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg);color:var(--ink2);cursor:pointer;
+  font-family:inherit;}
+.dlgbtns button.pri{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dlgbtns button:hover{border-color:var(--accent);}
+.rep + .rep{margin-top:48px;padding-top:8px;}
+/* comparison page: the four Rule 4s side by side, then the two bar charts */
+.cmpcards{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:24px 0 0;}
+@media(max-width:720px){.cmpcards{grid-template-columns:1fr}}
+.cmpcard{background:var(--surface);padding:13px 16px 15px;}
+.cmpcard .nm{font-weight:650;font-size:14px;letter-spacing:-.01em;}
+.cmpcard .r4{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin:6px 0 3px;}
+.cmpcard .rt{font-size:12.5px;color:var(--ink2);line-height:1.5;}
+.cmpcard .rt b{color:var(--ink);font-weight:600;}
+.barplot{min-height:300px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---- print / PDF -------------------------------------------------------------
+   Forced to the LIGHT palette: the dark theme would print as a solid ink-heavy
+   background. print-color-adjust keeps the greens, reds and tints that carry meaning. */
+@media print{
+  :root, :root[data-theme="dark"]{
+    --bg:#FFFFFF; --surface:#FFFFFF; --ink:#16201C; --ink2:#3F4C47; --ink3:#6B7A74;
+    --grid:rgba(20,32,28,.10); --border:rgba(20,32,28,.22);
+    --accent:#0F7B57; --accent-soft:rgba(15,123,87,.10); --accent-line:#0F7B57;
+    --neg:#B4402A; --neg-soft:rgba(180,64,42,.12); --ref:rgba(20,32,28,.35);
+    --bars:#5C7D8A; --pos:#0F7B57;
+    --opened:#7B1FA2; --closed:#1565C0;
+  }
+  @page{size:A4 portrait;margin:13mm 11mm;}
+  html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .noprint{display:none!important;}
+  /* the cap dial is one of those, and :has(+ .capbar) still matches a hidden sibling --
+     give the rules block its bottom corners back rather than leaving them squared off */
+  .rules{border-bottom-left-radius:12px!important;border-bottom-right-radius:12px!important;}
+  .wrap{max-width:none;padding:0;}
+  /* scroll boxes must open up: a PDF cannot be scrolled */
+  .tradescroll,.tscroll{max-height:none!important;overflow:visible!important;}
+  /* The blotter is TWELVE columns and simply does not fit 188mm of A4 portrait at the
+     screen type size: measured at the real print width, a quarter of the market names
+     wrapped and the dates, R and P&L columns overflowed too. Shrinking the type and the
+     cell padding for print fits it, which is far better than starving one column to feed
+     another -- the column widths themselves are percentages and stay as they are. */
+  table.trades{font-size:9px;}
+  table.trades th,table.trades td{padding:3px 4px;}
+  table.trades td.act{font-size:8.5px;}
+  table.trades th,table th{position:static;}
+  /* one strategy per page, and never split a block across the fold */
+  .rep{break-before:page;}
+  .rep:first-of-type{break-before:auto;}
+  .card,.kpis,.stats4,.rules,.note,.tradecard{break-inside:avoid;}
+  .section-h{break-after:avoid;}
+  tr{break-inside:avoid;}
+  a{text-decoration:none;color:inherit;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav noprint"><span class="lbl">Strategy</span><a href="equity_quickfix.html">Quickfix</a><a href="equity_quickfixwick.html">Quickfixwick</a><a href="equity_quickfixclose.html">Quickfixclose</a><a href="equity_quickfixopen.html">Quickfixopen</a><span class="navbtns"><a class="pdfbtn" href="report.html" target="_blank">Open report</a></span></nav>
+
+  <header>
+    <div class="eyebrow">Strategy comparison &middot; daily &middot; $100k starting capital</div>
+    <h1>Four ways to take the profit</h1>
+    <p class="lede">All 4 strategies share <b>rules 1 to 3</b> exactly, so they take the <b>same setups on the same bars</b>, and the only thing that differs is Rule 4, where the profit is taken. Everything below is therefore a comparison of <b>exits and nothing else</b>. One shared account per strategy, the same days, net of the same slippage. Read the two charts in order: the first is what happened, the second is the ranking.</p>
+  </header>
+
+  <section class="cmpcards" data-el="cards"></section>
+
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">The four strategies at a constant 1% risk per trade</span>
+      <span class="s">real result &middot; drawdown varies &middot; not a ranking</span>
+    </div>
+    <p class="chartnote">What each one actually did on the same fixed bet, over the same days
+      and the same setups. The risk is pinned so the <b>drawdown is free to move</b>, which
+      is why the tallest capital bar is not automatically the best strategy, part of its
+      return is the deeper hole it was allowed to dig. Rank them on the chart below.</p>
+    <div class="plot barplot" data-el="fxplot">
+      <svg data-el="fxsvg" role="img" aria-label="Final capital, max drawdown, return over drawdown and win rate for each strategy at a constant 1 percent risk"></svg>
+      <div class="tip" data-el="fxtip"></div>
+    </div>
+    <div class="findings" data-el="fxfindings"></div>
+  </section>
+
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">The same four levered to a constant 6% drawdown</span>
+      <span class="s">risk solved per strategy &middot; equal pain &middot; this is the ranking</span>
+    </div>
+    <p class="chartnote">Risk is a free variable, so the honest question is: held to the
+      <b>same 6% maximum drawdown</b>, which strategy ends up with the most money? The risk
+      is solved per strategy to make that true, and the second pane is what each one is then
+      allowed to bet.</p>
+    <div class="plot barplot" data-el="nwplot">
+      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk per trade allowed and win rate for each strategy at a constant 6 percent drawdown"></svg>
+      <div class="tip" data-el="nwtip"></div>
+    </div>
+    <div class="findings" data-el="nwfindings"></div>
+  </section>
+
+  <h2 class="section-h">The numbers</h2>
+  <div class="tradecard">
+    <div class="charthead" style="padding:12px 14px 10px">
+      <span class="t">Both readings, side by side</span>
+      <span class="s"><span data-el="tblcount"></span></span>
+    </div>
+    <div class="tradescroll">
+      <table class="trades"><thead><tr>
+        <th class="l" style="width:15%">Strategy</th>
+        <th class="l" style="width:25%">Rule 4</th>
+        <th style="width:7%">Trades</th>
+        <th style="width:8%">Win %</th>
+        <th style="width:11%">Capital @1%</th>
+        <th style="width:8%">Max DD</th>
+        <th style="width:7%">Ret/DD</th>
+        <th style="width:9%">Risk for 6%</th>
+        <th style="width:10%">Capital @6%</th>
+      </tr></thead><tbody data-el="cmpbody"></tbody></table>
+    </div>
+  </div>
+
+  <p class="note"><b>Backtest on daily bars, net of slippage.</b> Costs are charged as tick slippage, 1 tick on entry, 1 on a limit take-profit or a scheduled close-out, 3 on a stop, converted to R through each trade's own risk distance. The two quickest exits rest hardest on the fill model: <b>Quickfixclose</b> assumes one daily bar gives us both a fill at the reversal level intraday and a fill at that day's close, and because the entry trigger requires the close to be beyond the entry price it can only lose when slippage exceeds the move, which is why its drawdown is near zero. <b>Quickfixopen</b> assumes the next open is fillable and carries no stop, so an adverse gap costs more than 1R. Neither is a free lunch, both are the daily-proxy assumption showing through, and intraday prices are what would settle it.</p>
+  <footer class="mono">source: &lt;strategy&gt;_portfolio_daily.xlsx and _variants.json &middot; top chart at a constant 1% risk, bottom levered to a constant 6% drawdown &middot; the shared money management is replayed in the browser from the same code the strategy pages run</footer>
+
+</div>
+<script>
+const STRATS = [{"key":"quickfix","title":"Quickfix","rule4":"target = 1.9R, or an opposite reversal nearer than 1.9R","rule4_text":"Take profit at <b>1.9R</b>. If a bearish reversal sits closer than 1.9R below the entry, that level becomes the target instead, price is likely to turn there rather than run through it. <b>1.9R is a hard ceiling on every winner.</b>","r4":"1.9","risk":1.39,"solved":true},{"key":"quickfixwick","title":"Quickfixwick","rule4":"target = one tick beyond the entry bar's own wick (a short: below its low)","rule4_text":"Take profit <b>one tick below the entry bar's own low</b>, a tick past the wick it printed on the way back down. The level is fixed the moment the trade is placed and never moves, no reversal level and no R ceiling is involved. The whole trade is contained by the entry bar: the stop one tick above its high, the target one tick below its low. This is a bet on the <b>initial energy</b> of the move, if the thesis behind the entry is right, that low should break more often than the high does. A winner is worth whatever the entry bar measured, which is usually well under 3.5R.","r4":"wick","risk":1.0,"solved":false},{"key":"quickfixclose","title":"Quickfixclose","rule4":"exit = the entry bar's own close, flat the same day","rule4_text":"Close the position at <b>the entry bar's own close</b>. The trade is opened and shut on the same day: it fills at the first reversal and is marked out at that day's closing price, so nothing is ever carried overnight. The entry trigger requires that close to be beyond the entry price, so on gross terms this exit cannot lose, the losers are the trades whose move was smaller than the slippage charged to get in and out. <b>The stop never trades</b>, it is spent by the time the close confirms the entry and is here only to size the position.","r4":"close","risk":1.0,"solved":false},{"key":"quickfixopen","title":"Quickfixopen","rule4":"exit = the open of the price bar that follows the entry bar","rule4_text":"Close the position at <b>the open of the next price bar</b>, usually the following day. The trade is carried through one nightly session and no further. That open is the first price of the bar, so nothing can trade ahead of it and the exit is <b>unconditional</b>: there is no level to reach and no path to be ambiguous about. <b>The stop never trades</b>, it is here only to size the position, which means an adverse overnight gap takes the trade out for more than 1R.","r4":"open","risk":1.0,"solved":false}];
+// The REFERENCE risk: what the shared variant grid in _variants.json is priced at, and the
+// only risk at which the pages' own figures are pinned to a server figure. It is NOT what a
+// page opens at -- each strategy opens at its own default (DATA.risk_pct), the risk that puts
+// that strategy at the 6% drawdown budget.
+const REF_RISK = 1.39;
+// Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
+// strategy on the page: two strategies sitting on the same cap are one run, stored once.
+// `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra` holds
+// the settings that are NOT caps (the entry-bar wick, the day close, the next open): same
+// packed rows, same replay, but not points on that axis, so a strategy sitting on one
+// carries neither the dial nor the sweep.
+//
+// Why this is precomputed while the risk % is replayed live: risk changes only the DOLLAR
+// SIZING of a fixed trade list, so the browser can redo the arithmetic. Rule 4 changes the
+// trades. It moves every exit, and since only one position per market runs at a time, an
+// earlier exit frees that market for a signal a longer hold would have missed -- the trade
+// list itself is different, and there is nothing to replay it from.
+const VARIANTS = {"caps":["1.9"],"extra":["wick","close","open"],"labels":{"close":"day close","wick":"entry bar wick","1.9":"1.9R","open":"next open"},"texts":{"close":{"label":"day close","rule4":"exit = the entry bar's own close, flat the same day","rule4_text":"Close the position at <b>the entry bar's own close</b>. The trade is opened and shut on the same day: it fills at the first reversal and is marked out at that day's closing price, so nothing is ever carried overnight. The entry trigger requires that close to be beyond the entry price, so on gross terms this exit cannot lose, the losers are the trades whose move was smaller than the slippage charged to get in and out. <b>The stop never trades</b>, it is spent by the time the close confirms the entry and is here only to size the position.","lede":"Flat by the bell: the position is closed at the entry bar's own close, the same day it was opened, so nothing is carried through the nightly session. It fills at the first reversal and is marked out at that day's closing price.","caveat":"entry and exit both land on one daily bar, so the fill at the reversal and the fill at the close are assumed to be the same day's first and last prices"},"wick":{"label":"entry bar wick","rule4":"target = one tick beyond the entry bar's own wick (a short: below its low)","rule4_text":"Take profit <b>one tick below the entry bar's own low</b>, a tick past the wick it printed on the way back down. The level is fixed the moment the trade is placed and never moves, no reversal level and no R ceiling is involved. The whole trade is contained by the entry bar: the stop one tick above its high, the target one tick below its low. This is a bet on the <b>initial energy</b> of the move, if the thesis behind the entry is right, that low should break more often than the high does. A winner is worth whatever the entry bar measured, which is usually well under 3.5R.","lede":"Captures the initial energy move only: the target is fixed at entry, one tick beyond the entry bar's own wick, a tick below its low on a short, and never moves. Stop and target are the two sides of the entry bar, so the bet is simply that its low breaks before its high.","caveat":"the entry bar's low counts as broken whenever the day's range touches one tick below it"},"1.9":{"rule4":"target = 1.9R, or an opposite reversal nearer than 1.9R","rule4_text":"Take profit at <b>1.9R</b>. If a bearish reversal sits closer than 1.9R below the entry, that level becomes the target instead, price is likely to turn there rather than run through it. <b>1.9R is a hard ceiling on every winner.</b>","lede":"Takes profit at a fixed ceiling: a trade is closed at 1.9R, or earlier at the first opposite reversal that sits between entry and 1.9R. The 1.9R ceiling caps every winner.","caveat":"a 1.9R target counts as hit whenever the day's range touches it","label":"1.9R"},"open":{"label":"next open","rule4":"exit = the open of the price bar that follows the entry bar","rule4_text":"Close the position at <b>the open of the next price bar</b>, usually the following day. The trade is carried through one nightly session and no further. That open is the first price of the bar, so nothing can trade ahead of it and the exit is <b>unconditional</b>: there is no level to reach and no path to be ambiguous about. <b>The stop never trades</b>, it is here only to size the position, which means an adverse overnight gap takes the trade out for more than 1R.","lede":"Holds through one night and no longer: the position is closed at the open of the price bar that follows the entry bar. That open is the first price of the day, so the exit is unconditional, and what the trade earns is exactly what the nightly session did to it.","caveat":"the whole result is the overnight move, so it rests entirely on the next bar's open being a fillable price"}},"cols":["m","side","din","dout","xd","gr","cr","bars","pin","pout","sl","reason"],"reasons":["target_r","stop","unknown_pl","bullish_reversal","bearish_reversal","data_end","open_at_end","target_bar","exit_close","exit_open"],"markets":["Bitcoin_Per_USD_Binance","Bitcoin_Per_USD_CME","Chicago_SRW_Wheat_Futures_CBOT","CME_SOFR_Futures_3M","Cocoa_NYCSCE_Futures","Coffee_NYCSCE_Futures","Corn_CBOT_Futures","Dow_Futures_E_mini","Ethereum_Per_USD_Binance","EURO_Futures","EURO_STOXX_50_Index","German_Long_Bund","Global_X_Uranium_ETF","Gold_Futures_COMEX","iShares_Silver_Trust","Japanese_10_Year_Bond_Futures","Japanese_Yen_Futures","JPY_EUR_Cross_Rate","Live_Cattle_Futures_CME","Nasdaq_100_E_mini","NASDAQ_100_Index","NIKKEI_225_Index","NY_Copper_Futures","NY_Crude_Oil_Futures","NY_Natural_Gas_Futures","NY_Palladium_Futures","NY_Platinum_Futures","ProShares_UltraPro_Dow","Proshares_VIX_Short_Term_Futures_ETF","S_P_500_E_mini","S_P_500_Index","Silver_Futures_COMEX","SPDR_Gold_Shares","Sugar_World_CSCE_Futures","Teucrium_Wheat_Fund","United_States_Natural_Gas_Fund_LP","United_States_Oil_Fund_LP","US_10_Year_T_Note_Futures","US_30_Year_T_Bond_Futures_CBOT","US_Dollar_Index_Futures","USD_EUR_Cross_Rate"],"days":["2025-12-18","2025-12-19","2025-12-20","2025-12-30","2026-01-01","2026-01-02","2026-01-03","2026-01-04","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-10","2026-01-11","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-17","2026-01-18","2026-01-19","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-24","2026-01-25","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-01-31","2026-02-01","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-07","2026-02-08","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-14","2026-02-15","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-21","2026-02-22","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-02-28","2026-03-01","2026-03-02","2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-07","2026-03-08","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-14","2026-03-15","2026-03-16","2026-03-17","2026-03-18","2026-03-19","2026-03-20","2026-03-21","2026-03-22","2026-03-23","2026-03-24","2026-03-25","2026-03-26","2026-03-27","2026-03-28","2026-03-29","2026-03-30","2026-03-31","2026-04-01","2026-04-02","2026-04-03","2026-04-04","2026-04-05","2026-04-06","2026-04-07","2026-04-08","2026-04-09","2026-04-10","2026-04-11","2026-04-12","2026-04-13","2026-04-14","2026-04-15","2026-04-16","2026-04-17","2026-04-18","2026-04-20","2026-04-21","2026-04-22","2026-04-23","2026-04-24","2026-04-27","2026-04-28","2026-04-29","2026-04-30","2026-05-01","2026-05-04","2026-05-05","2026-05-06","2026-05-07","2026-05-08","2026-05-11","2026-05-12","2026-05-13","2026-05-14","2026-05-15","2026-05-18","2026-05-19","2026-05-20","2026-05-21","2026-05-22","2026-05-25","2026-05-26","2026-05-27","2026-05-28","2026-06-01","2026-06-02","2026-06-03","2026-06-04","2026-06-05","2026-06-08","2026-06-09","2026-06-10","2026-06-11","2026-06-12","2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19","2026-06-22","2026-06-23","2026-06-24","2026-06-25","2026-06-26","2026-06-29","2026-06-30","2026-07-01","2026-07-02","2026-07-03","2026-07-07","2026-07-08","2026-07-09","2026-07-10","2026-07-13","2026-07-14","2026-07-15","2026-07-16","2026-07-17","2026-07-20","2026-07-21","2026-07-22","2026-07-23","2026-07-24","2026-07-27"],"defaults":{"quickfix":"1.9","quickfixwick":"wick","quickfixclose":"close","quickfixopen":"open"},"v":{"close":{"rows":[[13,0,0,0,0,1.7169,0.012048,0,4393.0,4364.5,4409.6,8],[13,0,3,3,3,0.2428,0.007246,0,4393.0,4386.3,4420.6,8],[5,0,10,10,10,0.4644,0.003953,0,377.8,375.45,382.86,8],[30,0,10,10,10,4.4135,0.002418,0,6957.43,6920.93,6965.7,8],[5,0,11,11,11,0.8993,0.0033,0,377.8,372.35,383.86,8],[4,1,16,16,16,2.7021,0.042553,0,5097.0,5224.0,5050.0,8],[5,1,24,24,24,0.7251,0.006042,0,345.1,347.5,341.79,8],[30,0,30,30,30,0.591,0.00311,0,6982.4,6978.6,6988.83,8],[34,0,31,31,31,0.0556,0.111111,0,20.89,20.88,21.07,8],[8,1,32,32,32,0.1724,0.034483,0,2812.0,2822.0,2754.0,8],[18,0,32,32,32,2.6716,0.029851,0,239.06,237.27,239.73,8],[30,0,32,32,32,1.2813,0.001914,0,6982.4,6969.01,6992.85,8],[4,1,33,33,33,0.5461,0.013158,0,4082.0,4165.0,3930.0,8],[18,0,33,33,33,3.2286,0.028571,0,239.06,236.8,239.76,8],[0,1,36,36,36,1.2095,0.001058,0,76508.0,78794.0,74618.0,8],[4,1,36,36,36,0.8951,0.013986,0,4082.0,4210.0,3939.0,8],[30,0,36,36,36,0.6254,0.002099,0,6982.4,6976.44,6991.93,8],[10,0,37,37,37,1.6043,0.000668,0,6043.4,5995.35,6073.35,8],[4,1,38,38,38,0.0606,0.030303,0,4082.0,4086.0,4016.0,8],[22,1,39,39,39,0.5734,0.002312,0,5.7714,5.821,5.6849,8],[0,1,40,40,40,3.1135,0.000782,0,62630.0,70588.0,60074.0,8],[4,1,43,43,43,3.1515,0.060606,0,4082.0,4186.0,4049.0,8],[10,0,44,44,44,0.7298,0.001107,0,6060.23,6047.05,6078.29,8],[30,0,44,44,44,9.1419,0.004505,0,6982.4,6941.81,6986.84,8],[30,0,45,45,45,3.6907,0.001803,0,6982.4,6941.47,6993.49,8],[38,0,45,45,45,1.2069,0.068966,0,116.5,116.15,116.79,8],[10,0,46,46,46,1.26,0.000515,0,6060.23,6011.28,6099.08,8],[22,1,47,47,47,0.3362,0.002128,0,5.7714,5.803,5.6774,8],[38,0,57,57,57,0.8571,0.142857,0,118.02,117.9,118.16,8],[4,1,58,58,58,2.2564,0.051282,0,2990.0,3078.0,2951.0,8],[8,1,58,58,58,1.7368,0.105263,0,1818.0,1851.0,1799.0,8],[38,0,59,59,59,3.0,0.25,0,118.08,117.84,118.16,8],[13,0,64,64,64,0.611,0.002628,0,5358.1,5311.6,5434.2,8],[40,0,66,66,66,1.087,0.086957,0,0.8614,0.8589,0.8637,8],[30,1,67,67,67,1.5366,0.000846,0,6794.4,6830.71,6770.77,8],[40,0,67,67,67,0.0571,0.057143,0,0.8614,0.8612,0.8649,8],[40,0,68,68,68,0.2045,0.045455,0,0.8614,0.8605,0.8658,8],[0,0,79,79,79,2.3077,0.003017,0,75438.0,73908.0,76101.0,8],[36,0,82,82,82,0.2214,0.015267,0,121.72,121.43,123.03,8],[22,1,85,85,85,2.362,0.002967,0,5.3133,5.4725,5.2459,8],[13,1,86,86,86,2.3264,0.006944,0,4335.0,4402.0,4306.2,8],[36,0,93,93,93,3.7308,0.025641,0,130.16,127.25,130.94,8],[0,0,107,107,107,0.6509,0.001754,0,74900.0,74158.0,76040.0,8],[8,0,108,108,108,0.6875,0.125,0,2370.0,2359.0,2386.0,8],[18,0,108,108,108,1.5455,0.060606,0,251.58,251.07,251.91,8],[22,0,108,108,108,0.2019,0.00381,0,6.0956,6.085,6.1481,8],[18,0,109,109,109,8.3261,0.043478,0,251.45,247.62,251.91,8],[40,1,110,110,110,1.0,0.064516,0,0.8467,0.8498,0.8436,8],[7,0,114,114,114,1.3443,0.032787,0,49750.0,49668.0,49811.0,8],[1,0,117,117,117,4.5885,0.004115,0,79740.0,77510.0,80226.0,8],[29,0,118,118,118,2.1275,0.001197,0,7206.55,7171.0,7223.26,8],[2,0,119,119,119,1.0787,0.022472,0,662.6,653.0,671.5,8],[6,0,120,120,120,1.8947,0.105263,0,478.2,474.6,480.1,8],[16,0,121,121,121,0.7162,0.054054,0,0.006417,0.006391,0.006454,8],[18,0,121,121,121,1.904,0.016,0,255.38,253.0,256.63,8],[39,1,121,121,121,0.7796,0.008163,0,97.814,98.005,97.569,8],[16,0,122,122,122,0.5862,0.068966,0,0.006417,0.0064,0.006446,8],[19,0,122,122,122,2.2294,0.00034,0,27907.0,27776.0,27965.76,8],[6,0,123,123,123,5.8182,0.181818,0,486.4,480.0,487.5,8],[1,0,124,124,124,1.7495,0.003604,0,83046.0,82075.0,83601.0,8],[39,1,124,124,124,0.6571,0.008163,0,97.714,97.875,97.469,8],[9,0,125,125,125,0.8013,0.012821,0,1.1783,1.17705,1.17986,8],[26,0,125,125,125,0.7663,0.006873,0,2084.6,2062.3,2113.7,8],[13,0,127,127,127,1.384,0.016,0,4746.0,4728.7,4758.5,8],[13,0,128,128,128,1.5813,0.005333,0,4746.0,4686.7,4783.5,8],[31,0,128,128,128,0.2552,0.001042,0,86.081,85.591,88.001,8],[2,0,130,130,130,3.1507,0.027397,0,681.0,658.0,688.3,8],[39,0,134,134,134,1.8564,0.010256,0,99.376,99.014,99.571,8],[25,1,135,135,135,1.5,0.011765,0,1360.4,1385.9,1343.4,8],[39,0,135,135,135,1.7556,0.022222,0,99.376,99.218,99.466,8],[31,1,140,140,140,1.1209,0.001084,0,73.844,75.912,71.999,8],[39,0,140,140,140,1.0863,0.007843,0,99.246,98.969,99.501,8],[7,0,145,145,145,7.6226,0.018868,0,51744.0,50936.0,51850.0,8],[13,1,146,146,146,0.3031,0.003697,0,4347.0,4363.4,4292.9,8],[39,0,146,146,146,0.3111,0.014815,0,100.066,100.024,100.201,8],[13,1,149,149,149,0.1933,0.003515,0,4103.0,4114.0,4046.1,8],[39,0,149,149,149,0.868,0.008,0,100.066,99.849,100.316,8],[6,1,150,150,150,0.5926,0.074074,0,411.0,412.6,408.3,8],[2,1,151,151,151,1.8333,0.030303,0,577.5,589.6,570.9,8],[6,1,151,151,151,0.898,0.040816,0,411.0,415.4,406.1,8],[39,0,153,153,153,0.678,0.00678,0,100.066,99.866,100.361,8],[39,0,155,155,155,0.0103,0.006897,0,100.621,100.618,100.911,8],[26,1,157,157,157,1.0,0.009756,0,1641.5,1662.0,1621.0,8],[9,1,158,158,158,0.1087,0.007246,0,1.1391,1.1394,1.13634,8],[9,1,159,159,159,1.0204,0.010204,0,1.1391,1.1411,1.13714,8],[24,0,159,159,159,0.2041,0.040816,0,3.305,3.295,3.354,8],[25,1,159,159,159,3.4474,0.026316,0,1167.0,1193.2,1159.4,8],[26,1,159,159,159,0.6342,0.0059,0,1581.5,1603.0,1547.6,8],[39,0,159,159,159,1.8957,0.017391,0,101.411,101.193,101.526,8],[2,1,162,162,162,2.7317,0.04878,0,578.0,589.2,573.9,8],[11,0,162,162,162,0.5652,0.086957,0,127.47,127.34,127.7,8],[13,1,162,162,162,1.899,0.006969,0,3984.0,4038.5,3955.3,8],[7,0,163,163,163,0.1774,0.005376,0,52734.0,52668.0,53106.0,8],[26,1,163,163,163,2.0974,0.010256,0,1559.0,1599.9,1539.5,8],[33,0,163,163,163,0.0385,0.076923,0,15.0,14.99,15.26,8],[33,0,164,164,164,0.8333,0.111111,0,15.0,14.85,15.18,8],[18,1,167,167,167,2.881,0.02381,0,235.2,237.62,234.36,8],[24,0,167,167,167,1.8235,0.039216,0,3.305,3.212,3.356,8],[18,1,168,168,168,0.0617,0.024691,0,235.2,235.25,234.39,8],[2,0,170,170,170,1.2099,0.024691,0,645.0,635.2,653.1,8],[13,1,174,174,174,1.6493,0.009479,0,3984.0,4018.8,3962.9,8],[2,0,179,179,179,5.283,0.037736,0,706.0,678.0,711.3,8],[6,0,179,179,179,0.175,0.05,0,488.1,487.4,492.1,8]],"final":891375.33,"avg_win_r":1.628,"best_r":9.137,"avg_bars":0.0},"wick":{"rows":[[13,0,0,1,1,8.1024,0.012048,1,4393.0,4258.5,4409.6,7],[13,0,3,5,5,1.9674,0.007246,1,4393.0,4338.7,4420.6,7],[5,0,10,11,11,-1.0,0.007905,1,377.8,382.86,382.86,1],[30,0,10,11,11,5.2382,0.002418,1,6957.43,6914.11,6965.7,7],[4,1,16,17,17,-1.0,0.085106,1,5097.0,5050.0,5050.0,1],[5,1,24,25,25,0.9396,0.006042,1,345.1,348.21,341.79,7],[30,0,30,31,31,-3.0482,0.006221,1,6982.4,7002.0,6988.83,1],[34,0,31,32,32,-1.0556,0.222222,1,20.89,21.08,21.07,1],[8,1,32,33,33,-1.0,0.068966,1,2812.0,2754.0,2754.0,1],[18,0,32,33,33,-1.0,0.059701,1,239.06,239.73,239.73,2],[30,0,32,37,37,-1.0,0.003828,3,6982.4,6992.85,6992.85,2],[4,1,33,36,36,0.9803,0.013158,1,4082.0,4231.0,3930.0,7],[0,1,36,37,37,-1.0,0.002116,1,76508.0,74618.0,74618.0,1],[10,0,37,38,38,2.3372,0.000668,1,6043.4,5973.4,6073.35,7],[4,1,38,43,43,3.4394,0.030303,3,4082.0,4309.0,4016.0,7],[22,1,39,40,40,-1.0,0.004624,1,5.7714,5.6849,5.6849,1],[0,1,40,41,41,3.5407,0.000782,1,62630.0,71680.0,60074.0,7],[10,0,44,45,45,1.0216,0.001107,1,6060.23,6041.78,6078.29,7],[30,0,44,45,45,-1.0,0.009009,1,6982.4,6986.84,6986.84,2],[38,0,45,46,46,-1.0,0.137931,1,116.5,116.79,116.79,1],[10,0,46,47,47,1.4551,0.000515,1,6060.23,6003.7,6099.08,7],[22,1,47,51,51,-1.0,0.004255,1,5.7714,5.6774,5.6774,1],[38,0,57,60,60,-1.0,0.285714,3,118.02,118.16,118.16,1],[4,1,58,59,59,4.1282,0.051282,1,2990.0,3151.0,2951.0,7],[8,1,58,59,59,2.6842,0.105263,1,1818.0,1869.0,1799.0,7],[13,0,64,65,65,1.1209,0.002628,1,5358.1,5272.8,5434.2,7],[40,0,66,67,67,-1.0,0.173913,1,0.8614,0.8637,0.8637,1],[30,1,67,68,68,-1.0736,0.001693,1,6794.4,6769.03,6770.77,1],[40,0,68,71,71,0.2727,0.045455,1,0.8614,0.8602,0.8658,7],[0,0,79,80,80,2.8416,0.003017,1,75438.0,73554.0,76101.0,7],[36,0,82,85,85,6.4351,0.015267,1,121.72,113.29,123.03,7],[22,1,85,87,87,4.0326,0.002967,2,5.3133,5.5851,5.2459,7],[13,1,86,87,87,5.2326,0.006944,1,4335.0,4485.7,4306.2,7],[36,0,93,94,94,7.6538,0.025641,1,130.16,124.19,130.94,7],[0,0,107,108,108,0.9246,0.001754,1,74900.0,73846.0,76040.0,7],[8,0,108,109,109,3.9375,0.125,1,2370.0,2307.0,2386.0,7],[18,0,108,109,109,6.1212,0.060606,1,251.58,249.56,251.91,7],[22,0,108,109,109,0.6229,0.00381,1,6.0956,6.0629,6.1481,7],[40,1,110,110,110,1.0,0.064516,0,0.8467,0.8498,0.8436,5],[7,0,114,115,115,5.4262,0.032787,1,49750.0,49419.0,49811.0,7],[1,0,117,118,118,5.4444,0.004115,1,79740.0,77094.0,80226.0,7],[29,0,118,119,119,3.6092,0.001197,1,7206.55,7146.24,7223.26,7],[2,0,119,120,120,1.1798,0.022472,1,662.6,652.1,671.5,7],[6,0,120,121,121,-1.0,0.210526,1,478.2,480.1,480.1,1],[16,0,121,123,123,1.0946,0.054054,2,0.006417,0.006377,0.006454,7],[18,0,121,122,122,2.112,0.016,1,255.38,252.74,256.63,7],[39,1,121,122,122,1.1918,0.008163,1,97.814,98.106,97.569,7],[19,0,122,123,123,-1.0,0.000681,1,27907.0,27965.76,27965.76,1],[6,0,123,124,124,8.4545,0.181818,1,486.4,477.1,487.5,7],[1,0,124,125,125,2.9856,0.003604,1,83046.0,81389.0,83601.0,7],[39,1,124,128,128,2.0286,0.008163,4,97.714,98.211,97.469,7],[9,0,125,126,126,-1.0,0.025641,1,1.1783,1.17986,1.17986,2],[26,0,125,126,126,1.8385,0.006873,1,2084.6,2031.1,2113.7,7],[13,0,127,128,128,-1.0,0.032,1,4746.0,4758.5,4758.5,2],[31,0,128,129,129,-1.0,0.002083,1,86.081,88.001,88.001,1],[2,0,130,131,131,4.2329,0.027397,1,681.0,650.1,688.3,7],[39,0,134,137,137,2.5744,0.010256,3,99.376,98.874,99.571,7],[25,1,135,136,136,2.6882,0.011765,1,1360.4,1406.1,1343.4,7],[31,1,140,141,141,1.3317,0.001084,1,73.844,76.301,71.999,7],[39,0,140,143,143,-1.0,0.015686,3,99.246,99.501,99.501,1],[7,0,145,146,146,9.5189,0.018868,1,51744.0,50735.0,51850.0,7],[13,1,146,147,147,-1.0,0.007394,1,4347.0,4292.9,4292.9,2],[39,0,146,147,147,1.9407,0.014815,1,100.066,99.804,100.201,7],[13,1,149,150,150,2.4323,0.003515,1,4103.0,4241.4,4046.1,7],[39,0,149,150,150,2.424,0.008,1,100.066,99.46,100.316,7],[6,1,150,151,151,-1.0,0.148148,1,411.0,408.3,408.3,1],[2,1,151,152,152,2.0606,0.030303,1,577.5,591.1,570.9,7],[39,0,153,154,154,-1.0,0.013559,1,100.066,100.361,100.361,1],[39,0,155,157,157,-1.0,0.013793,2,100.621,100.911,100.911,1],[26,1,157,158,158,-1.0,0.019512,1,1641.5,1621.0,1621.0,1],[9,1,158,159,159,1.1449,0.007246,1,1.1391,1.14226,1.13634,7],[24,0,159,160,160,-1.0,0.081633,1,3.305,3.354,3.354,1],[25,1,159,160,160,5.4079,0.026316,1,1167.0,1208.1,1159.4,7],[26,1,159,160,160,1.1003,0.0059,1,1581.5,1618.8,1547.6,7],[39,0,159,160,160,2.887,0.017391,1,101.411,101.079,101.526,7],[2,1,162,163,163,4.0732,0.04878,1,578.0,594.7,573.9,7],[11,0,162,163,163,1.4783,0.086957,1,127.47,127.13,127.7,7],[13,1,162,163,163,3.2822,0.006969,1,3984.0,4078.2,3955.3,7],[7,0,163,164,164,-1.0,0.010753,1,52734.0,53106.0,53106.0,1],[26,1,163,164,164,3.1077,0.010256,1,1559.0,1619.6,1539.5,7],[33,0,163,164,164,0.6538,0.076923,1,15.0,14.83,15.26,7],[18,1,167,169,169,-1.0,0.047619,2,235.2,234.36,234.36,1],[24,0,167,168,168,2.0196,0.039216,1,3.305,3.202,3.356,7],[2,0,170,171,171,1.4444,0.024691,1,645.0,633.3,653.1,7],[13,1,174,175,175,2.1327,0.009479,1,3984.0,4029.0,3962.9,7],[2,0,179,180,180,8.8113,0.037736,1,706.0,659.3,711.3,7],[6,0,179,180,180,2.25,0.05,1,488.1,479.1,492.1,7]],"final":657632.98,"avg_win_r":3.084,"best_r":9.5,"avg_bars":1.18},"1.9":{"rows":[[13,0,0,1,1,8.1024,0.012048,1,4393.0,4258.5,4409.6,0],[13,0,3,5,5,1.9203,0.007246,1,4393.0,4340.0,4420.6,0],[5,0,10,11,11,-1.0,0.007905,1,377.8,382.86,382.86,1],[30,0,10,11,11,1.9,0.002418,1,6957.43,6941.72,6965.7,0],[4,1,16,17,17,-1.0,0.085106,1,5097.0,5050.0,5050.0,2],[5,1,24,26,26,1.9,0.006042,2,345.1,351.39,341.79,0],[30,0,30,31,31,-3.0482,0.006221,1,6982.4,7002.0,6988.83,1],[34,0,31,32,32,-1.0556,0.222222,1,20.89,21.08,21.07,1],[8,1,32,33,33,-1.0,0.068966,1,2812.0,2754.0,2754.0,1],[18,0,32,33,33,-1.0,0.059701,1,239.06,239.73,239.73,2],[30,0,32,33,33,3.3617,0.001914,1,6982.4,6947.27,6992.85,0],[4,1,33,37,37,1.9,0.013158,2,4082.0,4371.0,3930.0,0],[0,1,36,37,37,-1.0,0.002116,1,76508.0,74618.0,74618.0,1],[30,0,36,37,37,-1.0,0.004197,1,6982.4,6991.93,6991.93,2],[10,0,37,38,38,1.9,0.000668,1,6043.4,5986.49,6073.35,0],[4,1,38,39,39,1.9,0.030303,1,4082.0,4207.0,4016.0,0],[22,1,39,40,40,-1.0,0.004624,1,5.7714,5.6849,5.6849,1],[0,1,40,41,41,1.9,0.000782,1,62630.0,67486.0,60074.0,0],[4,1,43,44,44,-1.0,0.121212,1,4082.0,4049.0,4049.0,2],[10,0,44,45,45,1.9,0.001107,1,6060.23,6025.92,6078.29,0],[30,0,44,45,45,-1.0,0.009009,1,6982.4,6986.84,6986.84,2],[38,0,45,46,46,-1.0,0.137931,1,116.5,116.79,116.79,1],[10,0,46,47,47,1.9,0.000515,1,6060.23,5986.41,6099.08,0],[22,1,47,51,51,-1.0,0.004255,1,5.7714,5.6774,5.6774,1],[38,0,57,58,58,1.9,0.142857,1,118.02,117.75,118.16,0],[4,1,58,59,59,1.9,0.051282,1,2990.0,3064.0,2951.0,0],[8,1,58,59,59,1.9,0.105263,1,1818.0,1854.0,1799.0,0],[38,0,59,60,60,-1.0,0.5,1,118.08,118.16,118.16,2],[13,0,64,65,65,1.9,0.002628,1,5358.1,5213.5,5434.2,0],[40,0,66,67,67,-1.0,0.173913,1,0.8614,0.8637,0.8637,1],[30,1,67,68,68,-1.0736,0.001693,1,6794.4,6769.03,6770.77,1],[40,0,68,71,71,-1.0,0.090909,1,0.8614,0.8658,0.8658,1],[0,0,79,80,80,1.9,0.003017,1,75438.0,74178.0,76101.0,0],[36,0,82,85,85,6.4351,0.015267,1,121.72,113.29,123.03,0],[22,1,85,86,86,1.9,0.002967,1,5.3133,5.4414,5.2459,0],[13,1,86,87,87,1.9,0.006944,1,4335.0,4389.7,4306.2,0],[36,0,93,94,94,1.9,0.025641,1,130.16,128.68,130.94,0],[0,0,107,110,110,-1.0,0.003509,3,74900.0,76040.0,76040.0,1],[8,0,108,109,109,1.9,0.125,1,2370.0,2340.0,2386.0,0],[18,0,108,109,109,1.9,0.060606,1,251.58,250.95,251.91,0],[22,0,108,114,114,-1.0,0.007619,3,6.0956,6.1481,6.1481,1],[40,1,110,110,110,1.0,0.064516,0,0.8467,0.8498,0.8436,5],[7,0,114,115,115,4.1803,0.032787,1,49750.0,49495.0,49811.0,0],[1,0,117,118,118,1.9,0.004115,1,79740.0,78817.0,80226.0,0],[29,0,118,119,119,1.9,0.001197,1,7206.55,7174.8,7223.26,0],[2,0,119,120,120,1.9,0.022472,1,662.6,645.7,671.5,0],[6,0,120,121,121,2.4211,0.105263,1,478.2,473.6,480.1,0],[16,0,121,124,124,-1.0,0.108108,3,0.006417,0.006454,0.006454,1],[18,0,121,122,122,1.9,0.016,1,255.38,253.0,256.63,0],[39,1,121,122,122,1.9,0.008163,1,97.814,98.279,97.569,0],[19,0,122,123,123,-1.0,0.000681,1,27907.0,27965.76,27965.76,2],[6,0,123,124,124,1.9,0.181818,1,486.4,484.3,487.5,0],[1,0,124,125,125,1.9207,0.003604,1,83046.0,81980.0,83601.0,0],[39,1,124,128,128,1.9,0.008163,4,97.714,98.18,97.469,0],[9,0,125,126,126,2.5321,0.012821,1,1.1783,1.17435,1.17986,0],[26,0,125,126,126,1.9,0.006873,1,2084.6,2029.3,2113.7,0],[13,0,127,128,128,-1.0,0.032,1,4746.0,4758.5,4758.5,2],[31,0,128,129,129,-1.0,0.002083,1,86.081,88.001,88.001,1],[2,0,130,131,131,1.9,0.027397,1,681.0,667.1,688.3,0],[39,0,134,137,137,1.9,0.010256,3,99.376,99.006,99.571,0],[25,1,135,136,136,2.5059,0.011765,1,1360.4,1403.0,1343.4,0],[31,1,140,142,142,1.9,0.001084,2,73.844,77.349,71.999,0],[39,0,140,143,143,-1.0,0.015686,3,99.246,99.501,99.501,1],[7,0,145,146,146,1.9,0.018868,1,51744.0,51543.0,51850.0,0],[13,1,146,147,147,-1.0,0.007394,1,4347.0,4292.9,4292.9,1],[39,0,146,147,147,1.9,0.014815,1,100.066,99.809,100.201,0],[13,1,149,150,150,2.3181,0.003515,1,4103.0,4234.9,4046.1,0],[39,0,149,150,150,2.424,0.008,1,100.066,99.46,100.316,0],[6,1,150,151,151,-1.0,0.148148,1,411.0,408.3,408.3,2],[2,1,151,152,152,1.9,0.030303,1,577.5,590.0,570.9,0],[39,0,153,154,154,-1.0,0.013559,1,100.066,100.361,100.361,1],[39,0,155,157,157,-1.0,0.013793,2,100.621,100.911,100.911,1],[26,1,157,158,158,-1.0,0.019512,1,1641.5,1621.0,1621.0,1],[9,1,158,160,160,1.9,0.007246,2,1.1391,1.14434,1.13634,0],[24,0,159,160,160,-1.0,0.081633,1,3.305,3.354,3.354,1],[25,1,159,160,160,1.9,0.026316,1,1167.0,1181.4,1159.4,0],[26,1,159,160,160,1.9,0.0059,1,1581.5,1645.9,1547.6,0],[39,0,159,160,160,1.9,0.017391,1,101.411,101.192,101.526,0],[2,1,162,163,163,1.9,0.04878,1,578.0,585.8,573.9,0],[11,0,162,163,163,1.9,0.086957,1,127.47,127.03,127.7,0],[13,1,162,163,163,1.9,0.006969,1,3984.0,4038.5,3955.3,0],[7,0,163,164,164,-1.0,0.010753,1,52734.0,53106.0,53106.0,1],[26,1,163,164,164,1.9,0.010256,1,1559.0,1596.0,1539.5,0],[33,0,163,166,166,-1.0,0.153846,2,15.0,15.26,15.26,1],[18,1,167,168,168,1.9,0.02381,1,235.2,236.8,234.36,0],[24,0,167,168,168,1.9,0.039216,1,3.305,3.208,3.356,0],[2,0,170,171,171,1.9,0.024691,1,645.0,629.6,653.1,0],[13,1,174,175,175,1.9,0.009479,1,3984.0,4024.1,3962.9,0],[2,0,179,180,180,1.9,0.037736,1,706.0,695.9,711.3,0],[6,0,179,180,180,1.9,0.05,1,488.1,480.5,492.1,0]],"final":322043.71,"avg_win_r":2.154,"best_r":8.09,"avg_bars":1.2},"open":{"rows":[[13,0,0,1,1,8.1024,0.012048,1,4393.0,4258.5,4409.6,9],[13,0,3,5,5,1.9203,0.007246,1,4393.0,4340.0,4420.6,9],[5,0,10,11,11,0.9387,0.003953,1,377.8,373.05,382.86,9],[30,0,10,11,11,5.2382,0.002418,1,6957.43,6914.11,6965.7,9],[4,1,16,17,17,3.3191,0.042553,1,5097.0,5253.0,5050.0,9],[5,1,24,25,25,0.5438,0.006042,1,345.1,346.9,341.79,9],[30,0,30,31,31,-3.0482,0.00311,1,6982.4,7002.0,6988.83,9],[34,0,31,32,32,-1.0556,0.111111,1,20.89,21.08,21.07,9],[8,1,32,33,33,0.2069,0.034483,1,2812.0,2824.0,2754.0,9],[18,0,32,33,33,2.3284,0.029851,1,239.06,237.5,239.73,9],[30,0,32,33,33,3.3617,0.001914,1,6982.4,6947.27,6992.85,9],[4,1,33,36,36,0.1382,0.013158,1,4082.0,4103.0,3930.0,9],[0,1,36,37,37,1.1513,0.001058,1,76508.0,78684.0,74618.0,9],[30,0,36,37,37,-0.32,0.002099,1,6982.4,6985.45,6991.93,9],[10,0,37,38,38,1.814,0.000668,1,6043.4,5989.07,6073.35,9],[4,1,38,39,39,-0.1515,0.030303,1,4082.0,4072.0,4016.0,9],[22,1,39,40,40,-0.4555,0.002312,1,5.7714,5.732,5.6849,9],[0,1,40,41,41,3.1107,0.000782,1,62630.0,70581.0,60074.0,9],[4,1,43,44,44,0.0606,0.060606,1,4082.0,4084.0,4049.0,9],[10,0,44,45,45,1.0216,0.001107,1,6060.23,6041.78,6078.29,9],[30,0,44,45,45,1.3333,0.004505,1,6982.4,6976.48,6986.84,9],[38,0,45,46,46,1.2069,0.068966,1,116.5,116.15,116.79,9],[10,0,46,47,47,1.2667,0.000515,1,6060.23,6011.02,6099.08,9],[22,1,47,51,51,0.15,0.002128,1,5.7714,5.7855,5.6774,9],[38,0,57,58,58,0.8571,0.142857,1,118.02,117.9,118.16,9],[4,1,58,59,59,2.5385,0.051282,1,2990.0,3089.0,2951.0,9],[8,1,58,59,59,1.7368,0.105263,1,1818.0,1851.0,1799.0,9],[38,0,59,60,60,2.625,0.25,1,118.08,117.87,118.16,9],[13,0,64,65,65,0.2943,0.002628,1,5358.1,5335.7,5434.2,9],[40,0,66,67,67,0.8696,0.086957,1,0.8614,0.8594,0.8637,9],[30,1,67,68,68,-1.0736,0.000846,1,6794.4,6769.03,6770.77,9],[40,0,68,71,71,0.2727,0.045455,1,0.8614,0.8602,0.8658,9],[0,0,79,80,80,2.2775,0.003017,1,75438.0,73928.0,76101.0,9],[36,0,82,85,85,6.4351,0.015267,1,121.72,113.29,123.03,9],[22,1,85,86,86,2.5475,0.002967,1,5.3133,5.485,5.2459,9],[13,1,86,87,87,4.809,0.006944,1,4335.0,4473.5,4306.2,9],[36,0,93,94,94,6.7949,0.025641,1,130.16,124.86,130.94,9],[0,0,107,108,108,0.657,0.001754,1,74900.0,74151.0,76040.0,9],[8,0,108,109,109,0.625,0.125,1,2370.0,2360.0,2386.0,9],[18,0,108,109,109,0.1818,0.060606,1,251.58,251.52,251.91,9],[22,0,108,109,109,0.3829,0.00381,1,6.0956,6.0755,6.1481,9],[40,1,110,110,110,1.0,0.064516,0,0.8467,0.8498,0.8436,5],[7,0,114,115,115,4.1803,0.032787,1,49750.0,49495.0,49811.0,9],[1,0,117,118,118,4.7325,0.004115,1,79740.0,77440.0,80226.0,9],[29,0,118,119,119,2.0377,0.001197,1,7206.55,7172.5,7223.26,9],[2,0,119,120,120,1.1685,0.022472,1,662.6,652.2,671.5,9],[6,0,120,121,121,2.4211,0.105263,1,478.2,473.6,480.1,9],[16,0,121,122,122,0.3243,0.054054,1,0.006417,0.006405,0.006454,9],[18,0,121,122,122,1.928,0.016,1,255.38,252.97,256.63,9],[39,1,121,122,122,0.7592,0.008163,1,97.814,98.0,97.569,9],[19,0,122,123,123,2.5017,0.00034,1,27907.0,27760.0,27965.76,9],[6,0,123,124,124,7.4545,0.181818,1,486.4,478.2,487.5,9],[1,0,124,125,125,1.9207,0.003604,1,83046.0,81980.0,83601.0,9],[39,1,124,125,125,0.7796,0.008163,1,97.714,97.905,97.469,9],[9,0,125,126,126,2.5321,0.012821,1,1.1783,1.17435,1.17986,9],[26,0,125,126,126,1.8385,0.006873,1,2084.6,2031.1,2113.7,9],[13,0,127,128,128,0.056,0.016,1,4746.0,4745.3,4758.5,9],[31,0,128,129,129,-0.6453,0.001042,1,86.081,87.32,88.001,9],[2,0,130,131,131,3.1233,0.027397,1,681.0,658.2,688.3,9],[39,0,134,135,135,1.441,0.010256,1,99.376,99.095,99.571,9],[25,1,135,136,136,2.5059,0.011765,1,1360.4,1403.0,1343.4,9],[31,1,140,141,141,0.9328,0.001084,1,73.844,75.565,71.999,9],[39,0,140,141,141,1.4745,0.007843,1,99.246,98.87,99.501,9],[7,0,145,146,146,8.9434,0.018868,1,51744.0,50796.0,51850.0,9],[13,1,146,147,147,0.1423,0.003697,1,4347.0,4354.7,4292.9,9],[39,0,146,147,147,0.1556,0.014815,1,100.066,100.045,100.201,9],[13,1,149,150,150,2.3181,0.003515,1,4103.0,4234.9,4046.1,9],[39,0,149,150,150,2.424,0.008,1,100.066,99.46,100.316,9],[6,1,150,151,151,0.2222,0.074074,1,411.0,411.6,408.3,9],[2,1,151,152,152,1.7424,0.030303,1,577.5,589.0,570.9,9],[39,0,153,154,154,-0.2847,0.00678,1,100.066,100.15,100.361,9],[39,0,155,156,156,-0.2724,0.006897,1,100.621,100.7,100.911,9],[26,1,157,158,158,0.4634,0.009756,1,1641.5,1651.0,1621.0,9],[9,1,158,159,159,0.2899,0.007246,1,1.1391,1.1399,1.13634,9],[24,0,159,160,160,0.7755,0.040816,1,3.305,3.267,3.354,9],[25,1,159,160,160,2.3684,0.026316,1,1167.0,1185.0,1159.4,9],[26,1,159,160,160,1.1003,0.0059,1,1581.5,1618.8,1547.6,9],[39,0,159,160,160,1.0087,0.017391,1,101.411,101.295,101.526,9],[2,1,162,163,163,2.3415,0.04878,1,578.0,587.6,573.9,9],[11,0,162,163,163,1.4783,0.086957,1,127.47,127.13,127.7,9],[13,1,162,163,163,1.4286,0.006969,1,3984.0,4025.0,3955.3,9],[7,0,163,164,164,0.2527,0.005376,1,52734.0,52640.0,53106.0,9],[26,1,163,164,164,1.4154,0.010256,1,1559.0,1586.6,1539.5,9],[33,0,163,164,164,0.0,0.076923,1,15.0,15.0,15.26,9],[18,1,167,168,168,3.4524,0.02381,1,235.2,238.1,234.36,9],[24,0,167,168,168,1.6863,0.039216,1,3.305,3.219,3.356,9],[2,0,170,171,171,1.1111,0.024691,1,645.0,636.0,653.1,9],[13,1,174,175,175,1.0237,0.009479,1,3984.0,4005.6,3962.9,9],[2,0,179,180,180,4.7925,0.037736,1,706.0,680.6,711.3,9],[6,0,179,180,180,1.525,0.05,1,488.1,482.0,492.1,9]],"final":706337.47,"avg_win_r":1.978,"best_r":8.925,"avg_bars":0.99}}};
+const VCOL = {};
+VARIANTS.cols.forEach((c, i) => { VCOL[c] = i; });
+
+// Rows travel as positional arrays indexed against shared market / day / reason tables:
+// 34 caps of named JSON fields would put most of a megabyte of repeated key names into
+// every page. Net R is not stored -- it is gross minus cost, computed here.
+function unpackCap(tok){
+  const v = VARIANTS.v[tok];
+  if (!v) return null;
+  const M = VARIANTS.markets, D = VARIANTS.days, RS = VARIANTS.reasons;
+  return v.rows.map(row => {
+    const gr = row[VCOL.gr], cr = row[VCOL.cr], dout = row[VCOL.dout];
+    return {market:M[row[VCOL.m]], side:row[VCOL.side] ? "long" : "short",
+            din:D[row[VCOL.din]], dout:(dout == null ? null : D[dout]),
+            xd:D[row[VCOL.xd]], gr:gr, cr:cr, r:gr - cr, bars:row[VCOL.bars],
+            pin:row[VCOL.pin], pout:row[VCOL.pout], sl:row[VCOL.sl],
+            reason:RS[row[VCOL.reason]]};
+  });
+}
+
+// The numeric caps, for snapping whatever is typed into the box onto the grid that was
+// actually backtested. String() matches Python's "%g" token for every value in the grid.
+const CAP_NUMS = VARIANTS.caps.filter(c => c !== "none").map(Number).sort((a, b) => a - b);
+function snapCap(x){
+  let best = CAP_NUMS[0];
+  for (const c of CAP_NUMS) if (Math.abs(c - x) < Math.abs(best - x)) best = c;
+  return String(best);
+}
+// Where the Conclusions page keeps its text. Read back by the report when printing.
+const CONCL_KEY = "strategy_conclusions";
+function readConclusions(){
+  try { return JSON.parse(localStorage.getItem(CONCL_KEY) || "null") || null; }
+  catch(e){ return null; }
+}
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtUSD = v => (v<0?"−$":"$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const fmtK = v => (v<0?"−$":"$") + Math.abs(v/1000).toFixed(0) + "k";
+const pct = v => (v>=0?"+":"") + v.toFixed(1) + "%";
+const fmtPrice = v => { if(v==null) return "—"; const a=Math.abs(v);
+  const dp = a>=100?1:a>=1?2:a>=0.01?4:6;
+  return v.toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp}); };
+const signFix = (v,d) => v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
+const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
+// 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
+// a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
+// 'target_bar' = Quickfixwick's target, one tick past the entry bar's own wick.
+// 'exit_close' / 'exit_open' = the two BAR EXITS: the entry bar's own close (Quickfixclose)
+// and the open of the bar after it (Quickfixopen). Neither is a level that was reached, so
+// they are named for the moment rather than for a target.
+const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L",
+  bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
+  data_end:"data ended",open_at_end:"open at end",target_bar:"bar wick",
+  exit_close:"day close",exit_open:"next open"})[r]||r;
+
+// One calendar for every setting, so moving the cap dial does not shift the equity curve's
+// x-axis underneath the reader: 4R and 8R are drawn over exactly the same period, and so are
+// four different strategies on the comparison page.
+const DAYS = VARIANTS.days;
+const START_CAP = 100000;
+
+function niceTicks(min,max,n){
+  const raw=(max-min)/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), norm=raw/mag;
+  let step = norm<1.5?1:norm<3?2:norm<7?5:10; step*=mag;
+  const out=[]; for(let v=Math.ceil(min/step)*step; v<=max+1e-6; v+=step) out.push(v);
+  return out;
+}
+const NS="http://www.w3.org/2000/svg";
+const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+function txt(x,y,s,anchor,size,fill,ls){
+  const t=mk("text",{x:x,y:y,"font-size":size,fill:fill});
+  if(anchor)t.setAttribute("text-anchor",anchor); if(ls)t.setAttribute("letter-spacing",ls);
+  t.textContent=s; return t;
+}
+
+// ---- shared-account money management, replayed in the browser --------------------
+// A direct port of run_portfolio.py's loop, and the ONLY one on any page here. It is only
+// possible because the trades are CAPITAL-INDEPENDENT: which trades fire, their R multiples,
+// and their slippage cost in R are all fixed by price and reversals, so changing the risk %
+// changes the dollar sizing and nothing else. Rules mirrored exactly, and in this order:
+//   1) a new trade risks `risk`% of LIQUID capital = cash - risk tied up in open trades;
+//   2) cash moves ONLY when a trade closes; open trades are never marked to market;
+//   3) within a day ALL entries are sized first, THEN the exits book P&L;
+//   4) same-day entries are sized in market-name order, each off the base the earlier ones
+//      left. Plain < > comparison, not localeCompare, to match Python's sort.
+// The gross curve is replayed alongside on its own cash/committed pair -- costs change the
+// sizing base as the run compounds, so it cannot be derived from the net one afterwards.
+//
+// `lite` skips the daily narrative (the per-day activity strings and the point series),
+// which is all the cap charts and the comparison page need and is where nearly all the cost
+// is -- sorting the open markets into a string on all 180 days, 75 times over, would be felt
+// on every keystroke. It is the SAME function either way on purpose.
+//
+// A note that matters for quickfixclose: its trades enter and exit on the SAME day, so the
+// entries loop commits their risk and the exits loop releases it before the day's snapshot
+// is taken. `max_open` and `time_in_market` therefore read 0, which is not a bug -- it is
+// the literal truth that nothing is ever held at the end of a day.
+function simulate(risk, rows, lite, start){
+  const START = start == null ? START_CAP : start;
+  const R = rows;
+  const ent = {}, exi = {};
+  R.forEach((t,i) => {
+    (ent[t.din] || (ent[t.din] = [])).push(i);
+    (exi[t.xd] || (exi[t.xd] = [])).push(i);
+  });
+  const tr = R.map(t => Object.assign({}, t, {base:0, riskD:0, pnl:0, pnlpct:0}));
+  let cash = START, committed = 0, peak = START, maxdd = 0;
+  let gcash = START, gcommitted = 0;
+  const open = {}, gopen = {}, pts = [];
+  let maxOpen = 0, totalCost = 0, daysIn = 0;
+
+  for (const day of DAYS){
+    const es = (ent[day] || []).slice().sort((a,b) =>
+      R[a].market < R[b].market ? -1 : R[a].market > R[b].market ? 1 : 0);
+    const enotes = [];
+    for (const i of es){
+      const base = Math.max(cash - committed, 0), riskD = base * risk / 100;
+      tr[i].base = base; tr[i].riskD = riskD;
+      open[i] = riskD; committed += riskD;
+      const gbase = Math.max(gcash - gcommitted, 0);
+      gopen[i] = gbase * risk / 100; gcommitted += gopen[i];
+      if (!lite) enotes.push(R[i].market + " " + R[i].side + " (risk " +
+                  Math.round(riskD).toLocaleString("en-US") + ")");
+    }
+    const xnotes = [];
+    for (const i of (exi[day] || [])){
+      const riskD = open[i]; delete open[i]; committed -= riskD;
+      const pnl = tr[i].r * riskD;
+      cash += pnl; totalCost += tr[i].cr * riskD;
+      tr[i].pnl = pnl;
+      tr[i].pnlpct = tr[i].base ? pnl / tr[i].base * 100 : 0;
+      const griskD = gopen[i]; delete gopen[i]; gcommitted -= griskD;
+      gcash += tr[i].gr * griskD;
+      if (!lite) xnotes.push(R[i].market + " " + R[i].reason + " (" +
+        (R[i].reason === "open_at_end" ? "open->closed 0"
+          : (pnl >= 0 ? "+" : "−") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
+    }
+    const nOpen = Object.keys(open).length;
+    if (cash > peak) peak = cash;
+    const dd = peak > 0 ? (cash - peak) / peak * 100 : 0;
+    if (-dd > maxdd) maxdd = -dd;
+    if (nOpen > maxOpen) maxOpen = nOpen;
+    if (nOpen > 0) daysIn++;
+    if (!lite) pts.push({date:day, cash:cash, open:nOpen, dd:dd,
+              markets:Object.keys(open).map(i => R[i].market).sort().join(", "),
+              entries:enotes.join("; "), exits:xnotes.join("; ")});
+  }
+
+  // Closed trades only, in EXIT order -- the streaks are "as they were lived".
+  const closed = tr.filter(t => t.reason !== "open_at_end");
+  const seq = lite ? [] : closed.slice().sort((a,b) =>
+    a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
+    a.din < b.din ? -1 : a.din > b.din ? 1 :
+    a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
+  let lw=0, ll=0, cw=0, cl=0;
+  for (const t of seq){
+    if (t.pnl > 0){ cw++; cl=0; } else if (t.pnl < 0){ cl++; cw=0; } else { cw=0; cl=0; }
+    if (cw > lw) lw = cw;
+    if (cl > ll) ll = cl;
+  }
+  const wins = closed.filter(t => t.pnl > 0), loss = closed.filter(t => t.pnl < 0);
+  const mean = (xs,f) => xs.length ? xs.reduce((s,x) => s+f(x), 0)/xs.length : 0;
+  // Win rate keys off R, not dollars, so it stays meaningful at risk = 0 (where every
+  // position is sized to nothing and no trade can book a dollar of profit or loss).
+  const rWins = closed.filter(t => t.r > 0).length;
+
+  return {points:pts, trades:tr, stats:{
+    final:cash, ret:(cash/START-1)*100, maxdd:-maxdd,
+    rdd: maxdd > 0 ? ((cash/START-1)*100)/maxdd : null,
+    gross_final:gcash, gross_ret:(gcash/START-1)*100, total_cost:totalCost,
+    n_trades:closed.length,
+    win_rate: closed.length ? 100*rWins/closed.length : 0,
+    max_open:maxOpen,
+    time_in_market: DAYS.length ? 100*daysIn/DAYS.length : 0,
+    long_win:lw, long_loss:ll,
+    avg_win:mean(wins,t=>t.pnl), avg_loss:mean(loss,t=>t.pnl),
+    avg_win_pct:mean(wins,t=>t.pnlpct), avg_loss_pct:mean(loss,t=>t.pnlpct)
+  }};
+}
+
+// ---- one setting, priced two ways --------------------------------------------------
+// `statsAt` is one lite replay of one Rule 4 setting at one risk. `leveredAt` is the same
+// thing at the risk that puts THAT setting at TARGET_DD, found by bisection. Both are used
+// by the cap charts (across the cap axis) and by the comparison page (across strategies), so
+// they live out here: one bisection, one cache, and the two page types cannot disagree about
+// what 6% costs a given setting.
+const ROWCACHE={};
+const rowsFor = tok => ROWCACHE[tok] || (ROWCACHE[tok] = unpackCap(tok));
+// null for anything that is not a point on the cap axis: "none", and the three Rule 4
+// shapes that are not caps at all. Number("wick") is NaN, which would plot somewhere.
+const capOf = tok => { const x = Number(tok); return (tok === "none" || !isFinite(x)) ? null : x; };
+function statsAt(risk, tok){
+  const s = simulate(risk, rowsFor(tok), true).stats;
+  return {tok:tok, cap:capOf(tok), risk:risk, final:s.final, ret:s.ret, dd:s.maxdd,
+          rdd:s.rdd, n:s.n_trades, wr:s.win_rate};
+}
+
+// The project's drawdown budget, and the round reference risk the "real result" charts are
+// titled with. The two constants to change.
+const TARGET_DD = 6.0;
+const FIXED_RISK = 1.0;
+
+// Drawdown rises monotonically with risk (a bigger bet swings the balance further), so a
+// plain bisection finds the risk that hits the budget. Returns null when the setting cannot
+// reach it AT ANY BET, which is not a failure case to hide: quickfixclose lands there, because
+// its exits are all on the right side of entry on gross terms and the account barely dips.
+function riskForDrawdown(tok){
+  const dd = r => -simulate(r, rowsFor(tok), true).stats.maxdd;
+  let lo=0, hi=8;
+  if(dd(hi)<TARGET_DD){ hi=100; if(dd(hi)<TARGET_DD) return null; }   // unreachable
+  for(let i=0;i<24 && hi-lo>1e-3;i++){
+    const mid=(lo+hi)/2;
+    if(dd(mid)<TARGET_DD) lo=mid; else hi=mid;
+  }
+  return (lo+hi)/2;
+}
+// Solved points, cached PER TOKEN rather than per chart: a setting that appears on more than
+// one chart is bisected once, and two caches could otherwise drift.
+const LEVERED={};
+function leveredAt(tok){
+  if(tok in LEVERED) return LEVERED[tok];
+  const r = riskForDrawdown(tok);
+  return LEVERED[tok] = (r==null
+    ? {tok:tok, cap:capOf(tok), risk:null, final:null, ret:null, dd:null,
+       rdd:null, n:null, wr:null}
+    : statsAt(r, tok));
+}
+</script>
+<script>
+// ---- comparison.html: the four strategies against each other ----------------------
+// It calls the SAME `simulate`, `statsAt` and `leveredAt` as the strategy pages (CORE_JS),
+// so a figure here and the same figure on a strategy page cannot disagree. What is different
+// is only the x axis: four Rule 4 SHAPES rather than one shape's parameter.
+const $ = k => document.querySelector('[data-el="'+k+'"]');
+
+// Every registered strategy, at its own Rule 4 token. Order is the registry's, which puts
+// quickfix (the reference, and the only cap-family member here) first.
+const FIXED_PTS = STRATS.map(s => Object.assign(statsAt(FIXED_RISK, s.r4), {s:s}));
+const NORM_PTS  = STRATS.map(s => Object.assign(leveredAt(s.r4), {s:s}));
+
+const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
+const ddTxt = v => v==null?"—":Math.abs(v).toFixed(2)+"%";
+const rddTxt = v => v==null?"—":v.toFixed(1)+"x";
+const riskTxt = v => v==null?"—":v.toFixed(2)+"%";
+
+// ---- the bar plotter ---------------------------------------------------------------
+// One plotter for both charts, the same way the cap section has one line plotter: two
+// near-identical renderers drift apart.
+//
+// BARS, ZERO BASELINE, always. A bar's length is read as its value, so a truncated axis
+// would misstate every comparison on the page -- which is exactly the thing these two charts
+// exist to get right. The panes still auto-scale their TOP, so a pane's pixel height is how
+// much of the spread between the four is visible; the heights match the cap section's
+// (250px main, 90px readouts) for the same reason they were raised there.
+function barPlotter(plotEl, svgEl, tipEl, tipRows){
+  let g=null;
+  function draw(items, panels){
+    if(!items.length) return;
+    const W=plotEl.clientWidth||880, mL=64, mR=16, plotW=W-mL-mR;
+    const padT=18, xAxisH=30, gap=28;
+    const tops=[]; let H=padT;
+    panels.forEach(p=>{ tops.push(H); H+=p.h+gap; });
+    H=H-gap+xAxisH;
+    svgEl.setAttribute("viewBox",`0 0 ${W} ${H}`); svgEl.setAttribute("height",H);
+    while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+    const n=items.length, slot=plotW/n;
+    // A generous gap between neighbours: bars this few should not read as one block, and the
+    // value labels above them need room not to collide.
+    const bw=Math.min(slot-30, 104), cx=i=> mL+slot*i+slot/2;
+    const ys=[];
+
+    panels.forEach((p,pi)=>{
+      const top=tops[pi], bot=top+p.h;
+      const val=q=> { const v=q[p.k]; return v==null?null:(p.abs?Math.abs(v):v); };
+      const finite=items.map(val).filter(v=>v!=null);
+      // ONE value orders of magnitude above the rest flattens every other bar to a stub, and
+      // then the pane shows nothing except that the outlier is big -- which the reader could
+      // have got from the label. So scale to the REST and draw the outlier BROKEN at the top
+      // with its true value on it: the label carries the number, the bar only says "off this
+      // scale". The axis still starts at zero, so no bar that IS on the scale is misread.
+      //
+      // It fires today on return/drawdown: quickfixclose's drawdown is a rounding error, so
+      // the ratio comes out in the thousands and the metric has stopped meaning anything.
+      // Written generally because any pane could meet an outlier later.
+      const desc=finite.slice().sort((a,b)=>b-a);
+      const scaleOn=(desc.length>1 && desc[0] > 10*Math.max(desc[1],1e-9))
+        ? desc.slice(1) : desc;
+      const ceiling=Math.max.apply(null, scaleOn.concat(p.ref!=null?[p.ref]:[], [0]));
+      const yHi=(ceiling*1.20)||1;                 // headroom for the label above the tallest
+      const y=v=> bot-(v/yHi)*p.h;
+      ys.push(y);
+
+      (pi===0?niceTicks(0,yHi,3):[ceiling]).forEach(v=>{
+        if(v<0||v>yHi) return;
+        svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(v),y2:y(v),stroke:"var(--grid)","stroke-width":1}));
+        svgEl.appendChild(txt(mL-9,y(v)+3.5,p.fmt(v),"end",10.5,"var(--ink3)"));
+      });
+      svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:bot,y2:bot,stroke:"var(--border)","stroke-width":1}));
+      if(p.label) svgEl.appendChild(txt(mL+4,top-5,p.label,"start",10.5,"var(--ink3)",".04em"));
+      if(p.ref!=null){
+        svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(p.ref),y2:y(p.ref),stroke:"var(--ref)",
+          "stroke-width":1.2,"stroke-dasharray":"3 4"}));
+        svgEl.appendChild(txt(W-mR-2,y(p.ref)-5,p.fmt(p.ref)+" start","end",10,"var(--ink3)"));
+      }
+
+      items.forEach((q,i)=>{
+        const v=val(q);
+        // A strategy with no answer for this pane draws NO BAR and says so on the baseline.
+        // Quickfixclose has no 6%-drawdown risk at any bet size, and a zero-height bar would
+        // read as "it earns nothing" instead of "the question does not apply".
+        if(v==null){
+          svgEl.appendChild(txt(cx(i),bot-6,"n/a","middle",11,"var(--ink3)"));
+          return;
+        }
+        const off=v>yHi, ty=off?top+14:y(v);
+        svgEl.appendChild(mk("rect",{x:(cx(i)-bw/2).toFixed(1),y:ty.toFixed(1),
+          width:bw.toFixed(1),height:Math.max(bot-ty,0).toFixed(1),
+          fill:p.color,rx:4,opacity:.92}));
+        if(off){
+          // The break mark: two strokes in the surface colour across the bar, the standard
+          // "this bar does not end here" glyph.
+          [0,5].forEach(d=>svgEl.appendChild(mk("line",{
+            x1:(cx(i)-bw/2).toFixed(1), x2:(cx(i)+bw/2).toFixed(1),
+            y1:(ty+8+d).toFixed(1), y2:(ty+3+d).toFixed(1),
+            stroke:"var(--surface)","stroke-width":2.5})));
+        }
+        // Direct label on every bar. Four bars is few enough that labelling all of them is
+        // clearer than a hover-only readout, and it means the chart is still readable in the
+        // printed PDF, where nothing can be hovered.
+        const lab=txt(cx(i),ty-7,(p.mfmt||p.fmt)(v)+(off?" ▲":""),"middle",
+                      pi===0?12.5:11,"var(--ink)");
+        if(pi===0) lab.setAttribute("font-weight",600);
+        svgEl.appendChild(lab);
+      });
+    });
+
+    // x axis: the strategy names, written once under the last pane.
+    items.forEach((q,i)=>{
+      svgEl.appendChild(txt(cx(i),H-10,q.s.title,"middle",12,"var(--ink2)"));
+    });
+
+    // Hover: a full-height hit slot per strategy, so the target is the column and not the
+    // bar, which on the short panes would be a few pixels tall.
+    const hit=[];
+    items.forEach((q,i)=>{
+      const r=mk("rect",{x:(mL+slot*i).toFixed(1),y:padT,width:slot.toFixed(1),
+        height:(H-xAxisH-padT).toFixed(1),fill:"transparent"});
+      svgEl.appendChild(r); hit.push(r);
+    });
+    const band=mk("rect",{y:padT,height:(H-xAxisH-padT).toFixed(1),fill:"var(--accent-soft)",
+      opacity:0,width:slot.toFixed(1),x:mL});
+    svgEl.insertBefore(band, svgEl.firstChild);
+    g={W,mL,slot,items,band,padT};
+  }
+  function move(ev){
+    if(!g)return;
+    const r=plotEl.getBoundingClientRect(), scale=g.W/r.width;
+    let i=Math.floor(((ev.clientX-r.left)*scale-g.mL)/g.slot);
+    if(i<0||i>=g.items.length){ leave(); return; }
+    const q=g.items[i];
+    g.band.setAttribute("x",(g.mL+g.slot*i).toFixed(1));
+    g.band.setAttribute("opacity",.5);
+    tipEl.innerHTML=tipRows(q);
+    tipEl.style.opacity=1;
+    const tw=tipEl.offsetWidth, th=tipEl.offsetHeight;
+    const cx=(g.mL+g.slot*i+g.slot/2)/scale;
+    let lx=cx-tw/2; lx=Math.max(2,Math.min(r.width-tw-2,lx));
+    tipEl.style.left=lx+"px"; tipEl.style.top=(g.padT/scale+8)+"px";
+  }
+  function leave(){ if(!g)return; g.band.setAttribute("opacity",0); tipEl.style.opacity=0; }
+  plotEl.addEventListener("pointermove",move);
+  plotEl.addEventListener("pointerleave",leave);
+  return draw;
+}
+
+// Pane colours follow the cap section's, measure for measure: capital green, drawdown red,
+// risk red, return/DD slate, win rate ink. Colour here says WHICH MEASURE, not which
+// strategy -- the strategies are already named on the axis and every bar is labelled with
+// its own value, so spending the colour channel on identity would buy nothing and would put
+// four hues in a place that needs none.
+const FIXED_PANELS = () => [
+  {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
+  {k:"dd", h:90, abs:1, color:"var(--neg)", label:"MAX DRAWDOWN", fmt:v=>v.toFixed(1)+"%"},
+  {k:"rdd", h:90, color:"var(--bars)", label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
+  {k:"wr", h:90, color:"var(--ink2)", label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
+];
+// No return/DD pane on the levered chart: drawdown is pinned at 6% by construction there, so
+// return/DD is just return divided by a constant and the pane would redraw the capital bars
+// in different units. Same reason it is missing from the levered cap chart.
+const NORM_PANELS = () => [
+  {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
+  {k:"risk", h:90, color:"var(--neg)", label:"RISK PER TRADE ALLOWED", fmt:v=>v.toFixed(2)+"%"},
+  {k:"wr", h:90, color:"var(--ink2)", label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
+];
+
+const drawFixed = barPlotter($("fxplot"), $("fxsvg"), $("fxtip"), p =>
+  `<div class="d">${p.s.title}</div>`+
+  row("Final capital", fmtUSD(p.final)) + row("Return", pct(p.ret)) +
+  row("Max drawdown", ddTxt(p.dd)) + row("Risk per trade", riskTxt(FIXED_RISK)) +
+  row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
+  row("Trades", p.n));
+
+const drawNorm = barPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
+  `<div class="d">${p.s.title}</div>`+
+  (p.risk==null ? row("Risk needed","no "+TARGET_DD+"% at any bet") :
+    row("Risk per trade", riskTxt(p.risk)) + row("Final capital", fmtUSD(p.final)) +
+    row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
+    row("Win rate", p.wr.toFixed(1)+"%") + row("Trades", p.n)));
+
+// ---- what the charts say, read out of the charts ------------------------------------
+// Generated, not typed, exactly like the cap section's first passage: every number below
+// comes off the two grids at render time, so it cannot go stale against the data.
+function renderFindings(){
+  const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
+  const fx=FIXED_PTS.slice(), nw=NORM_PTS.filter(p=>p.final!=null);
+  const fxBest=fx.reduce((a,b)=>b.final>a.final?b:a);
+  const ddHi=fx.reduce((a,b)=>Math.abs(b.dd)>Math.abs(a.dd)?b:a);
+  const ddLo=fx.reduce((a,b)=>Math.abs(b.dd)<Math.abs(a.dd)?b:a);
+  const r1=v=>Math.abs(v).toFixed(1);
+  const r2=v=>Math.abs(v).toFixed(2);
+  $("fxfindings").innerHTML = h("Why this one cannot rank them",
+    `Best here is <b>${fxBest.s.title}</b> at <b>${fmtUSD(fxBest.final)}</b>. But on the same `+
+    `1% bet these four dig completely different holes, <b>${r2(ddHi.dd)}%</b> for `+
+    `${ddHi.s.title} against <b>${r2(ddLo.dd)}%</b> for ${ddLo.s.title}, so they are not `+
+    `being asked the same question and the tallest bar is not the answer to it. Return over `+
+    `drawdown is on this chart for that reason, and it is also where the limit of the metric `+
+    `shows: divide by a drawdown that is a rounding error and the ratio runs off the pane. `+
+    `The chart below asks the question properly, by giving each strategy the bet size that `+
+    `puts it in the same hole.`);
+
+  const unreach=NORM_PTS.filter(p=>p.final==null);
+  const nwBest=nw.length?nw.reduce((a,b)=>b.final>a.final?b:a):null;
+  const nwWorst=nw.length?nw.reduce((a,b)=>b.final<a.final?b:a):null;
+  const rHi=nw.length?nw.reduce((a,b)=>b.risk>a.risk?b:a):null;
+  let body = nwBest
+    ? `<span class="hl">Optimal point ${nwBest.s.title}</span> at `+
+      `<b>${fmtUSD(nwBest.final)}</b>, allowed <b>${riskTxt(nwBest.risk)}</b> per trade`+
+      (nwWorst && nwWorst!==nwBest
+        ? `, against ${fmtUSD(nwWorst.final)} for ${nwWorst.s.title} at `+
+          `${riskTxt(nwWorst.risk)}`
+        : ``)+
+      `. The bet size is the whole mechanism: the strategy that draws down least is the one `+
+      `that can be levered hardest, and `+
+      (rHi ? `${rHi.s.title} is allowed the most at ${riskTxt(rHi.risk)}` : ``)+`.`
+    : `No strategy on this page reaches a ${TARGET_DD}% drawdown at any bet size.`;
+  if(unreach.length){
+    body += ` <b>${unreach.map(p=>p.s.title).join(" and ")}</b> `+
+      `${unreach.length>1?"have":"has"} no bar at all: on this sample `+
+      `${unreach.length>1?"they":"it"} cannot be made to lose ${TARGET_DD}% at ANY bet size, `+
+      `so there is no leverage that puts `+
+      `${unreach.length>1?"them":"it"} on the same footing as the rest. That is a result, `+
+      `not a gap, and it is the strongest thing this chart says, read it against the fill `+
+      `assumptions in the note below rather than as a free lunch.`;
+  }
+  $("nwfindings").innerHTML = h("Where it pays", body);
+}
+
+// ---- the rule cards and the table ----------------------------------------------------
+function renderCards(){
+  $("cards").innerHTML = STRATS.map(s =>
+    `<div class="cmpcard"><div class="nm">${s.title}</div>`+
+    `<div class="r4">Rule 4 &middot; ${s.rule4}</div>`+
+    `<div class="rt">${s.rule4_text}</div></div>`).join("");
+}
+function renderTable(){
+  $("tblcount").textContent = STRATS.length + " strategies · rules 1 to 3 identical";
+  const cell=(v,cls)=>`<td class="${cls||"mono"}">${v}</td>`;
+  $("cmpbody").innerHTML = STRATS.map((s,i) => {
+    const f=FIXED_PTS[i], n=NORM_PTS[i];
+    return "<tr>"+
+      `<td class="l">${s.title}</td>`+
+      `<td class="l">${s.rule4}</td>`+
+      cell(f.n) + cell(f.wr.toFixed(1)+"%") + cell(fmtUSD(f.final)) +
+      cell(ddTxt(f.dd)) + cell(rddTxt(f.rdd)) +
+      cell(n.risk==null?"no 6%":riskTxt(n.risk)) +
+      cell(n.final==null?"&mdash;":fmtUSD(n.final)) + "</tr>";
+  }).join("");
+}
+
+function renderAll(){
+  drawFixed(FIXED_PTS, FIXED_PANELS());
+  drawNorm(NORM_PTS, NORM_PANELS());
+}
+renderCards(); renderTable(); renderFindings(); renderAll();
+new ResizeObserver(renderAll).observe($("fxplot"));
+new ResizeObserver(renderAll).observe($("nwplot"));
+window.addEventListener("beforeprint", renderAll);
+</script>
+</body>
+</html>

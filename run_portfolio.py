@@ -6,7 +6,7 @@
 # money management is re-run on the shared account.
 #
 #   python run_portfolio.py            # every registered strategy
-#   python run_portfolio.py quickfixpro    # just one
+#   python run_portfolio.py quickfixwick   # just one
 #
 # Money management (confirmed with the user):
 #   - one account, starting STARTING_CAPITAL; cash balance changes ONLY when a trade closes.
@@ -97,6 +97,14 @@ def cost_in_r(trade):
         # Includes 'data_end' (an obsolete market flattened at its last close): that is an
         # orderly close-out at the bell, not a stop triggered into a gap, so it is charged
         # the limit/target rate rather than the stop rate.
+        #
+        # And it includes the two BAR EXITS, for the same reason. 'exit_close' is a
+        # market-on-close and 'exit_open' a market-on-open: both are scheduled orders placed
+        # into the most liquid minutes of the session, so they belong with the limit rate
+        # rather than with a stop that fires into a move nobody chose the timing of. They
+        # are the whole strategy in quickfixclose's and quickfixopen's case, so the choice
+        # matters more there than anywhere else -- at 2 ticks round trip it is already the
+        # difference between a winner and a loser on their smallest trades.
         exit_ticks = SLIP_TARGET_TICKS
     return (SLIP_ENTRY_TICKS + exit_ticks) * trade["tick"] / rpu
 
@@ -255,9 +263,9 @@ def run(strategy, results):
 # One packed table of EVERY cap in strategies.CAP_CHOICES, written once and shared by every
 # strategy's page -- the cap family is a single family, so two strategies sitting on the
 # same cap are one run and must not be stored twice. Every registered Rule 4 that is NOT a cap
-# (Quickfixpro's entry-bar target) is filed in the same table under its own token; it is
-# listed separately from `caps` in the document, because the caps are the dial's axis and a
-# different Rule 4 shape is not a point on it.
+# (the wick target, the day close, the next open) is filed in the same table under its own
+# token; they are listed separately from `caps` in the document, because the caps are the
+# dial's axis and a different Rule 4 shape is not a point on it.
 #
 # Why precomputed at all, when the risk dial replays in the browser: risk only changes the
 # DOLLAR SIZING of a fixed trade list, but Rule 4 changes the trades themselves. It moves
@@ -270,17 +278,22 @@ VARIANTS_PATH = eng.OUT_DIR / "_variants.json"
 # exact order -- change one side and you must change the other.
 VAR_COLS = ["m", "side", "din", "dout", "xd", "gr", "cr", "bars",
             "pin", "pout", "sl", "reason"]
-# 'target_bar' is Quickfixpro's exit: the entry bar's own extreme. Appended rather than
-# slotted in beside 'target_r' -- the table travels WITH the rows, so the order is free to
-# change, but keeping it append-only makes a hand-read of an old file less confusing.
+# APPEND-ONLY. The table travels WITH the rows, so the order is technically free to change,
+# but keeping it append-only makes a hand-read of an old file far less confusing.
+#   target_bar   Quickfixwick's exit: one tick past the entry bar's own wick.
+#   exit_close   Quickfixclose's: the entry bar's own close.
+#   exit_open    Quickfixopen's: the open of the bar after the entry bar.
+# A new exit reason has to be added HERE, to `prettyReason` in build_equity_html.py AND to
+# charter's TRADE_COLORS, or it will unpack as undefined on the pages and draw grey on the
+# charts.
 VAR_REASONS = ["target_r", "stop", "unknown_pl", "bullish_reversal", "bearish_reversal",
-               "data_end", "open_at_end", "target_bar"]
+               "data_end", "open_at_end", "target_bar", "exit_close", "exit_open"]
 
 
 def _pack_rows(raw, mkt_ix, day_ix):
     """One cap's trades as arrays of small integers and numbers, in VAR_COLS order.
 
-    34 caps x ~80 trades of named JSON fields would put ~700 KB of repeated key names into
+    75 settings x ~80 trades of named JSON fields would put most of a megabyte of key names into
     every page. Indexing the market names and the dates against tables the page already
     has, and dropping to positional arrays, cuts that by about three quarters. Net R is not
     stored: it is gr - cr, and the page computes it.

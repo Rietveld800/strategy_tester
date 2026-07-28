@@ -1,0 +1,1420 @@
+{
+ "meta": {
+  "strategy": "quickfixclose",
+  "title": "Quickfixclose",
+  "cap": "close",
+  "rule4": "exit = the entry bar's own close, flat the same day",
+  "timeframe": "daily",
+  "source": "strategy_tester",
+  "starting_capital": 100000.0,
+  "risk_pct": 1.39,
+  "n_markets": 28,
+  "n_trades": 103
+ },
+ "markets": {
+  "Bitcoin_Per_USD_Binance": {
+   "tick": 1.0,
+   "price_decimals": 0,
+   "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-02-02",
+     "entry": 76508.0,
+     "exit_date": "2026-02-02",
+     "exit": 78794.0,
+     "stop": 74618.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.21,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-06",
+     "entry": 62630.0,
+     "exit_date": "2026-02-06",
+     "exit": 70588.0,
+     "stop": 60074.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.114,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-03-17",
+     "entry": 75438.0,
+     "exit_date": "2026-03-17",
+     "exit": 73908.0,
+     "stop": 76101.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.308,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-04-14",
+     "entry": 74900.0,
+     "exit_date": "2026-04-14",
+     "exit": 74158.0,
+     "stop": 76040.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.651,
+     "bars": 0
+    }
+   ]
+  },
+  "Bitcoin_Per_USD_CME": {
+   "tick": 1.0,
+   "price_decimals": 0,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-27",
+     "entry": 79740.0,
+     "exit_date": "2026-04-27",
+     "exit": 77510.0,
+     "stop": 80226.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 4.588,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-06",
+     "entry": 83046.0,
+     "exit_date": "2026-05-06",
+     "exit": 82075.0,
+     "stop": 83601.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.75,
+     "bars": 0
+    }
+   ]
+  },
+  "Chicago_SRW_Wheat_Futures_CBOT": {
+   "tick": 0.1,
+   "price_decimals": 1,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-29",
+     "entry": 662.6,
+     "exit_date": "2026-04-29",
+     "exit": 653.0,
+     "stop": 671.5,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.079,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-14",
+     "entry": 681.0,
+     "exit_date": "2026-05-14",
+     "exit": 658.0,
+     "stop": 688.3,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.151,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-15",
+     "entry": 577.5,
+     "exit_date": "2026-06-15",
+     "exit": 589.6,
+     "stop": 570.9,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.833,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-30",
+     "entry": 578.0,
+     "exit_date": "2026-06-30",
+     "exit": 589.2,
+     "stop": 573.9,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.732,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-13",
+     "entry": 645.0,
+     "exit_date": "2026-07-13",
+     "exit": 635.2,
+     "stop": 653.1,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.21,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-24",
+     "entry": 706.0,
+     "exit_date": "2026-07-24",
+     "exit": 678.0,
+     "stop": 711.3,
+     "target": null,
+     "reason": "exit_close",
+     "r": 5.283,
+     "bars": 0
+    }
+   ]
+  },
+  "Cocoa_NYCSCE_Futures": {
+   "tick": 1.0,
+   "price_decimals": 0,
+   "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-01-13",
+     "entry": 5097.0,
+     "exit_date": "2026-01-13",
+     "exit": 5224.0,
+     "stop": 5050.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.702,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-01-30",
+     "entry": 4082.0,
+     "exit_date": "2026-01-30",
+     "exit": 4165.0,
+     "stop": 3930.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.546,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-02",
+     "entry": 4082.0,
+     "exit_date": "2026-02-02",
+     "exit": 4210.0,
+     "stop": 3939.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.895,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-04",
+     "entry": 4082.0,
+     "exit_date": "2026-02-04",
+     "exit": 4086.0,
+     "stop": 4016.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.061,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-09",
+     "entry": 4082.0,
+     "exit_date": "2026-02-09",
+     "exit": 4186.0,
+     "stop": 4049.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.151,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-24",
+     "entry": 2990.0,
+     "exit_date": "2026-02-24",
+     "exit": 3078.0,
+     "stop": 2951.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.256,
+     "bars": 0
+    }
+   ]
+  },
+  "Coffee_NYCSCE_Futures": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-01-07",
+     "entry": 377.8,
+     "exit_date": "2026-01-07",
+     "exit": 375.45,
+     "stop": 382.86,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.464,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-01-08",
+     "entry": 377.8,
+     "exit_date": "2026-01-08",
+     "exit": 372.35,
+     "stop": 383.86,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.899,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-01-21",
+     "entry": 345.1,
+     "exit_date": "2026-01-21",
+     "exit": 347.5,
+     "stop": 341.79,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.725,
+     "bars": 0
+    }
+   ]
+  },
+  "Corn_CBOT_Futures": {
+   "tick": 0.1,
+   "price_decimals": 1,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-30",
+     "entry": 478.2,
+     "exit_date": "2026-04-30",
+     "exit": 474.6,
+     "stop": 480.1,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.895,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-05",
+     "entry": 486.4,
+     "exit_date": "2026-05-05",
+     "exit": 480.0,
+     "stop": 487.5,
+     "target": null,
+     "reason": "exit_close",
+     "r": 5.818,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-12",
+     "entry": 411.0,
+     "exit_date": "2026-06-12",
+     "exit": 412.6,
+     "stop": 408.3,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.593,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-15",
+     "entry": 411.0,
+     "exit_date": "2026-06-15",
+     "exit": 415.4,
+     "stop": 406.1,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.898,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-24",
+     "entry": 488.1,
+     "exit_date": "2026-07-24",
+     "exit": 487.4,
+     "stop": 492.1,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.175,
+     "bars": 0
+    }
+   ]
+  },
+  "Dow_Futures_E_mini": {
+   "tick": 1.0,
+   "price_decimals": 0,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-22",
+     "entry": 49750.0,
+     "exit_date": "2026-04-22",
+     "exit": 49668.0,
+     "stop": 49811.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.344,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-05",
+     "entry": 51744.0,
+     "exit_date": "2026-06-05",
+     "exit": 50936.0,
+     "stop": 51850.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 7.623,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-01",
+     "entry": 52734.0,
+     "exit_date": "2026-07-01",
+     "exit": 52668.0,
+     "stop": 53106.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.177,
+     "bars": 0
+    }
+   ]
+  },
+  "Ethereum_Per_USD_Binance": {
+   "tick": 1.0,
+   "price_decimals": 0,
+   "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-01-29",
+     "entry": 2812.0,
+     "exit_date": "2026-01-29",
+     "exit": 2822.0,
+     "stop": 2754.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.172,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-24",
+     "entry": 1818.0,
+     "exit_date": "2026-02-24",
+     "exit": 1851.0,
+     "stop": 1799.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.737,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-04-15",
+     "entry": 2370.0,
+     "exit_date": "2026-04-15",
+     "exit": 2359.0,
+     "stop": 2386.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.688,
+     "bars": 0
+    }
+   ]
+  },
+  "EURO_Futures": {
+   "tick": 1e-05,
+   "price_decimals": 5,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-05-07",
+     "entry": 1.1783,
+     "exit_date": "2026-05-07",
+     "exit": 1.17705,
+     "stop": 1.17986,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.801,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-24",
+     "entry": 1.1391,
+     "exit_date": "2026-06-24",
+     "exit": 1.1394,
+     "stop": 1.13634,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.109,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-25",
+     "entry": 1.1391,
+     "exit_date": "2026-06-25",
+     "exit": 1.1411,
+     "stop": 1.13714,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.02,
+     "bars": 0
+    }
+   ]
+  },
+  "EURO_STOXX_50_Index": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-02-03",
+     "entry": 6043.4,
+     "exit_date": "2026-02-03",
+     "exit": 5995.35,
+     "stop": 6073.35,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.604,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-10",
+     "entry": 6060.23,
+     "exit_date": "2026-02-10",
+     "exit": 6047.05,
+     "stop": 6078.29,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.73,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-12",
+     "entry": 6060.23,
+     "exit_date": "2026-02-12",
+     "exit": 6011.28,
+     "stop": 6099.08,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.26,
+     "bars": 0
+    }
+   ]
+  },
+  "German_Long_Bund": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-06-30",
+     "entry": 127.47,
+     "exit_date": "2026-06-30",
+     "exit": 127.34,
+     "stop": 127.7,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.565,
+     "bars": 0
+    }
+   ]
+  },
+  "Gold_Futures_COMEX": {
+   "tick": 0.1,
+   "price_decimals": 1,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2025-12-18",
+     "entry": 4393.0,
+     "exit_date": "2025-12-18",
+     "exit": 4364.5,
+     "stop": 4409.6,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.717,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2025-12-30",
+     "entry": 4393.0,
+     "exit_date": "2025-12-30",
+     "exit": 4386.3,
+     "stop": 4420.6,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.243,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-03-02",
+     "entry": 5358.1,
+     "exit_date": "2026-03-02",
+     "exit": 5311.6,
+     "stop": 5434.2,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.611,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-03-24",
+     "entry": 4335.0,
+     "exit_date": "2026-03-24",
+     "exit": 4402.0,
+     "stop": 4306.2,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.326,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-11",
+     "entry": 4746.0,
+     "exit_date": "2026-05-11",
+     "exit": 4728.7,
+     "stop": 4758.5,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.384,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-12",
+     "entry": 4746.0,
+     "exit_date": "2026-05-12",
+     "exit": 4686.7,
+     "stop": 4783.5,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.581,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-08",
+     "entry": 4347.0,
+     "exit_date": "2026-06-08",
+     "exit": 4363.4,
+     "stop": 4292.9,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.303,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-11",
+     "entry": 4103.0,
+     "exit_date": "2026-06-11",
+     "exit": 4114.0,
+     "stop": 4046.1,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.193,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-30",
+     "entry": 3984.0,
+     "exit_date": "2026-06-30",
+     "exit": 4038.5,
+     "stop": 3955.3,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.899,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-17",
+     "entry": 3984.0,
+     "exit_date": "2026-07-17",
+     "exit": 4018.8,
+     "stop": 3962.9,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.649,
+     "bars": 0
+    }
+   ]
+  },
+  "Japanese_Yen_Futures": {
+   "tick": 1e-06,
+   "price_decimals": 6,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-05-01",
+     "entry": 0.006417,
+     "exit_date": "2026-05-01",
+     "exit": 0.006391,
+     "stop": 0.006454,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.716,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-04",
+     "entry": 0.006417,
+     "exit_date": "2026-05-04",
+     "exit": 0.0064,
+     "stop": 0.006446,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.586,
+     "bars": 0
+    }
+   ]
+  },
+  "Live_Cattle_Futures_CME": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-01-29",
+     "entry": 239.06,
+     "exit_date": "2026-01-29",
+     "exit": 237.27,
+     "stop": 239.73,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.672,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-01-30",
+     "entry": 239.06,
+     "exit_date": "2026-01-30",
+     "exit": 236.8,
+     "stop": 239.76,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.229,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-04-15",
+     "entry": 251.58,
+     "exit_date": "2026-04-15",
+     "exit": 251.07,
+     "stop": 251.91,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.546,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-04-16",
+     "entry": 251.45,
+     "exit_date": "2026-04-16",
+     "exit": 247.62,
+     "stop": 251.91,
+     "target": null,
+     "reason": "exit_close",
+     "r": 8.326,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-01",
+     "entry": 255.38,
+     "exit_date": "2026-05-01",
+     "exit": 253.0,
+     "stop": 256.63,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.904,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-08",
+     "entry": 235.2,
+     "exit_date": "2026-07-08",
+     "exit": 237.62,
+     "stop": 234.36,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.881,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-09",
+     "entry": 235.2,
+     "exit_date": "2026-07-09",
+     "exit": 235.25,
+     "stop": 234.39,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.062,
+     "bars": 0
+    }
+   ]
+  },
+  "Nasdaq_100_E_mini": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-05-04",
+     "entry": 27907.0,
+     "exit_date": "2026-05-04",
+     "exit": 27776.0,
+     "stop": 27965.76,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.229,
+     "bars": 0
+    }
+   ]
+  },
+  "NY_Copper_Futures": {
+   "tick": 0.0001,
+   "price_decimals": 4,
+   "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-02-05",
+     "entry": 5.7714,
+     "exit_date": "2026-02-05",
+     "exit": 5.821,
+     "stop": 5.6849,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.573,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-13",
+     "entry": 5.7714,
+     "exit_date": "2026-02-13",
+     "exit": 5.803,
+     "stop": 5.6774,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.336,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-03-23",
+     "entry": 5.3133,
+     "exit_date": "2026-03-23",
+     "exit": 5.4725,
+     "stop": 5.2459,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.362,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-04-15",
+     "entry": 6.0956,
+     "exit_date": "2026-04-15",
+     "exit": 6.085,
+     "stop": 6.1481,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.202,
+     "bars": 0
+    }
+   ]
+  },
+  "NY_Natural_Gas_Futures": {
+   "tick": 0.001,
+   "price_decimals": 3,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-06-25",
+     "entry": 3.305,
+     "exit_date": "2026-06-25",
+     "exit": 3.295,
+     "stop": 3.354,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.204,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-08",
+     "entry": 3.305,
+     "exit_date": "2026-07-08",
+     "exit": 3.212,
+     "stop": 3.356,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.823,
+     "bars": 0
+    }
+   ]
+  },
+  "NY_Palladium_Futures": {
+   "tick": 0.1,
+   "price_decimals": 1,
+   "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-05-21",
+     "entry": 1360.4,
+     "exit_date": "2026-05-21",
+     "exit": 1385.9,
+     "stop": 1343.4,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.5,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-25",
+     "entry": 1167.0,
+     "exit_date": "2026-06-25",
+     "exit": 1193.2,
+     "stop": 1159.4,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.447,
+     "bars": 0
+    }
+   ]
+  },
+  "NY_Platinum_Futures": {
+   "tick": 0.1,
+   "price_decimals": 1,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-05-07",
+     "entry": 2084.6,
+     "exit_date": "2026-05-07",
+     "exit": 2062.3,
+     "stop": 2113.7,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.766,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-23",
+     "entry": 1641.5,
+     "exit_date": "2026-06-23",
+     "exit": 1662.0,
+     "stop": 1621.0,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.0,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-25",
+     "entry": 1581.5,
+     "exit_date": "2026-06-25",
+     "exit": 1603.0,
+     "stop": 1547.6,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.634,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-01",
+     "entry": 1559.0,
+     "exit_date": "2026-07-01",
+     "exit": 1599.9,
+     "stop": 1539.5,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.097,
+     "bars": 0
+    }
+   ]
+  },
+  "S_P_500_E_mini": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-28",
+     "entry": 7206.55,
+     "exit_date": "2026-04-28",
+     "exit": 7171.0,
+     "stop": 7223.26,
+     "target": null,
+     "reason": "exit_close",
+     "r": 2.127,
+     "bars": 0
+    }
+   ]
+  },
+  "S_P_500_Index": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-01-07",
+     "entry": 6957.43,
+     "exit_date": "2026-01-07",
+     "exit": 6920.93,
+     "stop": 6965.7,
+     "target": null,
+     "reason": "exit_close",
+     "r": 4.413,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-01-27",
+     "entry": 6982.4,
+     "exit_date": "2026-01-27",
+     "exit": 6978.6,
+     "stop": 6988.83,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.591,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-01-29",
+     "entry": 6982.4,
+     "exit_date": "2026-01-29",
+     "exit": 6969.01,
+     "stop": 6992.85,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.281,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-02",
+     "entry": 6982.4,
+     "exit_date": "2026-02-02",
+     "exit": 6976.44,
+     "stop": 6991.93,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.625,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-10",
+     "entry": 6982.4,
+     "exit_date": "2026-02-10",
+     "exit": 6941.81,
+     "stop": 6986.84,
+     "target": null,
+     "reason": "exit_close",
+     "r": 9.142,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-11",
+     "entry": 6982.4,
+     "exit_date": "2026-02-11",
+     "exit": 6941.47,
+     "stop": 6993.49,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.691,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-03-05",
+     "entry": 6794.4,
+     "exit_date": "2026-03-05",
+     "exit": 6830.71,
+     "stop": 6770.77,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.537,
+     "bars": 0
+    }
+   ]
+  },
+  "Silver_Futures_COMEX": {
+   "tick": 0.001,
+   "price_decimals": 3,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-05-12",
+     "entry": 86.081,
+     "exit_date": "2026-05-12",
+     "exit": 85.591,
+     "stop": 88.001,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.255,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-05-28",
+     "entry": 73.844,
+     "exit_date": "2026-05-28",
+     "exit": 75.912,
+     "stop": 71.999,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.121,
+     "bars": 0
+    }
+   ]
+  },
+  "Sugar_World_CSCE_Futures": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-07-01",
+     "entry": 15.0,
+     "exit_date": "2026-07-01",
+     "exit": 14.99,
+     "stop": 15.26,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.038,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-02",
+     "entry": 15.0,
+     "exit_date": "2026-07-02",
+     "exit": 14.85,
+     "stop": 15.18,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.833,
+     "bars": 0
+    }
+   ]
+  },
+  "Teucrium_Wheat_Fund": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-01-28",
+     "entry": 20.89,
+     "exit_date": "2026-01-28",
+     "exit": 20.88,
+     "stop": 21.07,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.056,
+     "bars": 0
+    }
+   ]
+  },
+  "United_States_Oil_Fund_LP": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-03-20",
+     "entry": 121.72,
+     "exit_date": "2026-03-20",
+     "exit": 121.43,
+     "stop": 123.03,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.221,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-03-31",
+     "entry": 130.16,
+     "exit_date": "2026-03-31",
+     "exit": 127.25,
+     "stop": 130.94,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.731,
+     "bars": 0
+    }
+   ]
+  },
+  "US_30_Year_T_Bond_Futures_CBOT": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-02-11",
+     "entry": 116.5,
+     "exit_date": "2026-02-11",
+     "exit": 116.15,
+     "stop": 116.79,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.207,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-23",
+     "entry": 118.02,
+     "exit_date": "2026-02-23",
+     "exit": 117.9,
+     "stop": 118.16,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.857,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-02-25",
+     "entry": 118.08,
+     "exit_date": "2026-02-25",
+     "exit": 117.84,
+     "stop": 118.16,
+     "target": null,
+     "reason": "exit_close",
+     "r": 3.0,
+     "bars": 0
+    }
+   ]
+  },
+  "US_Dollar_Index_Futures": {
+   "tick": 0.001,
+   "price_decimals": 3,
+   "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-05-01",
+     "entry": 97.814,
+     "exit_date": "2026-05-01",
+     "exit": 98.005,
+     "stop": 97.569,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.78,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-05-06",
+     "entry": 97.714,
+     "exit_date": "2026-05-06",
+     "exit": 97.875,
+     "stop": 97.469,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.657,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-20",
+     "entry": 99.376,
+     "exit_date": "2026-05-20",
+     "exit": 99.014,
+     "stop": 99.571,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.856,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-21",
+     "entry": 99.376,
+     "exit_date": "2026-05-21",
+     "exit": 99.218,
+     "stop": 99.466,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.756,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-28",
+     "entry": 99.246,
+     "exit_date": "2026-05-28",
+     "exit": 98.969,
+     "stop": 99.501,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.086,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-08",
+     "entry": 100.066,
+     "exit_date": "2026-06-08",
+     "exit": 100.024,
+     "stop": 100.201,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.311,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-11",
+     "entry": 100.066,
+     "exit_date": "2026-06-11",
+     "exit": 99.849,
+     "stop": 100.316,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.868,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-17",
+     "entry": 100.066,
+     "exit_date": "2026-06-17",
+     "exit": 99.866,
+     "stop": 100.361,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.678,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-19",
+     "entry": 100.621,
+     "exit_date": "2026-06-19",
+     "exit": 100.618,
+     "stop": 100.911,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.01,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-25",
+     "entry": 101.411,
+     "exit_date": "2026-06-25",
+     "exit": 101.193,
+     "stop": 101.526,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.896,
+     "bars": 0
+    }
+   ]
+  },
+  "USD_EUR_Cross_Rate": {
+   "tick": 0.0001,
+   "price_decimals": 4,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-03-04",
+     "entry": 0.8614,
+     "exit_date": "2026-03-04",
+     "exit": 0.8589,
+     "stop": 0.8637,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.087,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-03-05",
+     "entry": 0.8614,
+     "exit_date": "2026-03-05",
+     "exit": 0.8612,
+     "stop": 0.8649,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.057,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-03-06",
+     "entry": 0.8614,
+     "exit_date": "2026-03-06",
+     "exit": 0.8605,
+     "stop": 0.8658,
+     "target": null,
+     "reason": "exit_close",
+     "r": 0.204,
+     "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-04-17",
+     "entry": 0.8467,
+     "exit_date": "2026-04-17",
+     "exit": 0.8498,
+     "stop": 0.8436,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.0,
+     "bars": 0
+    }
+   ]
+  }
+ }
+}

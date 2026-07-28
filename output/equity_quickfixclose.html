@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Strategy report</title>
+<title>Quickfixclose equity curve optimized</title>
 <style>
 :root{
   --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
@@ -299,220 +299,9 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 }
 </style>
 </head>
-<body>
+<body data-strategy="quickfixclose">
 <div class="wrap">
-<nav class="nav noprint"><span class="lbl">Report</span><span style="font-size:13px;color:var(--ink2)"><span class="repcount"></span> &middot; in the print dialog choose destination <b>Save as PDF</b>, not "Microsoft Print to PDF", which rasterises every page into images (large file, no selectable text)</span><span class="navbtns"><button class="pdfbtn" data-el="printnow" type="button">Print / Save as PDF</button></span></nav>
-<section class="rep" data-root>
-  <header>
-    <div class="eyebrow">Quickfix strategy &middot; daily &middot; $100k starting capital</div>
-    <h1>Quickfix equity curve optimized</h1>
-    <p class="lede"><span data-el="lede4">Takes profit at a fixed ceiling: a trade is closed at 1.9R, or earlier at the first opposite reversal that sits between entry and 1.9R. The 1.9R ceiling caps every winner.</span> All <b>41 markets</b> in the archive were tested, <b>Dec 2025 &ndash; Jul 2026</b>; the rules fired on <b data-el="ledemk">28</b> of them, and the rest are listed with zero trades under <em>By market</em>. Capital moves only when a trade closes; each new trade risks <span class="riskecho">1.39%</span> of liquid capital, the risk that holds this strategy to a 6% maximum drawdown. Figures are net of realistic slippage.</p>
-  </header>
-
-  <div class="rules">
-    <div class="rhead">
-      <div class="t">How a trade is found</div>
-      <div class="s">Described for a short; the long side is the exact mirror, bearish
-        levels for the entry, bullish for the target.</div>
-    </div>
-    <div class="rulegrid"><div class="rule"><span class="n">1</span><div><div class="rn">Rule 1 &middot; Signal</div><div class="rt">At least <b>3 bullish reversal levels</b> lie between the previous day's close and today's high, price rose into them and tested them. The lowest of those is the <b>first</b> reversal, the next one up the <b>second</b>.</div></div></div><div class="rule"><span class="n">2</span><div><div class="rn">Rule 2 &middot; Clean setup</div><div class="rt">Refuse the trade if the bar <b>opened at or above the second</b> reversal. Opening below the first, or between the first and the second, is fine; opening above the second means price was already inside the cluster when the day began.</div></div></div><div class="rule"><span class="n">3</span><div><div class="rn">Rule 3 &middot; Room to move</div><div class="rt">The nearest <b>bearish</b> reversal below the entry must be at least <b>3.5R</b> below it. Any closer and there is not enough room to pay for the risk being taken.</div></div></div><div class="rule"><span class="n">4</span><div><div class="rn">Rule 4 &middot; Target</div><div class="rt" data-el="rule4text">Take profit at <b>1.9R</b>. If a bearish reversal sits closer than 1.9R below the entry, that level becomes the target instead, price is likely to turn there rather than run through it. <b>1.9R is a hard ceiling on every winner.</b></div></div></div></div>
-    <div class="rulefoot"><b>Entry and stop.</b> The bar must <b>close below the first reversal</b>, the proof that price probed the cluster and snapped back. The trade fills at that reversal price, and the stop sits <b>one tick above that bar's high</b>. Position size makes that distance exactly 1.39% of capital, so <b>1R = 1.39%</b>. One position per market at a time; management starts the day after entry.</div>
-    <div class="rulefoot">Entries come from the <b>reversal levels only</b>. No timing, cycle or aggregate turning-point signal is involved, this is the price half of the Socrates method on its own.</div>
-  </div>
-
-  <section class="riskbar capbar noprint">
-    <span class="lbl">Rule 4 &middot; profit cap</span>
-    <input data-el="capin" type="number" min="0" max="10"
-           step="0.1" value="1.9"
-           aria-label="Rule 4 profit cap, in R">
-    <span class="unit">R</span>
-    <label class="nocap"><input data-el="capoff" type="checkbox"> no cap</label>
-    <span class="hint" data-el="caphint"></span>
-  </section>
-
-
-  <section class="riskbar noprint">
-    <span class="lbl">Risk per trade</span>
-    <input data-el="riskin" type="number" min="0" max="100" step="0.1" value="1.39"
-           aria-label="Risk per trade, percent of liquid capital">
-    <span class="unit">% of liquid capital</span>
-    <span class="hint" data-el="riskhint"></span>
-    <span class="warn" data-el="riskwarn"></span>
-  </section>
-
-  <section class="kpis" data-el="kpis"></section>
-
-  <section class="card">
-    <div class="charthead">
-      <span class="t">Capital, drawdown &amp; positions open</span>
-      <span class="s">net of slippage &middot; hover for any day</span>
-    </div>
-    <div class="plot" data-el="plot">
-      <svg data-el="svg" role="img" aria-label="Portfolio equity, drawdown and open positions over time"></svg>
-      <div class="tip" data-el="tip"></div>
-    </div>
-  </section>
-
-  <p class="note"><b>Backtest, net of slippage.</b> Costs are charged as tick slippage, 1 tick on entry, 1 on a limit take-profit, 3 on a stop, converted to R through each trade's own risk distance.</p>
-
-  <h2 class="section-h">Per-trade statistics</h2>
-  <section class="stats4" data-el="tradestats"></section>
-
-  <h2 class="section-h">Choosing the profit cap</h2>
-  <section class="card sweepcard">
-    <div class="charthead">
-      <span class="t">Every cap from 0R to 10R, at a constant 1% risk per trade</span>
-      <span class="s">real result &middot; drawdown varies &middot; does not follow the risk dial</span>
-    </div>
-    <p class="chartnote">What each cap actually did on the same fixed bet. Every point is a
-      full backtest; the risk is pinned so the <b>drawdown is free to move</b>, which is what
-      makes the wider caps look good here, part of their return is the deeper hole
-      they were allowed to dig. Rank them on the chart below, not this one.</p>
-    <div class="plot sweepplot" data-el="fxplot">
-      <svg data-el="fxsvg" role="img" aria-label="Final capital, max drawdown, risk, return over drawdown and win rate against the Rule 4 profit cap at a constant 1 percent risk"></svg>
-      <div class="tip" data-el="fxtip"></div>
-    </div>
-    <div class="findings" data-el="fixedfindings"></div>
-  </section>
-
-  <section class="card sweepcard">
-    <div class="charthead">
-      <span class="t">The same caps levered to a constant 6% drawdown</span>
-      <span class="s">risk solved per cap &middot; equal pain &middot; this is the ranking</span>
-    </div>
-    <p class="chartnote">Risk is a free variable, so the honest question is: held to the
-      <b>same 6% maximum drawdown</b>, which cap ends up with the most money? The risk is
-      solved per cap to make that true, and the second pane is what each one is then allowed
-      to bet.</p>
-    <div class="plot sweepplot" data-el="nwplot">
-      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk per trade allowed and win rate against the Rule 4 profit cap at a constant 6 percent drawdown"></svg>
-      <div class="tip" data-el="nwtip"></div>
-    </div>
-    <div class="findings" data-el="capfindings"></div>
-  </section>
-
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">All trades</span>
-      <span class="s"><span data-el="tcount"></span> &middot; <span class="noprint">click a column to sort</span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades" data-el="ttbl"><thead data-el="thead"></thead><tbody data-el="ttbody"></tbody></table>
-    </div>
-  </div>
-
-  <h2 class="section-h">By market</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Per-market performance</span>
-      <span class="s"><span data-el="mcount"></span> &middot; <span class="noprint">click a column to sort</span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades" data-el="mtbl"><thead data-el="mhead"></thead><tbody data-el="mbody"></tbody></table>
-    </div>
-  </div>
-
-  <h2 class="section-h">Daily data</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Every trading day</span>
-      <span class="s"><span data-el="dcount"></span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades"><thead><tr>
-        <th class="l" style="width:11%">Date</th><th style="width:11%">Capital</th>
-        <th style="width:11%">Drawdown</th><th style="width:6%">Open</th>
-        <th class="l" style="width:61%">Activity</th>
-      </tr></thead><tbody data-el="tbody"></tbody></table>
-    </div>
-  </div>
-
-  <footer class="mono">source: quickfix_portfolio_daily.xlsx &middot; 41 markets tested, <span data-el="footmk">28</span> traded &middot; rule 4: <span data-el="footrule4">target = 1.9R, or an opposite reversal nearer than 1.9R</span> &middot; per-market one-position-at-a-time, portfolio-level concurrency</footer>
-</section>
-<section class="rep" data-root>
-  <header>
-    <div class="eyebrow">Quickfixwick strategy &middot; daily &middot; $100k starting capital</div>
-    <h1>Quickfixwick equity curve optimized</h1>
-    <p class="lede"><span data-el="lede4">Captures the initial energy move only: the target is fixed at entry, one tick beyond the entry bar's own wick, a tick below its low on a short, and never moves. Stop and target are the two sides of the entry bar, so the bet is simply that its low breaks before its high.</span> All <b>41 markets</b> in the archive were tested, <b>Dec 2025 &ndash; Jul 2026</b>; the rules fired on <b data-el="ledemk">28</b> of them, and the rest are listed with zero trades under <em>By market</em>. Capital moves only when a trade closes; each new trade risks <span class="riskecho">1%</span> of liquid capital, the risk that holds this strategy to a 6% maximum drawdown. Figures are net of realistic slippage.</p>
-  </header>
-
-  <div class="rules">
-    <div class="rhead">
-      <div class="t">How a trade is found</div>
-      <div class="s">Described for a short; the long side is the exact mirror, bearish
-        levels for the entry, bullish for the target.</div>
-    </div>
-    <div class="rulegrid"><div class="rule"><span class="n">1</span><div><div class="rn">Rule 1 &middot; Signal</div><div class="rt">At least <b>3 bullish reversal levels</b> lie between the previous day's close and today's high, price rose into them and tested them. The lowest of those is the <b>first</b> reversal, the next one up the <b>second</b>.</div></div></div><div class="rule"><span class="n">2</span><div><div class="rn">Rule 2 &middot; Clean setup</div><div class="rt">Refuse the trade if the bar <b>opened at or above the second</b> reversal. Opening below the first, or between the first and the second, is fine; opening above the second means price was already inside the cluster when the day began.</div></div></div><div class="rule"><span class="n">3</span><div><div class="rn">Rule 3 &middot; Room to move</div><div class="rt">The nearest <b>bearish</b> reversal below the entry must be at least <b>3.5R</b> below it. Any closer and there is not enough room to pay for the risk being taken.</div></div></div><div class="rule"><span class="n">4</span><div><div class="rn">Rule 4 &middot; Target</div><div class="rt" data-el="rule4text">Take profit <b>one tick below the entry bar's own low</b>, a tick past the wick it printed on the way back down. The level is fixed the moment the trade is placed and never moves, no reversal level and no R ceiling is involved. The whole trade is contained by the entry bar: the stop one tick above its high, the target one tick below its low. This is a bet on the <b>initial energy</b> of the move, if the thesis behind the entry is right, that low should break more often than the high does. A winner is worth whatever the entry bar measured, which is usually well under 3.5R.</div></div></div></div>
-    <div class="rulefoot"><b>Entry and stop.</b> The bar must <b>close below the first reversal</b>, the proof that price probed the cluster and snapped back. The trade fills at that reversal price, and the stop sits <b>one tick above that bar's high</b>. Position size makes that distance exactly 1% of capital, so <b>1R = 1%</b>. One position per market at a time; management starts the day after entry.</div>
-    <div class="rulefoot">Entries come from the <b>reversal levels only</b>. No timing, cycle or aggregate turning-point signal is involved, this is the price half of the Socrates method on its own.</div>
-  </div>
-
-
-  <section class="riskbar noprint">
-    <span class="lbl">Risk per trade</span>
-    <input data-el="riskin" type="number" min="0" max="100" step="0.1" value="1"
-           aria-label="Risk per trade, percent of liquid capital">
-    <span class="unit">% of liquid capital</span>
-    <span class="hint" data-el="riskhint"></span>
-    <span class="warn" data-el="riskwarn"></span>
-  </section>
-
-  <section class="kpis" data-el="kpis"></section>
-
-  <section class="card">
-    <div class="charthead">
-      <span class="t">Capital, drawdown &amp; positions open</span>
-      <span class="s">net of slippage &middot; hover for any day</span>
-    </div>
-    <div class="plot" data-el="plot">
-      <svg data-el="svg" role="img" aria-label="Portfolio equity, drawdown and open positions over time"></svg>
-      <div class="tip" data-el="tip"></div>
-    </div>
-  </section>
-
-  <p class="note"><b>Backtest, net of slippage.</b> Costs are charged as tick slippage, 1 tick on entry, 1 on a limit take-profit, 3 on a stop, converted to R through each trade's own risk distance.</p>
-
-  <h2 class="section-h">Per-trade statistics</h2>
-  <section class="stats4" data-el="tradestats"></section>
-
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">All trades</span>
-      <span class="s"><span data-el="tcount"></span> &middot; <span class="noprint">click a column to sort</span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades" data-el="ttbl"><thead data-el="thead"></thead><tbody data-el="ttbody"></tbody></table>
-    </div>
-  </div>
-
-  <h2 class="section-h">By market</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Per-market performance</span>
-      <span class="s"><span data-el="mcount"></span> &middot; <span class="noprint">click a column to sort</span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades" data-el="mtbl"><thead data-el="mhead"></thead><tbody data-el="mbody"></tbody></table>
-    </div>
-  </div>
-
-  <h2 class="section-h">Daily data</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Every trading day</span>
-      <span class="s"><span data-el="dcount"></span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades"><thead><tr>
-        <th class="l" style="width:11%">Date</th><th style="width:11%">Capital</th>
-        <th style="width:11%">Drawdown</th><th style="width:6%">Open</th>
-        <th class="l" style="width:61%">Activity</th>
-      </tr></thead><tbody data-el="tbody"></tbody></table>
-    </div>
-  </div>
-
-  <footer class="mono">source: quickfixwick_portfolio_daily.xlsx &middot; 41 markets tested, <span data-el="footmk">28</span> traded &middot; rule 4: <span data-el="footrule4">target = one tick beyond the entry bar's own wick (a short: below its low)</span> &middot; per-market one-position-at-a-time, portfolio-level concurrency</footer>
-</section>
+<nav class="nav noprint"><span class="lbl">Strategy</span><a href="equity_quickfix.html">Quickfix<span class="sub">target = 1.9R, or an opposite reversal nearer than 1.9R</span></a><a href="equity_quickfixwick.html">Quickfixwick<span class="sub">target = one tick beyond the entry bar's own wick (a short: below its low)</span></a><a href="equity_quickfixclose.html" class="on">Quickfixclose<span class="sub">exit = the entry bar's own close, flat the same day</span></a><a href="equity_quickfixopen.html">Quickfixopen<span class="sub">exit = the open of the price bar that follows the entry bar</span></a><span class="navbtns"><a class="pdfbtn" href="comparison.html">Compare</a><button class="pdfbtn" data-el="concl" type="button">Conclusions</button><button class="pdfbtn" data-el="pdfopen" type="button">Export PDF</button></span></nav>
 <section class="rep" data-root>
   <header>
     <div class="eyebrow">Quickfixclose strategy &middot; daily &middot; $100k starting capital</div>
@@ -596,101 +385,6 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
   </div>
 
   <footer class="mono">source: quickfixclose_portfolio_daily.xlsx &middot; 41 markets tested, <span data-el="footmk">28</span> traded &middot; rule 4: <span data-el="footrule4">exit = the entry bar's own close, flat the same day</span> &middot; per-market one-position-at-a-time, portfolio-level concurrency</footer>
-</section>
-<section class="rep" data-root>
-  <header>
-    <div class="eyebrow">Quickfixopen strategy &middot; daily &middot; $100k starting capital</div>
-    <h1>Quickfixopen equity curve optimized</h1>
-    <p class="lede"><span data-el="lede4">Holds through one night and no longer: the position is closed at the open of the price bar that follows the entry bar. That open is the first price of the day, so the exit is unconditional, and what the trade earns is exactly what the nightly session did to it.</span> All <b>41 markets</b> in the archive were tested, <b>Dec 2025 &ndash; Jul 2026</b>; the rules fired on <b data-el="ledemk">28</b> of them, and the rest are listed with zero trades under <em>By market</em>. Capital moves only when a trade closes; each new trade risks <span class="riskecho">1%</span> of liquid capital, the risk that holds this strategy to a 6% maximum drawdown. Figures are net of realistic slippage.</p>
-  </header>
-
-  <div class="rules">
-    <div class="rhead">
-      <div class="t">How a trade is found</div>
-      <div class="s">Described for a short; the long side is the exact mirror, bearish
-        levels for the entry, bullish for the target.</div>
-    </div>
-    <div class="rulegrid"><div class="rule"><span class="n">1</span><div><div class="rn">Rule 1 &middot; Signal</div><div class="rt">At least <b>3 bullish reversal levels</b> lie between the previous day's close and today's high, price rose into them and tested them. The lowest of those is the <b>first</b> reversal, the next one up the <b>second</b>.</div></div></div><div class="rule"><span class="n">2</span><div><div class="rn">Rule 2 &middot; Clean setup</div><div class="rt">Refuse the trade if the bar <b>opened at or above the second</b> reversal. Opening below the first, or between the first and the second, is fine; opening above the second means price was already inside the cluster when the day began.</div></div></div><div class="rule"><span class="n">3</span><div><div class="rn">Rule 3 &middot; Room to move</div><div class="rt">The nearest <b>bearish</b> reversal below the entry must be at least <b>3.5R</b> below it. Any closer and there is not enough room to pay for the risk being taken.</div></div></div><div class="rule"><span class="n">4</span><div><div class="rn">Rule 4 &middot; Target</div><div class="rt" data-el="rule4text">Close the position at <b>the open of the next price bar</b>, usually the following day. The trade is carried through one nightly session and no further. That open is the first price of the bar, so nothing can trade ahead of it and the exit is <b>unconditional</b>: there is no level to reach and no path to be ambiguous about. <b>The stop never trades</b>, it is here only to size the position, which means an adverse overnight gap takes the trade out for more than 1R.</div></div></div></div>
-    <div class="rulefoot"><b>Entry and stop.</b> The bar must <b>close below the first reversal</b>, the proof that price probed the cluster and snapped back. The trade fills at that reversal price, and the stop sits <b>one tick above that bar's high</b>. Position size makes that distance exactly 1% of capital, so <b>1R = 1%</b>. One position per market at a time; management starts the day after entry.</div>
-    <div class="rulefoot">Entries come from the <b>reversal levels only</b>. No timing, cycle or aggregate turning-point signal is involved, this is the price half of the Socrates method on its own.</div>
-  </div>
-
-
-  <section class="riskbar noprint">
-    <span class="lbl">Risk per trade</span>
-    <input data-el="riskin" type="number" min="0" max="100" step="0.1" value="1"
-           aria-label="Risk per trade, percent of liquid capital">
-    <span class="unit">% of liquid capital</span>
-    <span class="hint" data-el="riskhint"></span>
-    <span class="warn" data-el="riskwarn"></span>
-  </section>
-
-  <section class="kpis" data-el="kpis"></section>
-
-  <section class="card">
-    <div class="charthead">
-      <span class="t">Capital, drawdown &amp; positions open</span>
-      <span class="s">net of slippage &middot; hover for any day</span>
-    </div>
-    <div class="plot" data-el="plot">
-      <svg data-el="svg" role="img" aria-label="Portfolio equity, drawdown and open positions over time"></svg>
-      <div class="tip" data-el="tip"></div>
-    </div>
-  </section>
-
-  <p class="note"><b>Backtest, net of slippage.</b> Costs are charged as tick slippage, 1 tick on entry, 1 on a limit take-profit, 3 on a stop, converted to R through each trade's own risk distance.</p>
-
-  <h2 class="section-h">Per-trade statistics</h2>
-  <section class="stats4" data-el="tradestats"></section>
-
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">All trades</span>
-      <span class="s"><span data-el="tcount"></span> &middot; <span class="noprint">click a column to sort</span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades" data-el="ttbl"><thead data-el="thead"></thead><tbody data-el="ttbody"></tbody></table>
-    </div>
-  </div>
-
-  <h2 class="section-h">By market</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Per-market performance</span>
-      <span class="s"><span data-el="mcount"></span> &middot; <span class="noprint">click a column to sort</span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades" data-el="mtbl"><thead data-el="mhead"></thead><tbody data-el="mbody"></tbody></table>
-    </div>
-  </div>
-
-  <h2 class="section-h">Daily data</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Every trading day</span>
-      <span class="s"><span data-el="dcount"></span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades"><thead><tr>
-        <th class="l" style="width:11%">Date</th><th style="width:11%">Capital</th>
-        <th style="width:11%">Drawdown</th><th style="width:6%">Open</th>
-        <th class="l" style="width:61%">Activity</th>
-      </tr></thead><tbody data-el="tbody"></tbody></table>
-    </div>
-  </div>
-
-  <footer class="mono">source: quickfixopen_portfolio_daily.xlsx &middot; 41 markets tested, <span data-el="footmk">28</span> traded &middot; rule 4: <span data-el="footrule4">exit = the open of the price bar that follows the entry bar</span> &middot; per-market one-position-at-a-time, portfolio-level concurrency</footer>
-</section>
-
-<section class="concl" data-el="conclusions" hidden>
-  <div data-el="cgeneralwrap">
-    <h2 class="section-h">General conclusions</h2>
-    <div class="conclbody" data-el="cgeneral"></div>
-  </div>
-  <div data-el="cfinalwrap">
-    <h2 class="section-h">Final conclusions of the author</h2>
-    <div class="conclbody" data-el="cfinal"></div>
-  </div>
 </section>
 </div>
 <script>
@@ -941,7 +635,7 @@ function leveredAt(tok){
 }
 </script>
 <script>
-const DATASETS = [{"strategy":"quickfix","title":"Quickfix","rule4":"target = 1.9R, or an opposite reversal nearer than 1.9R","r4":"1.9","risk_pct":1.39,"ref_final":322043.71,"start":100000.0,"final":322043.71,"ret":2.2204,"maxdd":-6.0,"first":"2025-12-18","last":"2026-07-27","n":181,"n_trades":90,"win_rate":64.44444444444444,"n_markets":28,"n_markets_all":41,"markets_all":[{"m":"Bitcoin_Per_USD_Binance","obs":true},{"m":"Bitcoin_Per_USD_CME","obs":false},{"m":"Chicago_SRW_Wheat_Futures_CBOT","obs":false},{"m":"CME_SOFR_Futures_3M","obs":false},{"m":"Cocoa_NYCSCE_Futures","obs":true},{"m":"Coffee_NYCSCE_Futures","obs":true},{"m":"Corn_CBOT_Futures","obs":false},{"m":"Dow_Futures_E_mini","obs":false},{"m":"Ethereum_Per_USD_Binance","obs":true},{"m":"EURO_Futures","obs":false},{"m":"EURO_STOXX_50_Index","obs":true},{"m":"German_Long_Bund","obs":false},{"m":"Global_X_Uranium_ETF","obs":false},{"m":"Gold_Futures_COMEX","obs":false},{"m":"iShares_Silver_Trust","obs":true},{"m":"Japanese_10_Year_Bond_Futures","obs":false},{"m":"Japanese_Yen_Futures","obs":false},{"m":"JPY_EUR_Cross_Rate","obs":true},{"m":"Live_Cattle_Futures_CME","obs":false},{"m":"Nasdaq_100_E_mini","obs":false},{"m":"NASDAQ_100_Index","obs":true},{"m":"NIKKEI_225_Index","obs":true},{"m":"NY_Copper_Futures","obs":false},{"m":"NY_Crude_Oil_Futures","obs":false},{"m":"NY_Natural_Gas_Futures","obs":false},{"m":"NY_Palladium_Futures","obs":false},{"m":"NY_Platinum_Futures","obs":false},{"m":"ProShares_UltraPro_Dow","obs":true},{"m":"Proshares_VIX_Short_Term_Futures_ETF","obs":false},{"m":"S_P_500_E_mini","obs":false},{"m":"S_P_500_Index","obs":true},{"m":"Silver_Futures_COMEX","obs":false},{"m":"SPDR_Gold_Shares","obs":true},{"m":"Sugar_World_CSCE_Futures","obs":false},{"m":"Teucrium_Wheat_Fund","obs":true},{"m":"United_States_Natural_Gas_Fund_LP","obs":true},{"m":"United_States_Oil_Fund_LP","obs":true},{"m":"US_10_Year_T_Note_Futures","obs":false},{"m":"US_30_Year_T_Bond_Futures_CBOT","obs":false},{"m":"US_Dollar_Index_Futures","obs":false},{"m":"USD_EUR_Cross_Rate","obs":true}],"max_open":5,"time_in_market":48.6,"gross_final":338257.72,"gross_ret":2.3826,"total_cost":8362.72,"long_win":7,"long_loss":4,"avg_win":5187.38,"avg_loss":-2463.26,"avg_win_pct":2.99,"avg_loss_pct":-1.58,"avg_win_r":2.154,"best_r":8.09,"avg_bars":1.2,"slippage":{"entry":1,"target":1,"stop":3}},{"strategy":"quickfixwick","title":"Quickfixwick","rule4":"target = one tick beyond the entry bar's own wick (a short: below its low)","r4":"wick","risk_pct":1.0,"ref_final":657632.98,"start":100000.0,"final":398510.27,"ret":2.9851,"maxdd":-7.47,"first":"2025-12-18","last":"2026-07-27","n":181,"n_trades":87,"win_rate":66.66666666666667,"n_markets":28,"n_markets_all":41,"markets_all":[{"m":"Bitcoin_Per_USD_Binance","obs":true},{"m":"Bitcoin_Per_USD_CME","obs":false},{"m":"Chicago_SRW_Wheat_Futures_CBOT","obs":false},{"m":"CME_SOFR_Futures_3M","obs":false},{"m":"Cocoa_NYCSCE_Futures","obs":true},{"m":"Coffee_NYCSCE_Futures","obs":true},{"m":"Corn_CBOT_Futures","obs":false},{"m":"Dow_Futures_E_mini","obs":false},{"m":"Ethereum_Per_USD_Binance","obs":true},{"m":"EURO_Futures","obs":false},{"m":"EURO_STOXX_50_Index","obs":true},{"m":"German_Long_Bund","obs":false},{"m":"Global_X_Uranium_ETF","obs":false},{"m":"Gold_Futures_COMEX","obs":false},{"m":"iShares_Silver_Trust","obs":true},{"m":"Japanese_10_Year_Bond_Futures","obs":false},{"m":"Japanese_Yen_Futures","obs":false},{"m":"JPY_EUR_Cross_Rate","obs":true},{"m":"Live_Cattle_Futures_CME","obs":false},{"m":"Nasdaq_100_E_mini","obs":false},{"m":"NASDAQ_100_Index","obs":true},{"m":"NIKKEI_225_Index","obs":true},{"m":"NY_Copper_Futures","obs":false},{"m":"NY_Crude_Oil_Futures","obs":false},{"m":"NY_Natural_Gas_Futures","obs":false},{"m":"NY_Palladium_Futures","obs":false},{"m":"NY_Platinum_Futures","obs":false},{"m":"ProShares_UltraPro_Dow","obs":true},{"m":"Proshares_VIX_Short_Term_Futures_ETF","obs":false},{"m":"S_P_500_E_mini","obs":false},{"m":"S_P_500_Index","obs":true},{"m":"Silver_Futures_COMEX","obs":false},{"m":"SPDR_Gold_Shares","obs":true},{"m":"Sugar_World_CSCE_Futures","obs":false},{"m":"Teucrium_Wheat_Fund","obs":true},{"m":"United_States_Natural_Gas_Fund_LP","obs":true},{"m":"United_States_Oil_Fund_LP","obs":true},{"m":"US_10_Year_T_Note_Futures","obs":false},{"m":"US_30_Year_T_Bond_Futures_CBOT","obs":false},{"m":"US_Dollar_Index_Futures","obs":false},{"m":"USD_EUR_Cross_Rate","obs":true}],"max_open":4,"time_in_market":45.3,"gross_final":410829.29,"gross_ret":3.1083,"total_cost":5972.21,"long_win":15,"long_loss":4,"avg_win":6151.12,"avg_loss":-2008.77,"avg_win_pct":3.08,"avg_loss_pct":-1.13,"avg_win_r":3.084,"best_r":9.5,"avg_bars":1.18,"slippage":{"entry":1,"target":1,"stop":3}},{"strategy":"quickfixclose","title":"Quickfixclose","rule4":"exit = the entry bar's own close, flat the same day","r4":"close","risk_pct":1.0,"ref_final":891375.33,"start":100000.0,"final":489473.14,"ret":3.8947,"maxdd":-0.06,"first":"2025-12-18","last":"2026-07-27","n":181,"n_trades":103,"win_rate":97.0873786407767,"n_markets":28,"n_markets_all":41,"markets_all":[{"m":"Bitcoin_Per_USD_Binance","obs":true},{"m":"Bitcoin_Per_USD_CME","obs":false},{"m":"Chicago_SRW_Wheat_Futures_CBOT","obs":false},{"m":"CME_SOFR_Futures_3M","obs":false},{"m":"Cocoa_NYCSCE_Futures","obs":true},{"m":"Coffee_NYCSCE_Futures","obs":true},{"m":"Corn_CBOT_Futures","obs":false},{"m":"Dow_Futures_E_mini","obs":false},{"m":"Ethereum_Per_USD_Binance","obs":true},{"m":"EURO_Futures","obs":false},{"m":"EURO_STOXX_50_Index","obs":true},{"m":"German_Long_Bund","obs":false},{"m":"Global_X_Uranium_ETF","obs":false},{"m":"Gold_Futures_COMEX","obs":false},{"m":"iShares_Silver_Trust","obs":true},{"m":"Japanese_10_Year_Bond_Futures","obs":false},{"m":"Japanese_Yen_Futures","obs":false},{"m":"JPY_EUR_Cross_Rate","obs":true},{"m":"Live_Cattle_Futures_CME","obs":false},{"m":"Nasdaq_100_E_mini","obs":false},{"m":"NASDAQ_100_Index","obs":true},{"m":"NIKKEI_225_Index","obs":true},{"m":"NY_Copper_Futures","obs":false},{"m":"NY_Crude_Oil_Futures","obs":false},{"m":"NY_Natural_Gas_Futures","obs":false},{"m":"NY_Palladium_Futures","obs":false},{"m":"NY_Platinum_Futures","obs":false},{"m":"ProShares_UltraPro_Dow","obs":true},{"m":"Proshares_VIX_Short_Term_Futures_ETF","obs":false},{"m":"S_P_500_E_mini","obs":false},{"m":"S_P_500_Index","obs":true},{"m":"Silver_Futures_COMEX","obs":false},{"m":"SPDR_Gold_Shares","obs":true},{"m":"Sugar_World_CSCE_Futures","obs":false},{"m":"Teucrium_Wheat_Fund","obs":true},{"m":"United_States_Natural_Gas_Fund_LP","obs":true},{"m":"United_States_Oil_Fund_LP","obs":true},{"m":"US_10_Year_T_Note_Futures","obs":false},{"m":"US_30_Year_T_Bond_Futures_CBOT","obs":false},{"m":"US_Dollar_Index_Futures","obs":false},{"m":"USD_EUR_Cross_Rate","obs":true}],"max_open":0,"time_in_market":0.0,"gross_final":504385.87,"gross_ret":4.0439,"total_cost":7653.82,"long_win":58,"long_loss":1,"avg_win":3896.93,"avg_loss":-73.4,"avg_win_pct":1.63,"avg_loss_pct":-0.03,"avg_win_r":1.628,"best_r":9.137,"avg_bars":0.0,"slippage":{"entry":1,"target":1,"stop":3}},{"strategy":"quickfixopen","title":"Quickfixopen","rule4":"exit = the open of the price bar that follows the entry bar","r4":"open","risk_pct":1.0,"ref_final":706337.47,"start":100000.0,"final":416960.79,"ret":3.1696,"maxdd":-4.21,"first":"2025-12-18","last":"2026-07-27","n":181,"n_trades":90,"win_rate":87.77777777777777,"n_markets":28,"n_markets_all":41,"markets_all":[{"m":"Bitcoin_Per_USD_Binance","obs":true},{"m":"Bitcoin_Per_USD_CME","obs":false},{"m":"Chicago_SRW_Wheat_Futures_CBOT","obs":false},{"m":"CME_SOFR_Futures_3M","obs":false},{"m":"Cocoa_NYCSCE_Futures","obs":true},{"m":"Coffee_NYCSCE_Futures","obs":true},{"m":"Corn_CBOT_Futures","obs":false},{"m":"Dow_Futures_E_mini","obs":false},{"m":"Ethereum_Per_USD_Binance","obs":true},{"m":"EURO_Futures","obs":false},{"m":"EURO_STOXX_50_Index","obs":true},{"m":"German_Long_Bund","obs":false},{"m":"Global_X_Uranium_ETF","obs":false},{"m":"Gold_Futures_COMEX","obs":false},{"m":"iShares_Silver_Trust","obs":true},{"m":"Japanese_10_Year_Bond_Futures","obs":false},{"m":"Japanese_Yen_Futures","obs":false},{"m":"JPY_EUR_Cross_Rate","obs":true},{"m":"Live_Cattle_Futures_CME","obs":false},{"m":"Nasdaq_100_E_mini","obs":false},{"m":"NASDAQ_100_Index","obs":true},{"m":"NIKKEI_225_Index","obs":true},{"m":"NY_Copper_Futures","obs":false},{"m":"NY_Crude_Oil_Futures","obs":false},{"m":"NY_Natural_Gas_Futures","obs":false},{"m":"NY_Palladium_Futures","obs":false},{"m":"NY_Platinum_Futures","obs":false},{"m":"ProShares_UltraPro_Dow","obs":true},{"m":"Proshares_VIX_Short_Term_Futures_ETF","obs":false},{"m":"S_P_500_E_mini","obs":false},{"m":"S_P_500_Index","obs":true},{"m":"Silver_Futures_COMEX","obs":false},{"m":"SPDR_Gold_Shares","obs":true},{"m":"Sugar_World_CSCE_Futures","obs":false},{"m":"Teucrium_Wheat_Fund","obs":true},{"m":"United_States_Natural_Gas_Fund_LP","obs":true},{"m":"United_States_Oil_Fund_LP","obs":true},{"m":"US_10_Year_T_Note_Futures","obs":false},{"m":"US_30_Year_T_Bond_Futures_CBOT","obs":false},{"m":"US_Dollar_Index_Futures","obs":false},{"m":"USD_EUR_Cross_Rate","obs":true}],"max_open":4,"time_in_market":41.4,"gross_final":427550.19,"gross_ret":3.2755,"total_cost":5514.48,"long_win":26,"long_loss":2,"avg_win":4158.97,"avg_loss":-1054.32,"avg_win_pct":1.98,"avg_loss_pct":-0.69,"avg_win_r":1.978,"best_r":8.925,"avg_bars":0.99,"slippage":{"entry":1,"target":1,"stop":3}}];
+const DATASETS = [{"strategy":"quickfixclose","title":"Quickfixclose","rule4":"exit = the entry bar's own close, flat the same day","r4":"close","risk_pct":1.0,"ref_final":891375.33,"start":100000.0,"final":489473.14,"ret":3.8947,"maxdd":-0.06,"first":"2025-12-18","last":"2026-07-27","n":181,"n_trades":103,"win_rate":97.0873786407767,"n_markets":28,"n_markets_all":41,"markets_all":[{"m":"Bitcoin_Per_USD_Binance","obs":true},{"m":"Bitcoin_Per_USD_CME","obs":false},{"m":"Chicago_SRW_Wheat_Futures_CBOT","obs":false},{"m":"CME_SOFR_Futures_3M","obs":false},{"m":"Cocoa_NYCSCE_Futures","obs":true},{"m":"Coffee_NYCSCE_Futures","obs":true},{"m":"Corn_CBOT_Futures","obs":false},{"m":"Dow_Futures_E_mini","obs":false},{"m":"Ethereum_Per_USD_Binance","obs":true},{"m":"EURO_Futures","obs":false},{"m":"EURO_STOXX_50_Index","obs":true},{"m":"German_Long_Bund","obs":false},{"m":"Global_X_Uranium_ETF","obs":false},{"m":"Gold_Futures_COMEX","obs":false},{"m":"iShares_Silver_Trust","obs":true},{"m":"Japanese_10_Year_Bond_Futures","obs":false},{"m":"Japanese_Yen_Futures","obs":false},{"m":"JPY_EUR_Cross_Rate","obs":true},{"m":"Live_Cattle_Futures_CME","obs":false},{"m":"Nasdaq_100_E_mini","obs":false},{"m":"NASDAQ_100_Index","obs":true},{"m":"NIKKEI_225_Index","obs":true},{"m":"NY_Copper_Futures","obs":false},{"m":"NY_Crude_Oil_Futures","obs":false},{"m":"NY_Natural_Gas_Futures","obs":false},{"m":"NY_Palladium_Futures","obs":false},{"m":"NY_Platinum_Futures","obs":false},{"m":"ProShares_UltraPro_Dow","obs":true},{"m":"Proshares_VIX_Short_Term_Futures_ETF","obs":false},{"m":"S_P_500_E_mini","obs":false},{"m":"S_P_500_Index","obs":true},{"m":"Silver_Futures_COMEX","obs":false},{"m":"SPDR_Gold_Shares","obs":true},{"m":"Sugar_World_CSCE_Futures","obs":false},{"m":"Teucrium_Wheat_Fund","obs":true},{"m":"United_States_Natural_Gas_Fund_LP","obs":true},{"m":"United_States_Oil_Fund_LP","obs":true},{"m":"US_10_Year_T_Note_Futures","obs":false},{"m":"US_30_Year_T_Bond_Futures_CBOT","obs":false},{"m":"US_Dollar_Index_Futures","obs":false},{"m":"USD_EUR_Cross_Rate","obs":true}],"max_open":0,"time_in_market":0.0,"gross_final":504385.87,"gross_ret":4.0439,"total_cost":7653.82,"long_win":58,"long_loss":1,"avg_win":3896.93,"avg_loss":-73.4,"avg_win_pct":1.63,"avg_loss_pct":-0.03,"avg_win_r":1.628,"best_r":9.137,"avg_bars":0.0,"slippage":{"entry":1,"target":1,"stop":3}}];
 
 // ---- one strategy's report, mounted into `root` ----------------------------------
 // A factory rather than top-level code: the print report mounts SEVERAL of these on one
@@ -1778,74 +1472,77 @@ const INST = ROOTS.map((el,i) => mountReport(el, DATASETS[i]));
 window.addEventListener("beforeprint", () => INST.forEach(i => i.render()));
 // The cap sweep prints too -- it is a result, not a control. Only the dial itself is noprint.
 
-// ---- report page: show only the requested strategies, then print ------------------
-const params = new URLSearchParams(location.search);
-const want = (params.get("s") || "").split(",").filter(Boolean);
-if (want.length){
-  ROOTS.forEach((el, i) => {
-    if (want.indexOf(DATASETS[i].strategy) < 0) el.remove();
-  });
-}
-// Rule 4 caps, as key:token pairs -- applied BEFORE the risk so the risk replay runs once,
-// on the right trade list. A strategy not named here keeps its own default cap.
-(params.get("cap") || "").split(",").filter(Boolean).forEach(pair => {
-  const bits = pair.split(":");
-  INST.filter(i => i.key === bits[0]).forEach(i => i.setCap(bits[1]));
-});
-// `risk` takes either key:value pairs (what Export PDF writes, now that each strategy has
-// its own default) or a BARE NUMBER, which applies to every strategy on the page -- that is
-// still the honest way to ask "compare them all at 2%", and it keeps older links working.
-//
-// Number(null) is 0, NOT NaN. Reading the parameter straight into Number() therefore made a
-// report opened WITHOUT ?risk= (e.g. the Conclusions page's "Open report" link) re-run the
-// whole simulation at 0% -- every position sized to nothing, so the equity curve came out
-// flat at exactly the starting capital. Hence the empty-string guard before any Number().
-const rpRaw = (params.get("risk") || "").trim();
-if (rpRaw && rpRaw.indexOf(":") === -1){
-  const rp = Number(rpRaw);
-  if (isFinite(rp) && rp >= 0) INST.forEach(i => i.setRisk(rp));
-} else if (rpRaw){
-  rpRaw.split(",").filter(Boolean).forEach(pair => {
-    const bits = pair.split(":"), r = Number(bits[1]);
-    if (isFinite(r) && r >= 0) INST.filter(i => i.key === bits[0]).forEach(i => i.setRisk(r));
-  });
-}
-document.querySelectorAll(".repcount").forEach(e => {
-  const n = document.querySelectorAll("[data-root]").length;
-  e.textContent = n + (n === 1 ? " strategy" : " strategies");
-});
-// Conclusions: the hash wins (that is how Export PDF hands them over, and it survives
-// file:// documents not sharing storage); otherwise fall back to this browser's own copy.
-function conclusionsForReport(){
-  const m = (location.hash || "").match(/[#&]c=([^&]*)/);
-  if (m){ try { return JSON.parse(decodeURIComponent(m[1])); } catch(e){} }
-  return readConclusions();
-}
-(function renderConclusions(){
-  const c = conclusionsForReport() || {};
-  const g = (c.general || "").trim(), f = (c.final || "").trim();
-  const box = document.querySelector('[data-el="conclusions"]');
-  if (!box) return;
-  if (!g && !f){ box.remove(); return; }            // nothing written: no empty headings
-  const put = (key, text) => {
-    const wrap = box.querySelector('[data-el="'+key+'wrap"]');
-    if (!text){ wrap.remove(); return; }
-    // textContent, not innerHTML: this is typed prose, and CSS white-space:pre-wrap keeps
-    // the line breaks without needing any markup.
-    box.querySelector('[data-el="'+key+'"]').textContent = text;
-  };
-  put("cgeneral", g);
-  put("cfinal", f);
-  box.hidden = false;
-})();
+// ---- Export PDF: pick strategies, open the print report ---------------------------
+// No PDF library is bundled. The browser's own print-to-PDF gives selectable vector text at
+// a fraction of the size that an html2canvas-style rasteriser would produce, so the button
+// opens report.html for the chosen strategies and lets it call window.print().
+const conclBtn = document.querySelector('[data-el="concl"]');
+if (conclBtn) conclBtn.addEventListener("click", () => { location.href = "conclusions.html"; });
 
-const printBtn = document.querySelector('[data-el="printnow"]');
-if (printBtn) printBtn.addEventListener("click", () => window.print());
-// Auto-open the print dialog when arrived at from the Export PDF button. Deferred a frame so
-// the charts have laid out at their printed width first.
-if (params.get("auto") === "1"){
-  window.addEventListener("load", () => setTimeout(() => window.print(), 350));
-}
+const pdfBtn = document.querySelector('[data-el="pdfopen"]');
+if (pdfBtn) pdfBtn.addEventListener("click", () => {
+  const here = document.body.dataset.strategy;
+  const picked = {};
+  STRATS.forEach(s => { picked[s.key] = (s.key === here); });   // current one pre-ticked
+  const mask = document.createElement("div");
+  mask.className = "mask";
+  mask.innerHTML =
+    '<div class="dlg"><h4>Export PDF</h4>' +
+    '<p>Choose the strategies to include. They print one per page, in this order, at the ' +
+    'risk currently set on the page. Anything written on the Conclusions page is printed ' +
+    'at the end.</p><div class="dlglist">' +
+    STRATS.map(s => '<label class="dlgrow"><input type="checkbox" data-s="' + s.key + '">' +
+      '<span class="nm">' + s.title + '<span class="sb">' + s.rule4 + '</span></span></label>').join("") +
+    '</div><div class="dlgbtns"><button data-a="all">Select all</button>' +
+    '<button data-a="cancel">Cancel</button>' +
+    '<button class="pri" data-a="ok">Open PDF</button></div></div>';
+  const boxes = () => Array.prototype.slice.call(mask.querySelectorAll("input[data-s]"));
+  boxes().forEach(cb => {
+    cb.checked = !!picked[cb.dataset.s];
+    cb.addEventListener("change", () => { picked[cb.dataset.s] = cb.checked; });
+  });
+  function close(){ document.removeEventListener("keydown", onKey, true); mask.remove(); }
+  function ok(){
+    const keys = STRATS.map(s => s.key).filter(k => picked[k]);
+    if (!keys.length) return;                       // nothing ticked: refuse rather than open a blank report
+    close();
+    let url = "report.html?s=" + keys.join(",") + "&auto=1";
+    // Any risk moved off its strategy's own default, as key:value pairs -- the same shape as
+    // the cap parameter. A strategy not named keeps its own default, which since 2026-07-27
+    // is its 6%-drawdown risk rather than one number shared by the page.
+    const risks = INST.filter(i => Math.abs(i.risk() - i.defaultRisk()) > 1e-9)
+                      .map(i => i.key + ":" + i.risk());
+    if (risks.length) url += "&risk=" + risks.join(",");
+    // Carry any Rule 4 cap that has been moved off its default, so the PDF prints what is
+    // on screen. Only this page's own strategy can have been re-dialled here; the others
+    // print at their own defaults, which is what the reader would expect from their names.
+    const caps = INST.filter(i => i.cap() !== VARIANTS.defaults[i.key])
+                     .map(i => i.key + ":" + i.cap());
+    if (caps.length) url += "&cap=" + caps.join(",");
+    // Carry the conclusions in the HASH as well as leaving them in localStorage. Opened from
+    // a file:// path, browsers do not reliably share storage between two local documents,
+    // and the text must survive the hop to the report either way. A hash is never sent
+    // anywhere -- it is read by the report itself.
+    const c = readConclusions();
+    if (c && ((c.general || "").trim() || (c.final || "").trim())){
+      url += "#c=" + encodeURIComponent(JSON.stringify(c));
+    }
+    window.open(url, "_blank");
+  }
+  function onKey(e){
+    if (e.key === "Escape"){ e.stopPropagation(); close(); }
+    else if (e.key === "Enter"){ e.stopPropagation(); ok(); }
+  }
+  mask.querySelector('[data-a="all"]').addEventListener("click", () => {
+    STRATS.forEach(s => { picked[s.key] = true; });
+    boxes().forEach(cb => { cb.checked = true; });
+  });
+  mask.querySelector('[data-a="ok"]').addEventListener("click", ok);
+  mask.querySelector('[data-a="cancel"]').addEventListener("click", close);
+  mask.addEventListener("mousedown", e => { if (e.target === mask) close(); });
+  document.addEventListener("keydown", onKey, true);
+  document.body.appendChild(mask);
+});
 
 </script>
 </body>

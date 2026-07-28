@@ -9,21 +9,30 @@ resulting trades to `charter` for display.
 renders charts.** It reads the array (meta) xlsx files from `hyperliquid_bot` (via
 `charter`'s parser) and writes trades + equity as JSON / xlsx / standalone HTML reports.
 
-One strategy is built today: **quickfix**, the cap family at **1.9R** with **1.39%** risk
-per trade. Those are the levered-optimal settings, not a guess: 1.9R tops the
-constant-6%-drawdown chart and 1.39% is the risk that puts it there.
+**Four strategies are built today**, one per Rule 4 *shape*. They share rules 1–3 exactly, so
+they take the same setups on the same bars, and the only thing this project ever compares is
+**where the profit is taken**.
 
-Rule 4 is the **cap family**: ride to the first opposite reversal beyond entry, never past
-`cap`R. One policy with one number in it, and that number is a **dial on the reports**,
-**0R to 10R** (tenth-R steps to 5.5R, quarter-R above) plus no cap at all. Every setting is a
-real backtest. See [The Rule 4 cap dial](#the-rule-4-cap-dial-on-the-reports).
+| | Rule 4 | risk per trade | on the cap dial |
+|---|---|---|---|
+| **quickfix** | the **cap family** at **1.9R**: the first opposite reversal beyond entry, never past 1.9R | **1.39%**, solved | yes |
+| **quickfixwick** | one tick past the **entry bar's own wick**, fixed at entry | 1.0%, chosen | no |
+| **quickfixclose** | the **entry bar's own close**, flat the same day | 1.0%, chosen | no |
+| **quickfixopen** | the **open of the next bar**, held through one night | 1.0%, chosen | no |
 
-Two sibling strategies were retired on 2026-07-28 and neither should be reinstated without
-being asked. **slowfix** was the family at no cap, i.e. a dial position rather than a method.
-**quickfixpro** took profit one tick beyond the entry bar's own extreme, fixed at entry, a
-genuinely different Rule 4 *shape* rather than another cap; it is gone from the report and
-from charter. The machinery for a second shape stays (`Rule4`, `in_grid`) and
-`strategies.py`'s header says how to add one.
+quickfix's settings are the levered-optimal point of its family, not a guess: 1.9R tops the
+constant-6%-drawdown chart and 1.39% is the risk that puts it there. Its cap is a **dial on
+the reports**, **0R to 10R** (tenth-R steps to 5.5R, quarter-R above) plus no cap at all, and
+every setting is a real backtest — see
+[The Rule 4 cap dial](#the-rule-4-cap-dial-on-the-reports). The other three have no number in
+them to dial, so their pages carry neither the dial nor the cap charts.
+
+The four against each other is a question none of those pages can answer, and
+**[`comparison.html`](#the-comparison-page)** is where it is answered.
+
+**slowfix** was retired on 2026-07-28 and should not be reinstated without being asked: it
+was the family at no cap, i.e. a dial position rather than a method, and "no cap" is still a
+setting of the dial.
 
 ---
 
@@ -54,15 +63,17 @@ for entry detection and for target recomputation alike.
    reversal price. (Close at or above it → no trade — no proof price snapped back.)
 4. **Stop.** One tick above the entry bar's high. `risk = stop - entry`. Position is sized
    so that risk is exactly the strategy's own `risk_pct` of equity, so **1R = that
-   percentage** (1.39% today, see [Risk per trade](#risk-per-trade-one-number-per-strategy)).
-   A gapped stop can lose more than 1R; see the daily-proxy assumptions.
+   percentage** (see [Risk per trade](#risk-per-trade-one-number-per-strategy)).
+   A gapped stop can lose more than 1R; see the daily-proxy assumptions. On two of the four
+   strategies the stop **never trades at all** and only sizes the position — see
+   [Rule 4 — four shapes](#rule-4--four-shapes).
 5. **Reward filter (Rule 3).** The nearest bearish reversal below entry must be at least
    **3.5R** below entry, else refuse (not enough room).
-6. **Target (Rule 4).** Take profit at `cap`R, or at an opposite reversal nearer than that.
-   It is evaluated on **every** bar from the levels known at that bar's start, so the target
-   moves in when a nearer level is drawn and falls away when one is elected. Only
-   **opposite-side** reversals ever close a trade early (bearish for a short, bullish for a
-   long), never a same-side one.
+6. **Exit (Rule 4).** The one rule that differs, and the whole subject of this project. Two
+   of the four watch a **price level** (recomputed on every bar from the levels known at that
+   bar's start, so a target moves in when a nearer level is drawn and falls away when one is
+   elected; only **opposite-side** reversals ever close a trade early). The other two exit on
+   a **bar event** — this bar's close, the next bar's open — and watch no level at all.
 
 ### Long setup (mirror)
 
@@ -71,11 +82,54 @@ Bearish ladder for entry, bullish for targets. Tested bearish reversals in
 Rule 2: refuse if `open <= second`. Trigger: **close above the first**. Stop = one tick
 below the entry bar's low. Rule 3: nearest bullish reversal above entry ≥ 3.5R up.
 
-### Rule 4 — two shapes
+### Rule 4 — four shapes
 
 | Strategy | Rule 4 | Character |
 |---|---|---|
 | **quickfix** | The cap family at **cap = 1.9R**: take profit at 1.9R, or at an opposite reversal that sits **closer** than 1.9R (then that reversal is the target). | Takes profit fast. 1.9R is a hard ceiling on every winner. |
+| **quickfixwick** | One tick **below the entry bar's own low** (a short; the long is the mirror), fixed at entry and never moving. | Stop and target are the two sides of the entry bar. A bet on the initial energy of the move. |
+| **quickfixclose** | The **entry bar's own close**. Opened and shut on the same day. | Never carries overnight. Cannot lose on gross terms. |
+| **quickfixopen** | The **open of the bar that follows the entry bar**, unconditionally. | Holds through one nightly session and no further. What it earns is what the night did. |
+
+#### Two mechanisms, and why
+
+The first two watch a **price level**, so they go through `check_exit`'s shared resolution:
+stop first, then gaps, then ambiguity. Their Rule 4 is a **target policy**,
+`policy(pos, bull, bear) -> (price, reason)`, called on every bar.
+
+The last two do not. "Out at this bar's close" and "out at the next bar's open" are
+**moments**, not levels: there is no order the market could have filled first and nothing to
+be ambiguous about, so there is nothing for that machinery to resolve. Their Rule 4 is a
+**bar exit**, `bar_exit(pos, bar, k) -> (price, reason) | None`, where `k` is bars since
+entry. `k = 0` is the entry bar, and a bar exit is **the only thing in this engine allowed to
+close a trade there** — which is what makes quickfixclose expressible at all.
+`engine.backtest` calls it once at `k = 0` immediately after booking the entry; a target
+policy is never called there, and management for it starts the next bar as it always has.
+
+A `Rule4` carries exactly one of the two and refuses to be built with both or neither.
+
+**The stop never trades on quickfixclose or quickfixopen.** That is a consequence, not a
+simplification: quickfixclose is shut on the bar that opened it, and the stop sits one tick
+beyond that bar's own already-spent extreme; quickfixopen is shut at the *first price* of the
+next bar, so nothing can trade ahead of it. The stop still **sizes** the position — 1R is the
+stop distance, and Rule 3 still applies unchanged — but **it is not a floor under the loss**.
+An adverse overnight gap takes quickfixopen out for well over 1R, which is the same
+arithmetic as a gapped stop everywhere else here, except that on quickfixopen *every* exit is
+at an open, so it is not a rare case.
+
+**quickfixclose cannot lose on gross terms**, and that follows from the entry rule rather
+than from a flattering assumption: the trigger requires the bar to close **beyond** the entry
+price (a short only fires when the close is below the first reversal, which is where it
+filled), so marking out at that same close is always on the right side of entry. Its losers
+are the trades whose move was smaller than the two ticks of slippage charged to get in and
+out. On the current data that means a **97.1% win rate and a 0.06% maximum drawdown**, and no
+6%-drawdown risk at any bet size at all. It is a real result and it is also the loudest thing
+this project has to say about the daily-proxy fill model; the comparison page frames it that
+way rather than as a free lunch.
+
+Two figures on its page look broken and are not: **max concurrent 0** and **time in market
+0%**. Entries and exits both land inside one day, so nothing is ever held when a day is
+counted. The KPI subtitles say so.
 
 #### The cap family — one policy, one number
 
@@ -100,31 +154,37 @@ only behaviour a capped run cannot produce — a ceiling is always somewhere.
 Note that identical Rule 4 *setups* do not mean identical *trades*: an earlier exit frees
 that market sooner, and one position per market at a time means a later signal can be taken
 that a longer hold would have blocked. Changing the cap changes the trade list, which is why
-each setting is a real backtest rather than something the page could recompute.
+each setting is a real backtest rather than something the page could recompute. The same
+mechanism is why the four strategies do not have identical trade counts either — on the
+current data quickfixclose books **103** where quickfix books 90, purely because it hands the
+market back the same day.
 
-#### A second Rule 4 shape
+#### Adding a fifth shape
 
-**Quickfixpro** was one, from 2026-07-27 to 2026-07-28: take profit **one tick beyond the
-entry bar's own extreme**, fixed at entry and never moving, so stop and target were the two
-sides of the entry bar and the bet was simply that its low breaks before its high. No
-reversal level and no R ceiling, so it was not a cap setting: `in_grid=False`, and its page
-carried neither the cap dial nor the cap charts. It was retired on the user's instruction and
-its policy deleted rather than left unreachable; it is in git.
-
-The machinery for a second shape stays. To add one: write the policy factory beside
-`target_policy`, build a `Rule4` with `in_grid=False` and its own prose, register a
-`Strategy` on it, and run `solve_risk.py` for its risk. A new exit reason must be added to
-`VAR_REASONS`, `prettyReason` **and** charter's `TRADE_COLORS`.
+Write the factory beside `target_policy` / `entry_bar_policy` (a target) or beside
+`close_exit` / `open_exit` (a bar event), build a `Rule4` with `in_grid=False` and its own
+prose, register a `Strategy` on it, and decide whether its risk is solved or chosen. A new
+exit reason must be added to `VAR_REASONS`, `prettyReason` **and** charter's `TRADE_COLORS`
+— or to charter's `TRADE_BY_R` instead, if the reason can cover a win *or* a loss, as both
+time exits can.
 
 ### Daily-proxy assumptions
 
 We only have daily bars, not intraday ticks (that arrives later with IBKR data). So:
 
 - **Entry is confirmed on the close**, filled at the first-reversal price.
-- **The target can never be hit on the entry bar.** Management (stop and target) starts the
-  **day after** entry. The entry bar's high/low are already spent by the time its close
+- **A price target can never be hit on the entry bar.** Management (stop and target) starts
+  the **day after** entry. The entry bar's high/low are already spent by the time its close
   confirms the trade, and by construction the stop sits one tick beyond that bar's own
-  extreme, so it cannot trigger there either.
+  extreme, so it cannot trigger there either. The one exception is a **bar exit**, and only
+  because it watches no level: quickfixclose is marked out at that same bar's close, which is
+  a price the bar has already printed rather than one whose path we would have to guess.
+- Everything below in this section is about **price levels**, so it governs quickfix and
+  quickfixwick. The two bar exits never reach any of it: they name a price, so there is no
+  gap test, no in-range test and no ambiguity. What they *do* inherit is the same honesty
+  problem in a different place — quickfixclose assumes one daily bar can give us both a fill
+  at the reversal intraday and a fill at that day's close, and quickfixopen assumes the next
+  open is fillable.
 - **A gap is filled at the OPEN** (user, 2026-07-27). If a later bar **jumps over** the stop
   or the target, the trade fills at **that bar's open**, not at the level. The open is the day's first price, so a level the bar opened past
   was taken at the open and nothing can have traded before it — the gap is the one case where
@@ -156,6 +216,12 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
 - Slippage is unchanged and still charges the full 3-tick stop rate on a gapped stop. That is
   mildly conservative — the gap is already in the fill price — and is left alone deliberately:
   it is an order-type cost, not a re-pricing of the fill.
+- The two **bar exits** are charged the **limit rate** (1 tick), not the stop rate: a
+  market-on-close and a market-on-open are scheduled orders placed into the most liquid
+  minutes of the session, not a stop fired into a move nobody chose the timing of. Same
+  reasoning already applied to `data_end`. It matters more here than anywhere else — at two
+  ticks round trip it is the difference between a winner and a loser on quickfixclose's
+  smallest trades, and those trades are the *only* way it loses at all.
 
 **Why two strategies can split on the same bar** (audited 2026-07-27, after the question came
 up from reading the charter overlays side by side). `check_exit` is shared, so every strategy
@@ -165,7 +231,7 @@ target*, and those sit at different prices. Across the whole archive:
 | | days where BOTH stop and target were in the exit bar's range | booked `unknown_pl` (−1R) | booked a win | booked a stop |
 |---|---|---|---|---|
 | quickfix 2.5R | 9 | **5** | 3 (all gapped past the target) | 1 (−3.05R, gapped past the stop) |
-| quickfixpro | 7 | **6** | 1 (+0.27R, gapped) | 0 |
+| quickfixwick | 7 | **6** | 1 (+0.27R, gapped) | 0 |
 
 Both strategies do give the doubt to the stop; the wins are the gap rule firing *first*,
 because the bar opened past the target and the limit was already filled before price ran back
@@ -174,22 +240,22 @@ through the stop. The one date where the two split is **EURO_Futures, short, exi
 ```
 entry bar 2026-05-07, low 1.17425
   quickfix 2.5R target   1.17440   <- computed: entry - 2.5 x risk
-  quickfixpro target     1.17424   <- entry bar low - 1 tick
+  quickfixwick target    1.17424   <- entry bar low - 1 tick
   exit bar 2026-05-08    O 1.17435  H 1.18085  L 1.17405  C 1.17985
 ```
 
 The open landed **between the two targets** — 5 ticks past quickfix's, 11 ticks short of
-quickfixpro's — so quickfix gapped into profit at the open (+2.53R) while quickfixpro did not
+quickfixwick's — so quickfix gapped into profit at the open (+2.53R) while quickfixwick did not
 gap, traded through both levels, and booked −1R. One rule, two target prices 1.6 ticks apart.
 
 Structural point worth keeping: quickfix's target is a **computed** price
-(`entry − cap × risk`, landing wherever the arithmetic puts it) while quickfixpro's is a
+(`entry − cap × risk`, landing wherever the arithmetic puts it) while quickfixwick's is a
 **real chart price** (entry bar low − 1 tick), so a computed target lands near the open by
 chance more often and wins these coin-flips somewhat more.
 
 **Open question, deliberately not changed.** The gap test is `open <= target` (short), so an
 open sitting *exactly on* the target counts as a gap. That happens once today —
-`USD_EUR_Cross_Rate` 2026-03-09, quickfixpro, open 0.8602 against a 0.8602 target, booked
+`USD_EUR_Cross_Rate` 2026-03-09, quickfixwick, open 0.8602 against a 0.8602 target, booked
 +0.27R. Defensible (a resting limit fills when the market trades there) but it is not a gap.
 Requiring a **strict gap of at least one tick** would send that trade through to
 `unknown_pl` instead; it is a one-line change in `check_exit` and would need the risks
@@ -245,15 +311,15 @@ backtests.
 
 | File | What it does |
 |---|---|
-| `engine.py` | The engine, shared by every strategy: `load_bars`, `infer_tick`, `market_dirs`, signal detection, the stop, exit resolution, `backtest(bars, tick, dp, policy)` and `run_markets` (all markets, **every cap in the grid**, one pass). Run directly for a single-market (gold) JSON ledger. |
-| `strategies.py` | The **registry** and Rule 4 itself: `target_policy(cap)` (the cap family), `CAP_CHOICES` (the grid the reports dial across), and the text every output labels itself with. A `Rule4` bundles one setting — its policy, the token its backtest is filed under, `in_grid`, and its prose; a `Strategy` is a key, a title, a **default `Rule4`** and its own `risk_pct`. `QUICKFIX`, `REGISTRY`. |
+| `engine.py` | The engine, shared by every strategy: `load_bars`, `infer_tick`, `market_dirs`, signal detection, the stop, exit resolution, `backtest(bars, tick, dp, rule4)` (it takes the whole `Rule4`, since that may carry a target policy **or** a bar exit) and `run_markets` (all markets, **every cap in the grid** plus every registered non-cap Rule 4, one pass). Run directly for a single-market (gold) JSON ledger. |
+| `strategies.py` | The **registry** and Rule 4 itself: `target_policy(cap)` (the cap family), `entry_bar_policy()` (the wick), `close_exit()` / `open_exit()` (the two bar exits), `CAP_CHOICES` (the grid the reports dial across), and the text every output labels itself with. A `Rule4` bundles one setting — its policy **or** its bar exit, the token its backtest is filed under, `in_grid`, and its prose; a `Strategy` is a key, a title, a **default `Rule4`**, its own `risk_pct` and whether that risk was solved. `QUICKFIX`, `WICK`, `DAY_CLOSE`, `NEXT_OPEN`, `REGISTRY`. |
 | `run_all.py` | Runs every market independently (each a fresh $100k) → `<strategy>_all_markets_daily.xlsx` (per-market summary + all trades). |
 | `run_portfolio.py` | Merges every market's trades into ONE shared account, applies the money-management + slippage model → the portfolio xlsx + `_equity_<strategy>.json`. Also writes `_variants.json`: the same shared account replayed at **every cap in the grid, plus every registered Rule 4 that is not a cap**, packed for the pages. |
-| `build_equity_html.py` | Renders `_equity_<strategy>.json` + the shared `_variants.json` into `output/equity_<strategy>.html`, plus `report.html` and `conclusions.html`. Refuses to build if the variant grid disagrees with a strategy's workbook. |
-| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<key>.json` — one file per **cap** in `CHARTER_CAPS` (1.9R, 2R, 2.25R, 2.5R, 5R; the strategy's own default MUST be in there). `CHARTER_STRATEGIES` is empty since quickfixpro was retired. Prunes hand-off files it no longer owns. |
+| `build_equity_html.py` | Renders `_equity_<strategy>.json` + the shared `_variants.json` into `output/equity_<strategy>.html`, plus `report.html`, `comparison.html` and `conclusions.html`. Refuses to build if the variant grid disagrees with a strategy's workbook. |
+| `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<key>.json` — one file per **cap** in `CHARTER_CAPS` (1.9R, 2R, 2.25R, 2.5R, 5R; quickfix's own default MUST be in there) plus one per **key** in `CHARTER_STRATEGIES` (the three non-cap strategies). Prunes hand-off files it no longer owns. |
 | `strategies.py` (grid) | `CAP_GRID` = 0R&ndash;10R, tenth-R steps to `CAP_FINE_TO` (5.5R) and quarter-R above. One axis for the dial and both charts; `CAP_CHOICES` adds the uncapped run and is what gets backtested (75 settings). |
-| `solve_risk.py` | Solves each strategy's default risk: the one that puts it at `engine.TARGET_DD` (6%) maximum drawdown. Prints its own solve **and** what the registered number actually produces. Not part of the pipeline; it is how the constants in `strategies.py` are derived. |
-| `run_pipeline.py` | Every writer in one pass over the array archive (and it backtests whatever `CHARTER_CAPS` names on top of the dial grid, since the two lists are independent) (the fast way to regenerate everything): per-market xlsx, portfolio, the cap grid, the charter hand-off, then the pages. |
+| `solve_risk.py` | Solves each strategy's 6%-drawdown risk. Prints its own solve **and** what the registered number actually produces, but only calls a **solved** risk stale — the three chosen 1% risks are reported and left alone. Not part of the pipeline; it is how quickfix's constant in `strategies.py` is derived. |
+| `run_pipeline.py` | Every writer in one pass over the array archive (and it backtests whatever `CHARTER_CAPS` names on top of the dial grid, since the two lists are independent) (the fast way to regenerate everything): per-market xlsx, portfolio, the cap grid, the charter hand-off, then the pages (including `comparison.html`, always for every strategy). |
 
 Parsing is imported from `../charter/scripts/charting_core.py` (`parse_array`); do not
 rewrite it here.
@@ -271,19 +337,25 @@ If the new strategy is the cap family at a different cap, it is one line:
 Its Rule 4 text, lede, caveat, footers and navigation buttons are all generated from the
 cap, and a cap already in `CAP_CHOICES` costs no extra backtest — it is already in the grid.
 
-If Rule 4 needs a genuinely different *shape* (a trailing stop, a time exit, a target that
-is not priced off a reversal or an R multiple), it is a new `Rule4` beside `ENTRY_BAR`:
+If Rule 4 needs a genuinely different *shape*, it is a new `Rule4` beside `WICK`,
+`DAY_CLOSE` and `NEXT_OPEN`:
 
-1. Write the policy factory beside `target_policy` / `entry_bar_policy`. It gets `pos` (side,
-   entry, stop, risk, and the entry bar's own high/low/tick), the bullish levels and the
-   bearish levels known at the bar's start, and returns `(price_or_None, reason)`.
+1. Write the factory. Which kind depends on what the exit watches:
+   - a **price level** → beside `target_policy` / `entry_bar_policy`. It gets `pos` (side,
+     entry, stop, risk, and the entry bar's own high/low/tick), the bullish levels and the
+     bearish levels known at the bar's start, and returns `(price_or_None, reason)`.
+   - a **bar event** (a time exit, an nth-bar exit) → beside `close_exit` / `open_exit`. It
+     gets `pos`, the `bar`, and `k` bars since entry, and returns `(price, reason)` or
+     `None`. `k = 0` is the entry bar, which only a bar exit may close on.
 2. If it invents a new exit reason, add it to `VAR_REASONS` (`run_portfolio.py`),
-   `prettyReason` (`build_equity_html.py`) and `TRADE_COLORS` (charter's builder).
-3. Build a `Rule4(token=..., label=..., policy=..., texts=...)` with `in_grid` left `False` —
-   it is not a point on the cap dial — and give it `rule4` / `rule4_text` / `lede` / `caveat`
-   text, which for a one-off setting is written rather than generated.
-4. `Strategy(key=..., title=..., rule4=<that>, risk_pct=...)`, appended to `REGISTRY`, then
-   `solve_risk.py` for the real `risk_pct` as above.
+   `prettyReason` (`build_equity_html.py`) and `TRADE_COLORS` (charter's builder) — or to
+   charter's `TRADE_BY_R` instead, if the reason can be a win *or* a loss.
+3. Build a `Rule4(token=..., label=..., texts=..., policy=...)` **or**
+   `Rule4(..., bar_exit=...)` — exactly one, it raises otherwise — with `in_grid` left
+   `False`, since it is not a point on the cap dial, and give it `rule4` / `rule4_text` /
+   `lede` / `caveat` text, written rather than generated for a one-off setting.
+4. `Strategy(key=..., title=..., rule4=<that>, risk_pct=..., risk_solved=...)`, appended to
+   `REGISTRY`. Run `solve_risk.py` if the risk is meant to be the solved one.
 5. Add the key to `CHARTER_STRATEGIES` if it should be drawn on the charts.
 
 Everything else — the runners, the workbooks, the variant grid, the pages, the strategy
@@ -316,19 +388,33 @@ slippage. Constants live at the top of `run_portfolio.py`. Fees/commission are o
 
 ### Risk per trade: one number per strategy
 
-**Every strategy is published at its own risk: the one that puts *that* strategy at a 6%
-maximum drawdown** (`engine.TARGET_DD`). So all three pages open at the same **pain**, and
-the only thing left to compare is what each one earns for it.
+**Each strategy is published at its own risk**, and `Strategy.risk_solved` records where that
+number came from:
 
-| | risk per trade | 1R = |
-|---|---|---|
-| quickfix (1.9R) | **1.39%** | 1.39% of liquid capital |
+| | risk per trade | 1R = | where it comes from |
+|---|---|---|---|
+| quickfix (1.9R) | **1.39%** | 1.39% of liquid capital | **solved**: the risk that puts it at a 6% max drawdown (`engine.TARGET_DD`) |
+| quickfixwick | 1.0% | 1.0% | **chosen** (user, 2026-07-28) |
+| quickfixclose | 1.0% | 1.0% | **chosen** |
+| quickfixopen | 1.0% | 1.0% | **chosen** |
 
-These are **measured constants**, not choices: `solve_risk.py` bisects for them (max drawdown
-rises monotonically with risk) and prints both its own solve and what the *registered* number
-actually produces.
+Publishing at the *solved* risk is what makes two strategies comparable at equal **pain**
+rather than equal bet size, and it is still how quickfix is published. The three quick exits
+are deliberately not: their exits are fast enough that the R scale stops meaning much, and
+quickfixclose barely draws down at all, so a 6%-drawdown solve either does not converge or
+hands back a bet nobody would take. Comparing all four at equal drawdown is the job of
+[the comparison page](#the-comparison-page), which solves the leverage *there* instead of
+baking it into the published defaults.
 
-It calls the registry **stale only when the registered risk misses the target**, not when it
+`solve_risk.py` still prints the solve for every strategy — "what would 6% cost this one" is
+worth knowing even when it is not the setting — but it only calls a **solved** risk stale.
+Do not paste its numbers into the registry for the other three.
+
+For quickfix, that number is a **measured constant**, not a choice: `solve_risk.py` bisects
+for it (max drawdown rises monotonically with risk) and prints both its own solve and what
+the *registered* number actually produces.
+
+It calls the registry **stale only when a solved risk misses the target**, not when it
 differs from the solve in the third decimal. The registry deliberately carries round numbers
 (1.39 against a solved 1.391) and an exact-match test would have left the tool complaining
 forever about a difference that moves the drawdown by nothing. The tolerance is 0.05, the same
@@ -347,42 +433,64 @@ quote another strategy's number (user, 2026-07-27).
 server figure. It tracks quickfix's number because quickfix is the reference strategy;
 nothing depends on them being equal.
 
-### Where it stands (2026-07-28 data, 28 markets with trades, at 1.9R / 1.39%)
+### Where it stands (2026-07-28 data, 41 markets tested, 28 with trades)
 
 **A DATED SNAPSHOT, NOT A SPECIFICATION.** Every figure in this section moves with each new
 array day, so it is stale by definition the morning after it is written, and **it is not
 meant to be updated per bar** — doing that would be a daily chore with no reader on the other
-end. `output/report.html` is regenerated on every run and is the live answer; this table is
-here so the README means something to somebody who has not opened the report. Refresh it when
-a number is quoted in a decision, or when the rules or the fill model change. What must stay
-current is the *structure* — the rules, the defaults, the invariants below — none of which a
-new bar touches.
+end. `output/report.html` and `output/comparison.html` are regenerated on every run and are
+the live answer; this table is here so the README means something to somebody who has not
+opened them. Refresh it when a number is quoted in a decision, or when the rules or the fill
+model change. What must stay current is the *structure* — the rules, the defaults, the
+invariants below — none of which a new bar touches.
 
-| | quickfix (1.9R) |
-|---|---|
-| Risk per trade | 1.39% |
-| Net return | **+222.04%** |
-| Gross return | +238.26% |
-| Max drawdown | 6.00% |
-| **Return / drawdown** | **37.0x** |
-| Closed trades | 90 |
-| Win rate | 64.4% |
-| Average winner | +2.15R |
-| Average hold | 1.2 bars |
-| Max concurrent | 5 |
-| Time in market | 49% |
-| Longest losing run | 4 |
+Each at its own **published default** risk, which is why the drawdown column is not constant:
 
-The drawdown is 6.00% by construction: 1.39% is the risk solved to put 1.9R exactly there.
-Both numbers come off the cap chart at the bottom of the report, which is the whole point of
-that section.
+| | quickfix (1.9R) | quickfixwick | quickfixclose | quickfixopen |
+|---|---|---|---|---|
+| Risk per trade | 1.39% | 1.0% | 1.0% | 1.0% |
+| Net return | **+222.04%** | **+298.51%** | **+389.47%** | **+316.96%** |
+| Gross return | +238.26% | +310.83% | +404.39% | +327.55% |
+| Max drawdown | 6.00% | 7.47% | 0.06% | 4.21% |
+| **Return / drawdown** | 37.0x | 40.0x | (undefined) | **75.4x** |
+| Closed trades | 90 | 87 | 103 | 90 |
+| Win rate | 64.4% | 66.7% | 97.1% | 87.8% |
+| Average winner | +2.15R | +3.08R | +1.63R | +1.98R |
+| Average hold | 1.2 bars | 1.2 bars | 0.0 bars | 1.0 bars |
+| Max concurrent | 5 | 4 | 0 | 4 |
+| Time in market | 49% | 45% | 0% | 41% |
+| Longest losing run | 4 | 4 | 1 | 2 |
 
-The uncapped end of the family is far behind: $158,195 at 0.396% risk, 9.7x. It wins barely a
-quarter of the time (28%) with winners four times the size (+9.51R against +2.15R), and that
+quickfix's drawdown is 6.00% by construction: 1.39% is the risk solved to put 1.9R exactly
+there, off the cap chart at the bottom of its page. The other three are at a flat 1%, so
+their drawdowns are whatever they are — which is exactly why this table cannot rank them and
+the comparison page exists.
+
+**Levered to a constant 6% drawdown**, which can:
+
+| | risk allowed | final capital |
+|---|---|---|
+| **quickfixopen** | **1.428%** | **$743,168** |
+| quickfix (1.9R) | 1.391% | $322,330 |
+| quickfixwick | 0.799% | $305,529 |
+| quickfixclose | — | never reaches 6% at any bet size |
+
+quickfixopen wins by more than a factor of two, and the mechanism is visible in the table
+above: it holds 4.21% of drawdown at a 1% bet where quickfixwick holds 7.47%, so it is the
+one that can be levered hardest. Its win rate is 87.8% because the overnight session is
+usually kind to a position entered on a reversal snap-back; its exposure is a single night,
+so a losing run never gets long (2).
+
+**Read the fill assumptions before reading any of this as a result.** quickfixclose's 97.1%
+and near-zero drawdown are the entry rule and the daily-proxy model showing through, not an
+edge to trade; quickfixopen carries no stop at all, so its tail is an overnight gap. Both
+are stated in full on the comparison page and in the daily-proxy section above.
+
+Within quickfix's own family, the uncapped end is far behind: $158,195 at 0.396% risk, 9.7x.
+It wins barely a quarter of the time (28%) with winners four times the size, and that
 combination produces long losing runs (13 straight against 4), which is a deep hole; held to
 the same 6% it must be sized right down, and that gives away far more than the big winners
-bring back. That is
-visible on the cap chart rather than as a strategy of its own.
+bring back. That is visible on the cap chart rather than as a strategy of its own.
 
 **Return / drawdown is the ranking metric**, not total return. Risk per trade is a dial, so a
 shallower edge can be levered up to meet a given drawdown, while the reverse conversion does
@@ -435,7 +543,8 @@ specific peaks will not.
 
 ## Outputs (`output/`)
 
-Per strategy, `<strategy>` being `quickfix` today.
+Per strategy, `<strategy>` being one of `quickfix`, `quickfixwick`, `quickfixclose`,
+`quickfixopen`.
 
 - **`<strategy>_gold_daily.json`** — single-market ledger: `meta`, `trades` (entry/exit,
   bars, R, pnl%, equity), `equity_curve`.
@@ -458,8 +567,67 @@ Per strategy, `<strategy>` being `quickfix` today.
   so a new strategy appears on every page as soon as the pages are rebuilt. It also carries
   the **risk dial** and the **Export PDF** button (both below).
 - **`report.html`** — the print/PDF report, carrying **every** strategy (below).
+- **`comparison.html`** — the four strategies against each other
+  ([below](#the-comparison-page)).
 - **`conclusions.html`** — two free-text fields that print at the end of the exported PDF
   (below).
+
+### The comparison page
+
+`comparison.html` answers the one question no strategy page can, and the cap section cannot
+either: the cap charts sweep **one** Rule 4 shape across its own parameter, and three of the
+four strategies have no such parameter. It is the same two-chart argument as
+[Choosing the profit cap](#choosing-the-profit-cap--the-section-at-the-bottom-of-the-page),
+one level up — across **strategies** instead of across caps.
+
+1. **At a constant 1% risk per trade** — the real result, and it cannot rank anything. Panes:
+   final capital, **max drawdown**, **return/drawdown**, **win rate**. With the bet fixed the
+   drawdown is free to move, and on the current data it moves from 0.06% to 7.47%, so the
+   tallest capital bar is partly just the deepest hole.
+2. **Levered to a constant 6% drawdown** — the ranking. Panes: final capital, **the risk each
+   strategy is allowed**, **win rate**. Solved per strategy by the same bisection
+   `solve_risk.py` uses, at the same `TARGET_DD`.
+
+Return/drawdown is on the first chart only, for the same reason it is on only the first cap
+chart: on the levered one the drawdown is pinned by construction, so the pane would redraw
+the capital bars in different units.
+
+Above them, the four Rule 4 cards; below them, a numbers table and a generated *Where it
+pays* passage carrying the yellow **Optimal point** highlight.
+
+**Bars, not lines.** The x axis is four names, not a continuous number line, so joining them
+would imply an ordering and a rate of change between neighbours that do not exist. The
+baseline is **always zero** — a bar's length is read as its value, and these two charts exist
+precisely to get that comparison right. Panes still auto-scale their top, so a pane's pixel
+height is how much of the spread is visible (250px main, 90px readouts, matching the cap
+section). Colour says **which measure**, not which strategy: capital green, drawdown red,
+risk red, return/DD slate, win rate ink — the cap charts' own pane colours. The strategies
+are named on the axis and every bar is direct-labelled with its value, so spending the colour
+channel on identity would buy nothing and put four hues where none are needed. Direct labels
+also mean the charts are readable in a printed PDF, where nothing can be hovered.
+
+Two cases the page had to handle honestly rather than hide:
+
+- **The outlier.** quickfixclose's return/drawdown is around 7000x, because its drawdown is a
+  rounding error. Scaled naively that one bar flattens the other three to stubs. So a value
+  orders of magnitude above the rest is scaled to *the rest* and its bar is drawn **broken**
+  at the top of the pane, with a break mark and its true value labelled and flagged `▲`. The
+  label carries the number; the bar only says "off this scale". Written generally, not
+  special-cased to that pane.
+- **The missing bar.** quickfixclose has no 6%-drawdown risk *at any bet size*, so the
+  levered chart draws **no bar and prints `n/a`**. A zero-height bar would say "it earns
+  nothing" instead of "the question does not apply", and the generated prose spells out that
+  this is a result rather than a gap — and points at the fill assumptions rather than letting
+  it read as a free lunch.
+
+It calls the **same** `simulate`, `statsAt` and `leveredAt` as the strategy pages: those were
+hoisted out of `mountReport` into a shared `CORE_JS` block for exactly this, so there is one
+port of `run_portfolio.py`'s loop in the browser and the two page types cannot disagree about
+a figure. It ships a **trimmed** variant grid — the four tokens it prices, not all 75 — so it
+is ~80 KB against a strategy page's ~530 KB; it has no dial to reach the rest with.
+
+Reached from a **Compare** button, first in the nav's button row on every strategy page and
+on the conclusions page. It is deliberately **not** folded into `report.html`.
 
 ### The daily calendar
 
@@ -593,8 +761,8 @@ equity curve, drawdown, KPIs, per-trade stats, the blotter's P&L columns and the
 table.
 
 **One box PER STRATEGY, like the cap dial** (since 2026-07-27). It was page-level while every
-strategy shared one risk; now each opens at its own 6%-drawdown risk, and one box cannot show
-three numbers. The old reasoning for sharing was that a multi-strategy PDF should be
+strategy shared one risk; now each opens at its own published default and one box cannot show
+four numbers. The old reasoning for sharing was that a multi-strategy PDF should be
 like-for-like — but equal **drawdown** is the like-for-like this project ranks on, which is
 exactly what the per-strategy defaults give. Typing a number still lets you compare them at
 one bet size; the box then says it has been changed and names the default it came from.
@@ -622,7 +790,7 @@ entries-before-exits ordering and the market-name sizing order.
   console warning if it ever does not. That is the guard against the JS port drifting from
   the Python. It re-simulates at the reference rather than checking the live figures, because
   a page no longer opens there — testing "if the dial happens to sit on the reference" would
-  silently never fire on two of the three strategies.
+  silently never fire on three of the four strategies.
 - `charter_trades_*.json` is unaffected — the risk dial is a display-side exploration, it
   never changes the trades or any file on disk.
 
@@ -781,8 +949,8 @@ pages 516 KB.
 
 - **`_variants.json`** — the variant grid, shared by every page (intermediate). `caps` is the
   single cap axis — the dial's and both charts'; `extra` lists the settings that are *not*
-  caps; empty today, since quickfixpro was the only one), packed and replayed identically but
-  not points on that axis.
+  caps: `wick`, `close` and `open`), packed and replayed identically but not points on that
+  axis.
 - **`_equity_<strategy>.json`** — that strategy's headline numbers at its default Rule 4 and
   its own `risk_pct` (intermediate). Its `r4` field is the variant token the page opens at —
   a cap token for the family, something else for a strategy outside it, which is why it is
@@ -833,9 +1001,11 @@ shapes:
   and MUST be here**, or the charts draw every cap except the one the strategy actually runs
   at; it was added on 2026-07-28 when the default moved there, and it has to move again if
   the default does. The rest bracket it: 2R–2.5R is the levered band, 5R a wider comparison.
-- `CHARTER_STRATEGIES` — **empty** since quickfixpro was retired. Kept because the export
-  writes a whole strategy and a cap through the same code path, so re-adding one is a single
-  key.
+- `CHARTER_STRATEGIES` — **quickfixwick, quickfixclose and quickfixopen**, exported by key
+  because there is no cap number to name the file after. Unlike the caps, these are worth
+  drawing *together*: they do not share a Rule 4 shape, so their exits land on genuinely
+  different bars and prices instead of fanning off one point. Read against a cap overlay
+  they show the whole spread of what "take the profit" can mean on one setup.
 
 `export_charter_trades.py` also **prunes** any `charter_trades_*.json` it no longer owns,
 because charter globs the directory and a file left over from an earlier set would go on
@@ -848,11 +1018,13 @@ one point and fan 34 exit lines from it. Charter also has one line style for the
 and colour already means the outcome, so they cannot be told apart on the chart at all — they
 are read one tick at a time.
 
-**Caps, not every strategy** (2026-07-27). This used to be one file per registered strategy
-(`charter_trades_quickfix.json`, `…_slowfix.json`). Once a cap-family strategy turned out to
-be just a dial position, the useful comparison on a price chart became a few caps. The
-uncapped setting is not exported at all — its trades are the least interesting on the chart.
-Nothing outside the cap family is exported today.
+**A few caps, and every non-cap strategy.** Caps went from one-file-per-strategy to
+one-file-per-cap on 2026-07-27, once a cap-family strategy turned out to be just a dial
+position: the useful comparison on a price chart is then a handful of caps, not all 75, and
+the uncapped setting is not exported at all since its trades are the least interesting on the
+chart. The three **non-cap** strategies are a different case and are all exported: they do
+not share a Rule 4 shape, so their exits land on genuinely different bars and prices instead
+of fanning off one point, which is exactly what makes them worth seeing together.
 
 The set is **independent of the reports' cap grid** and need not sit on it: 2.25R is exported
 and is on no grid the reports draw, since the grid moved to tenth-R steps. `run_pipeline.py`
@@ -860,15 +1032,28 @@ backtests whatever `CHARTER_CAPS` names, on top of the grid, so the two can dive
 only about what charter draws; the workbooks, JSON ledgers and HTML reports are unchanged.
 
 `reason` was **`target_5r`** until the cap became a dial; it is now **`target_r`** — the exit
-means "the R cap was hit", and 5 is only one setting of it. **`target_bar`** was quickfixpro's
-target, the entry bar's own extreme; nothing emits it now, but charter still colours it.
-charter colours all three green, the same as any other target, so files exported before the rename still draw correctly and so colour never starts
-meaning "which strategy" instead of "what happened".
+means "the R cap was hit", and 5 is only one setting of it. **`target_bar`** is quickfixwick's
+target, one tick past the entry bar's own wick. charter colours all three green, the same as
+any other target, so files exported before the rename still draw correctly and so colour
+never starts meaning "which strategy" instead of "what happened".
+
+The two **time exits** are the one reason that cannot name its own colour. **`exit_close`**
+and **`exit_open`** are *moments*, not levels, so the same reason covers a win and a loss and
+painting either green would draw a losing trade as a target reached. charter lists them in
+`TRADE_BY_R` and `trade_color()` reads their colour off the trade's own `r` instead — which
+is what "colour is the outcome" actually asks for. On the current data that is 79 green, 9
+red and 1 grey (a flat trade) across quickfixopen.
 
 Trade geometry only — the entry plots at the first-reversal price on the entry bar, the exit
 at the fill level on the exit bar. `unknown_pl` exits at the stop; `data_end` exits at the
-last bar's close (drawn grey — it is not a rule exit); `open_at_end` has null exit. charter reads this at build time and overlays the trades on each market's **daily**
-price pane behind a toggle.
+last bar's close (drawn grey — it is not a rule exit); `open_at_end` has null exit. A
+**quickfixclose** trade exits on its *own* entry bar, so its line is vertical and both its
+markers sit on one bar — correct, and the only overlay that does it. charter reads this at
+build time and overlays the trades on each market's **daily** price pane behind a toggle.
+
+Note that `r` here is the **gross** R multiple: slippage is a portfolio-level cost applied in
+`run_portfolio.py`, so a trade that was green on the chart can still be a small net loser in
+the ledger. That has always been true of every overlay and is not specific to the time exits.
 
 To refresh **everything** — new data included — there is one command,
 `python ../trading_system/refresh.py`, or the **Update** button at the top of charter's
@@ -885,7 +1070,8 @@ To refresh the overlay alone, end to end:
    (append a market substring, e.g. `... gold`, for a fast single-market rebuild).
 3. In `../charter`: `venv\Scripts\python.exe serve.py`, open the site, and click the **T**
    button (green/red triangles) on the right rail. It opens the **Strategy trades box** —
-   one checkbox per exported overlay (1.9R, 2R, 2.25R, 2.5R, 5R), each labelled with
+   one checkbox per exported overlay (1.9R, 2R, 2.25R, 2.5R, 5R, then quickfixclose,
+   quickfixopen and quickfixwick), each labelled with
    its own Rule 4 and its trade count — so you can show any combination or none. Long entry =
    up-triangle, short = down-triangle, exit = a marker on the exit bar; the entry→exit line
    is green for a win, red for a stop, amber for an ambiguous (`unknown_pl`) outcome, blue
@@ -893,9 +1079,11 @@ To refresh the overlay alone, end to end:
 
 **Colour is the outcome**, and every overlay is drawn **identically** — one dotted line, one
 round exit marker for all of them. There is nothing to tell them apart on the chart, on
-purpose: they all share Rules 1–3, so their entry triangles sit on exactly the same bar and
-price, and a different dash per overlay would only decorate lines that start from the same
-point. **Read them one tick at a time**; the exits and the lines are what differ. (The old
+purpose: **all** of them share Rules 1–3, caps and non-caps alike, so their entry triangles
+sit on exactly the same bar and price and a different dash per overlay would only decorate
+lines that start from the same point. **Read them one tick at a time**; the exits and the
+lines are what differ, and with four genuinely different Rule 4 shapes on the chart that is
+now worth doing. (The old
 four-style set — dot/dash/long-dash/dash-dot — is in git if a genuine
 need to tell overlays apart at a glance ever returns.)
 
@@ -917,7 +1105,8 @@ venv\Scripts\python.exe solve_risk.py               # each strategy's 6%-drawdow
 
 Every script takes optional strategy keys; with none it runs all of them. Reading the array
 archive is the slow part, so prefer `run_pipeline.py` for a full refresh — it parses the
-archive once and feeds all four writers, then rebuilds `report.html` and `conclusions.html`.
+archive once and feeds all four writers, then rebuilds `report.html`, `comparison.html` and
+`conclusions.html`.
 
 Two things follow from the cap grid. `run_portfolio.py` backtests **all 75 settings** (that is
 what `_variants.json` is) while `run_all.py` and `export_charter_trades.py` ask for the

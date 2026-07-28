@@ -4,7 +4,7 @@
 # account portfolio xlsx + equity JSON, the standalone HTML page, and the charter hand-off.
 #
 #   python run_pipeline.py            # every registered strategy
-#   python run_pipeline.py quickfixpro    # just one
+#   python run_pipeline.py quickfixwick   # just one
 #
 # This exists because reading the array archive is the slow part of every runner. The
 # pipeline parses it ONCE (engine.run_markets) and feeds the same backtests to all four
@@ -55,6 +55,8 @@ def main(argv):
     for s in picked:
         build_equity_html.build(s)
     build_equity_html.build_conclusions()
+    # Always every strategy, even on a partial run: comparing a subset is not the comparison.
+    build_equity_html.build_comparison()
     build_equity_html.build_report(
         [s for s in strategies.REGISTRY
          if (eng.OUT_DIR / f"_equity_{s.key}.json").exists()])

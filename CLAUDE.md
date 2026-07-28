@@ -87,7 +87,10 @@ and not taken.
 **RISK PER TRADE IS PER STRATEGY** (user, 2026-07-27): each strategy's default is the risk
 that puts THAT strategy at `engine.TARGET_DD` (6%) max drawdown — quickfix **1.39%**.
 It is a MEASURED constant in `strategies.py`
-(`Strategy.risk_pct`), derived by **`solve_risk.py`** — re-run it and paste the numbers back
+(`Strategy.risk_pct`), derived by **`solve_risk.py`**, which calls the registry stale only
+when the registered risk MISSES the 6% target by more than 0.05, not when it differs from
+its own 3-dp solve (1.39 against a solved 1.391 would otherwise nag forever). Re-run it
+and paste the numbers back
 after any change to the rules, the fill model or the archive, or the reports quietly go
 stale. So **1R = the strategy's own percentage**; any text saying "1R = 1%" or "1R = 1.573%"
 is stale (the rules block generates it via `strategies.entry_mechanics(risk_pct)`, a function
@@ -119,9 +122,11 @@ already-through gap bug, by coming out best on the whole grid, which is impossib
 face. Levered to equal drawdown the plateau starts at **1.3R** (allowed risk 0.19% at 0R ->
 1.39% at 1.3R, flat to 2R, 1.18% at 2.1R) and the top four settings sit within 6% of each
 other. Critically, ret/DD at a FIXED risk is NOT risk-invariant, and the levered top point has
-been 2.5R, 2R and 3.75R on three successive readings — each time because the FILL MODEL
-changed, never the strategies. Read the band, never rank caps off the fixed-risk chart, and do
-not chase the peak with quickfix's default.
+read 2.5R, 2R, 3.75R and now 1.9R across successive changes to the FILL MODEL and to the
+grid's resolution, never to the strategies. 3.75R is not even a setting any more (tenth-R
+steps skip it). The default currently SITS on the peak (1.9R), which is a coincidence to
+re-check after any change, not a result. Read the band, never rank caps off the fixed-risk
+chart, and do not chase the peak.
 
 Layout: one shared `engine.py`, and strategies are DATA in `strategies.py` (a registry; each
 strategy is a key, a title and a default `Rule4` — for the cap family every line of Rule 4

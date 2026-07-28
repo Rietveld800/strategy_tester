@@ -252,7 +252,7 @@ backtests.
 | `build_equity_html.py` | Renders `_equity_<strategy>.json` + the shared `_variants.json` into `output/equity_<strategy>.html`, plus `report.html` and `conclusions.html`. Refuses to build if the variant grid disagrees with a strategy's workbook. |
 | `export_charter_trades.py` | Hand-off to charter: `output/charter_trades_<key>.json` — one file per **cap** in `CHARTER_CAPS` (1.9R, 2R, 2.25R, 2.5R, 5R; the strategy's own default MUST be in there). `CHARTER_STRATEGIES` is empty since quickfixpro was retired. Prunes hand-off files it no longer owns. |
 | `strategies.py` (grid) | `CAP_GRID` = 0R&ndash;10R, tenth-R steps to `CAP_FINE_TO` (5.5R) and quarter-R above. One axis for the dial and both charts; `CAP_CHOICES` adds the uncapped run and is what gets backtested (75 settings). |
-| `solve_risk.py` | Solves each strategy's default risk: the one that puts it at `engine.TARGET_DD` (6%) maximum drawdown. Prints the paste-ready `risk_pct` and flags a stale registry. Not part of the pipeline &mdash; it is how the constants in `strategies.py` are derived. |
+| `solve_risk.py` | Solves each strategy's default risk: the one that puts it at `engine.TARGET_DD` (6%) maximum drawdown. Prints its own solve **and** what the registered number actually produces. Not part of the pipeline; it is how the constants in `strategies.py` are derived. |
 | `run_pipeline.py` | Every writer in one pass over the array archive (and it backtests whatever `CHARTER_CAPS` names on top of the dial grid, since the two lists are independent) (the fast way to regenerate everything): per-market xlsx, portfolio, the cap grid, the charter hand-off, then the pages. |
 
 Parsing is imported from `../charter/scripts/charting_core.py` (`parse_array`); do not
@@ -325,8 +325,14 @@ the only thing left to compare is what each one earns for it.
 | quickfix (1.9R) | **1.39%** | 1.39% of liquid capital |
 
 These are **measured constants**, not choices: `solve_risk.py` bisects for them (max drawdown
-rises monotonically with risk) and prints the paste-ready line plus a warning when the
-registry has gone stale. Re-run it after any change to the rules, the fill model or the
+rises monotonically with risk) and prints both its own solve and what the *registered* number
+actually produces.
+
+It calls the registry **stale only when the registered risk misses the target**, not when it
+differs from the solve in the third decimal. The registry deliberately carries round numbers
+(1.39 against a solved 1.391) and an exact-match test would have left the tool complaining
+forever about a difference that moves the drawdown by nothing. The tolerance is 0.05, the same
+one the report's own chart uses on its bisection. Re-run it after any change to the rules, the fill model or the
 archive — they all moved when gap fills went in on 2026-07-27. They live in `strategies.py`
 rather than being solved on every run so that the workbooks, the ledgers and the pages all
 quote one published figure and the reports do not shift under the reader.
@@ -671,11 +677,12 @@ capital line in different units.
 covered everything at tenth-R resolution there was nothing left to zoom into.)
 
 **It reorders the family, and it flattens it.** Levered to equal drawdown the top of the grid
-is **3.75R ($306,713, 1.21% risk, 34.5x)**, then **2R ($299,000, 1.39%)**, **2.5R ($290,519,
-1.18%)** and **5R ($289,469, 1.03%)** — four settings inside 6% of each other, which is
-nothing on this sample. What the chart says clearly is the *bottom*: the uncapped run is the
-**worst of the whole family** at $158,195, because it must be sized down to 0.396% per trade
-to hold 6%.
+is **1.9R ($306,421, 1.391% risk, 34.4x)** — which is quickfix's default, so the strategy now
+sits on the point its own chart picks — then **2R ($299,000, 1.391%)**, **3.7R ($291,206,
+1.211%)**, **2.5R ($290,519, 1.175%)** and **5R ($289,469, 1.027%)**. Five settings inside 6%
+of each other, which is nothing on this sample. What the chart says clearly is the *bottom*:
+the uncapped run is the **worst of the whole family** at $158,195, because it must be sized
+down to 0.396% per trade to hold 6%.
 
 **The plateau starts at 1.3R.** Allowed risk climbs from 0.19% at 0R to **1.39% at 1.3R**,
 holds there to 2R, then falls to 1.18% at 2.1R. Below 1.3R the cap is too tight for the
@@ -684,10 +691,12 @@ winners to pay for the losers and the account cannot carry a full bet — capita
 in the grid deliberately as that sanity anchor: it is what exposed the already-through gap
 bug on 2026-07-27, by coming out best on the whole grid, which is impossible on its face.
 
-**Quickfix's default cap of 2.5R has been left alone**, and the top point of the levered
-chart has now been 2.5R, then 2R, then 3.75R on three successive readings — each time because
-the **fill model** changed, never the strategies. That is the argument for reading a band
-rather than a point, and for not chasing the peak with the default.
+**The default follows this chart, but the chart's peak is not to be chased.** That top point
+has read 2.5R, then 2R, then 3.75R, and now 1.9R across successive changes to the **fill
+model** and to the grid's resolution — never to the strategies themselves. 3.75R is not even
+a setting any more: tenth-R steps do not include it. So take the **band** as the finding, and
+treat a default sitting on the current peak as a coincidence worth re-checking rather than a
+result.
 
 **Both charts explain themselves, from themselves.** Every number in the prose under them is
 **read out of the grid at render time**, not typed, so it cannot go stale, including which

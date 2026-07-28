@@ -858,7 +858,16 @@ meaning "which strategy" instead of "what happened".
 Trade geometry only — the entry plots at the first-reversal price on the entry bar, the exit
 at the fill level on the exit bar. `unknown_pl` exits at the stop; `data_end` exits at the
 last bar's close (drawn grey — it is not a rule exit); `open_at_end` has null exit. charter reads this at build time and overlays the trades on each market's **daily**
-price pane behind a toggle. To refresh the overlay end to end:
+price pane behind a toggle.
+
+To refresh **everything** — new data included — there is one command,
+`python ../trading_system/refresh.py`, or the **Update** button at the top of charter's
+icon rail, which runs it and streams the output into the page. That is the umbrella's
+convenience runner: it calls each project's own entry point (`hyperliquid_bot`'s
+`main.py`, this project's `run_pipeline.py`, charter's builder) in data-flow order and
+stops at the first failure. It changes nothing here; the steps below are what it runs.
+
+To refresh the overlay alone, end to end:
 
 1. Here: `venv\Scripts\python.exe export_charter_trades.py` (regenerate after a rule change).
 2. In `../charter`: `venv\Scripts\python.exe scripts\chart_all_markets_reference.py`

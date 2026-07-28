@@ -171,9 +171,10 @@ the server's figure at the default risk, at EVERY cap (console warning on drift)
 if you change the money management in `run_portfolio.py`, change `simulate()` in
 `build_equity_html.py` to match. Nothing is persisted and no file changes.
 
-**Choosing the profit cap** is the LAST section of every CAP-FAMILY page (after By market /
-Daily data, before the footer; a non-cap shape would carry neither it nor the dial). ONE
-section with TWO
+**Choosing the profit cap** sits DIRECTLY ABOVE the All trades blotter (moved there
+2026-07-28, user: it is the finding the report exists to make, so it reads before the raw
+trade list). Order: KPIs, equity chart, Per-trade statistics, THIS, All trades, By market,
+Daily data, footer. A non-cap shape would carry neither it nor the dial. ONE section with TWO
 charts over the same 0R-10R grid (merged 2026-07-28, user: "1 section, less explaining, more
 to the point"):
 
@@ -199,10 +200,15 @@ missed. Uncapped is a dashed reference line on both, never a point ("no cap" is 
 Drawn SYNCHRONOUSLY at mount -- deferring to a rAF silently skipped them on any page whose
 cap was `none`, including in the printed PDF. The generated prose was cut from five passages
 to three at the same time. The FIRST (`Where it pays`) is generated end to end and carries a
-YELLOW HIGHLIGHT on the best point -- that is the finding the report exists to make. The
+YELLOW HIGHLIGHT on the best point, labelled "Optimal point" -- that is the finding the report exists to make. The
 other two (`Why`, `How much to trust it`) are the USER'S OWN WORDS, verbatim; their numbers
 are still read out (the sweet-spot cap is `best.cap`, not a literal) but the rest is fixed
-prose and must be revisited BY HAND if the data moves. It is the one place in the report
+prose and must be revisited BY HAND if the data moves.
+
+PANE HEIGHTS are deliberate: every pane auto-scales its y range to its own data, so pixel
+height IS how much variation is visible. Main pane 250px, readout panes 90px (raised from
+150/50 on 2026-07-28, user: "more height so the vertical movement is better visible"). The
+constant-risk pane stays 52px -- a flat line by construction, there to show it does not move. It is the one place in the report
 where a claim can age.
 
 NO EM DASHES in report prose (user, 2026-07-28) -- use a comma. The only survivors are the

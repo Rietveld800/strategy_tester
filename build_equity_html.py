@@ -167,7 +167,7 @@ h1{font-size:clamp(26px,4.4vw,40px);line-height:1.08;margin:0 0 12px;letter-spac
 .rules:has(+ .capbar){border-bottom-left-radius:0;border-bottom-right-radius:0;}
 /* the cap sweep sits right under the dial: it is what the dial does, across the whole grid */
 .sweepcard{margin-top:14px;}
-.sweepplot{min-height:210px;}
+.sweepplot{min-height:330px;}
 .chartnote{margin:0;padding:0 14px 4px;font-size:12px;color:var(--ink3);line-height:1.5;
   max-width:78ch;}
 .chartnote b{color:var(--ink2);font-weight:600;}
@@ -357,7 +357,7 @@ __RISKBAR__
 
   <h2 class="section-h">Per-trade statistics</h2>
   <section class="stats4" data-el="tradestats"></section>
-
+__CAPCHART__
   <div class="tradecard">
     <div class="charthead" style="padding:12px 14px 10px">
       <span class="t">All trades</span>
@@ -379,7 +379,6 @@ __RISKBAR__
     </div>
   </div>
 __DAILY__
-__CAPCHART__
   <footer class="mono">__FOOTER__</footer>
 </section>"""
 
@@ -872,7 +871,7 @@ function mountReport(root, DATA){
 
   function render(){
     const W=plot.clientWidth||880;
-    const padT=14, mainH=262, gap=16, ddH=60, posH=60, xAxisH=22;
+    const padT=14, mainH=340, gap=16, ddH=90, posH=90, xAxisH=22;
     const mainBot=padT+mainH, ddTop=mainBot+gap, ddBot=ddTop+ddH;
     const posTop=ddBot+gap, posBot=posTop+posH, H=posBot+xAxisH;
     const mL=58, mR=18, plotW=W-mL-mR;
@@ -1190,11 +1189,11 @@ function mountReport(root, DATA){
   // pane would redraw the capital line in different units. It earns its place on the chart
   // above, where the drawdown actually varies.
   const NORM_PANELS = () => [
-    {k:"final", h:150, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
+    {k:"final", h:250, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
      ref:START, none:1},
-    {k:"risk", h:50, kind:"line", color:"var(--neg)", none:1,
+    {k:"risk", h:100, kind:"line", color:"var(--neg)", none:1,
      label:"RISK PER TRADE ALLOWED", fmt:v=>v.toFixed(2)+"%"},
-    {k:"wr",  h:50, kind:"line", color:"var(--ink2)", none:1,
+    {k:"wr",  h:90, kind:"line", color:"var(--ink2)", none:1,
      label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
   ];
 
@@ -1233,7 +1232,7 @@ function mountReport(root, DATA){
         `<b>${plat[0].cap}R&ndash;${plat[plat.length-1].cap}R</b> is the band: every cap on it `+
         `is allowed the same <b>${r2(best.risk)}%</b> per trade`+
         (cliff?`, and at ${cliff.cap}R that falls to ${r2(cliff.risk)}%`:``)+
-        `. <span class="hl">Best point ${best.cap}R</span> at <b>${usd(best.final)}</b>`+
+        `. <span class="hl">Optimal point ${best.cap}R</span> at <b>${usd(best.final)}</b>`+
         (none?`; uncapped is the worst of the family at ${usd(none.final)}, sized down to `+
               `${r2(none.risk)}%`:``)+`.`) +
       // Both passages below are the USER'S OWN WORDS (2026-07-28), pasted verbatim per the
@@ -1243,7 +1242,7 @@ function mountReport(root, DATA){
       h("Why",
         `<b>Taking profit early prevents long loss streaks resulting in less drawdown for the `+
         `same amount of risk taken. A lower drawdown allows for taking more risk which `+
-        `equals the highest return for the same drawdown.</b>`) +
+        `equals the highest return for the same maximum drawdown.</b>`) +
       // The user's words, lightly corrected on their instruction (2026-07-28): "less" ->
       // "least", "as long till it hits" -> "until it hits", "dataseries" -> "data series",
       // plus the commas around the two interrupting clauses. Meaning and voice unchanged.
@@ -1282,16 +1281,21 @@ function mountReport(root, DATA){
   // says the bet never changed, then return/DD, then win rate. The risk pane is a constant by
   // construction -- it is on the chart precisely to show that it is, since that is the whole
   // difference from the chart below.
+  // Pane heights. Every pane auto-scales its y range to its own data, so the pixel height IS
+  // how much of the variation a reader can see -- a 50px pane flattens a curve that a 90px
+  // one shows clearly. Raised across both charts on 2026-07-28 for exactly that reason. The
+  // constant-risk pane stays shorter: it is a flat line by construction and has nothing to
+  // resolve, it is there to show that it does not move.
   const FIXED_PANELS = () => [
-    {k:"final", h:150, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
+    {k:"final", h:250, kind:"area", color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD,
      ref:START, none:1},
-    {k:"dd", h:50, kind:"line", color:"var(--neg)", none:1,
+    {k:"dd", h:90, kind:"line", color:"var(--neg)", none:1,
      label:"MAX DRAWDOWN", fmt:v=>Math.abs(v).toFixed(0)+"%"},
-    {k:"risk", h:36, kind:"line", color:"var(--ink3)", none:1,
+    {k:"risk", h:52, kind:"line", color:"var(--ink3)", none:1,
      label:"RISK PER TRADE (CONSTANT)", fmt:v=>v.toFixed(2)+"%"},
-    {k:"rdd", h:50, kind:"line", color:"var(--bars)", none:1,
+    {k:"rdd", h:90, kind:"line", color:"var(--bars)", none:1,
      label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
-    {k:"wr",  h:50, kind:"line", color:"var(--ink2)", none:1,
+    {k:"wr",  h:90, kind:"line", color:"var(--ink2)", none:1,
      label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
   ];
 

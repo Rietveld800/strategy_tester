@@ -671,8 +671,17 @@ slow part and is unchanged, so the grid rides along on the same pass.
 
 #### Choosing the profit cap — the section at the bottom of the page
 
-The dial answers "what happens at 1.7R". The last section of every cap-family page answers
-"what happens at all of them", which is the question one setting cannot. **Two charts over
+The dial answers "what happens at 1.7R". This section answers "what happens at all of them",
+which is the question one setting cannot. It sits **directly above the trade blotter**
+(2026-07-28): it is the finding the report exists to make, so it is read before the raw trade
+list rather than after everything else.
+
+Pane heights matter and are set deliberately. Every pane auto-scales its y range to its own
+data, so the pixel height **is** how much of the variation a reader can see: a 50px pane
+flattens a curve that a 90px one resolves. The main capital pane is 250px and the readout
+panes 90px, raised from 150/50 on 2026-07-28 for exactly that reason. The constant-risk pane
+is deliberately shorter (52px): it is a flat line by construction and has nothing to resolve,
+it is there to show that it does not move. **Two charts over
 the same 0R–10R grid**, stacked, read top to bottom:
 
 1. **At a constant 1% risk per trade** — the real result. Five panes: final capital, **max
@@ -721,11 +730,12 @@ result.
 
 **Both charts explain themselves, from themselves.** Every number in the prose under them is
 **read out of the grid at render time**, not typed, so it cannot go stale, including which
-stretch of caps shares the same allowed risk and where that falls off a cliff. The levered
+stretch of caps shares the same allowed risk and where that falls off a cliff. The best
+setting is labelled **Optimal point** and highlighted in yellow. The levered
 chart's reading was cut from five passages to three on 2026-07-28.
 
 The first of those three, *Where it pays*, is generated end to end, and it is where the
-**best point is highlighted in yellow** — that is the finding the whole report exists to
+**Optimal point is highlighted in yellow** — that is the finding the whole report exists to
 make, so it is marked as such rather than left to be picked out of a sentence.
 
 The other two, *Why* and *How much to trust it*, are the **author's own words**, supplied

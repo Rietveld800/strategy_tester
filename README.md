@@ -430,7 +430,8 @@ Per strategy, `<strategy>` being `quickfix` today.
   `trades` (gross/cost/net R, prices, P&L, running balance).
 - **`equity_<strategy>.html`** — standalone interactive report: the **four rules** (1–3
   shared, 4 this strategy's), the **Rule 4 cap dial**, equity + drawdown + open-positions
-  panels, KPI + per-trade stat tiles, a sortable trade blotter, a per-market breakdown, and
+  panels, KPI + per-trade stat tiles, a sortable trade blotter, a per-market breakdown, the
+  **daily calendar**, and
   **Choosing the profit cap** at the bottom (the 0R–10R grid twice over: at a constant 1%
   risk, then levered to a constant 6% drawdown, each with its own generated reading). The cap dial and that last section are **left out for a
   strategy outside the cap family**, since there would be no number in its Rule 4 to dial and
@@ -443,6 +444,19 @@ Per strategy, `<strategy>` being `quickfix` today.
 - **`report.html`** — the print/PDF report, carrying **every** strategy (below).
 - **`conclusions.html`** — two free-text fields that print at the end of the exported PDF
   (below).
+
+### The daily calendar
+
+Every trading day, in order: date, **total capital**, drawdown, positions open, and the
+entries and exits booked that day (entries green, exits red, an em dash where nothing
+happened). It scrolls inside its own box on screen and the print stylesheet opens it out, so
+it runs to several pages of the PDF.
+
+**It is on both page types and it prints** (user, 2026-07-28). It used to be a collapsed
+`<details class="noprint">` on the interactive page only and was left out of `report.html`
+altogether, on the reasoning that a 180-row table per strategy would bloat the PDF; the
+effect was that the calendar simply was not there when it was wanted. One markup block,
+`DAILY_HTML`, now serves both.
 
 ### The market universe on the reports
 
@@ -526,8 +540,8 @@ It is always built with **all** strategies even during a partial rebuild, so a
 driving every strategy on the page, so a multi-strategy PDF is always a like-for-like
 comparison. The print stylesheet forces the light palette (the dark theme would print as a
 solid ink-heavy background), opens the scrolling tables so nothing is cut off, keeps cards
-and rows from splitting across the fold, and drops the navigation, risk control and daily
-table.
+and rows from splitting across the fold, and drops the navigation and the two dials. The
+**daily calendar prints** (see below).
 
 Both page types are generated from one stylesheet, one per-strategy markup section and one
 script whose renderer is a **factory** (`mountReport(root, DATA)`), so the report can mount
@@ -676,11 +690,20 @@ the **fill model** changed, never the strategies. That is the argument for readi
 rather than a point, and for not chasing the peak with the default.
 
 **Both charts explain themselves, from themselves.** Every number in the prose under them is
-**read out of the grid at render time**, not typed, so it cannot go stale — including which
-stretch of caps shares the same allowed risk, and where that falls off a cliff. The levered
-chart's reading was cut from five passages to three on 2026-07-28: it now says where the band
-is, that the mechanism is the risk each cap can carry (1.39% at 1.3R against 0.19% at 0R —
-7.4× the position size for the same pain), and how far to trust it.
+**read out of the grid at render time**, not typed, so it cannot go stale, including which
+stretch of caps shares the same allowed risk and where that falls off a cliff. The levered
+chart's reading was cut from five passages to three on 2026-07-28.
+
+The first of those three, *Where it pays*, is generated end to end, and it is where the
+**best point is highlighted in yellow** — that is the finding the whole report exists to
+make, so it is marked as such rather than left to be picked out of a sentence.
+
+The other two, *Why* and *How much to trust it*, are the **author's own words**, supplied
+verbatim (user, 2026-07-28). Their numbers are still read out: the cap named as the sweet
+spot is `best.cap` off the levered grid, not a literal, so the passage follows the data if
+the peak moves. Everything else in them is fixed prose and has to be revisited by hand — that
+is the trade for saying it in the author's voice, and it is the one place in the report where
+a claim could age.
 
 Mechanics:
 

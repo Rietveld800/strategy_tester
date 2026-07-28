@@ -34,9 +34,11 @@ Strategy department of a four-part trading system. Read `README.md` and
 
 ## Status (2026-07-27)
 
-ONE strategy is built and documented: **quickfix**, the cap family at **1.9R** with
-**1.39%** risk per trade (user, 2026-07-28). Those are the levered-optimal point: 1.9R tops
-the constant-6%-drawdown chart, and 1.39% is the risk that puts it there.
+ONE strategy is built and documented: **quickfix**, the cap family at a **1.9R** profit cap
+with **1.39%** risk per trade. THOSE ARE THE DEFAULTS (user, 2026-07-28) and they are the
+levered-optimal point, not a guess: 1.9R tops the constant-6%-drawdown chart, and 1.39% is
+the risk that puts it exactly there (verified: 6.00%). `engine.RISK_PCT`, the reference the
+variant grid is priced at, tracks it. `CHARTER_CAPS` must contain 1.9R and does.
 
 **BOTH SIBLING STRATEGIES HAVE BEEN RETIRED.** Do not reinstate either without being asked.
 - **slowfix** (2026-07-28) was the cap family at no cap, i.e. a dial position, never a
@@ -191,7 +193,21 @@ NEVER a second copy of the money management, and the levered one warns if the bi
 missed. Uncapped is a dashed reference line on both, never a point ("no cap" is not 10.25R).
 Drawn SYNCHRONOUSLY at mount -- deferring to a rAF silently skipped them on any page whose
 cap was `none`, including in the printed PDF. The generated prose was cut from five passages
-to three at the same time; every number in it is still READ OUT OF THE GRID at render time.
+to three at the same time. The FIRST (`Where it pays`) is generated end to end and carries a
+YELLOW HIGHLIGHT on the best point -- that is the finding the report exists to make. The
+other two (`Why`, `How much to trust it`) are the USER'S OWN WORDS, verbatim; their numbers
+are still read out (the sweet-spot cap is `best.cap`, not a literal) but the rest is fixed
+prose and must be revisited BY HAND if the data moves. It is the one place in the report
+where a claim can age.
+
+NO EM DASHES in report prose (user, 2026-07-28) -- use a comma. The only survivors are the
+`&mdash;` used as the "no data" marker in table cells (a null glyph, not punctuation, and
+explicitly fine) and `&ndash;` ranges like "Dec 2025 &ndash; Jul 2026".
+
+The DAILY CALENDAR (`DAILY_HTML`: date, total capital, drawdown, positions open, that day's
+entries and exits) is on BOTH page types and PRINTS. It was a collapsed
+`<details class="noprint">` on the interactive page only and absent from report.html, so the
+PDF never carried it and the user went looking; do not put it back behind a disclosure.
 
 Variant rows travel PACKED (positional arrays against shared market/date/reason tables):
 `VAR_COLS` in `run_portfolio.py` and `unpackCap` in `build_equity_html.py` are two halves of

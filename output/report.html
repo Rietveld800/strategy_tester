@@ -328,7 +328,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     </div>
   </section>
 
-  <p class="note"><b>Backtest, net of slippage.</b> Costs are charged as tick slippage &mdash; 1 tick on entry, 1 on a limit take-profit, 3 on a stop &mdash; converted to R through each trade's own risk distance.</p>
+  <p class="note"><b>Backtest, net of slippage.</b> Costs are charged as tick slippage, 1 tick on entry, 1 on a limit take-profit, 3 on a stop, converted to R through each trade's own risk distance.</p>
 
   <h2 class="section-h">Per-trade statistics</h2>
   <section class="stats4" data-el="tradestats"></section>
@@ -351,6 +351,20 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     </div>
     <div class="tradescroll">
       <table class="trades" data-el="mtbl"><thead data-el="mhead"></thead><tbody data-el="mbody"></tbody></table>
+    </div>
+  </div>
+
+  <h2 class="section-h">Daily data</h2>
+  <div class="tradecard">
+    <div class="charthead" style="padding:12px 14px 10px">
+      <span class="t">Every trading day</span>
+      <span class="s"><span data-el="dcount"></span></span>
+    </div>
+    <div class="tradescroll">
+      <table class="trades"><thead><tr>
+        <th class="l">Date</th><th>Capital</th><th>Drawdown</th><th>Open</th>
+        <th class="l">Activity</th>
+      </tr></thead><tbody data-el="tbody"></tbody></table>
     </div>
   </div>
 
@@ -634,13 +648,15 @@ function mountReport(root, DATA){
 
   function renderDaily(){
     const el = $("tbody");
-    if (!el) return;                       // the print report omits the daily table
+    if (!el) return;
+    const dc = $("dcount");
+    if (dc) dc.textContent = P.length + " trading days";
     el.innerHTML = P.map(p => {
       const act = [p.entries?`<span style="color:var(--pos)">${p.entries}</span>`:"",
                    p.exits?`<span style="color:var(--neg)">${p.exits}</span>`:""].filter(Boolean).join(" &nbsp; ");
       return `<tr><td class="mono">${p.date}</td><td class="mono">${fmtUSD(p.cash)}</td>`+
         `<td class="mono ${p.dd<0?'neg':''}">${p.dd.toFixed(2)}%</td>`+
-        `<td class="mono">${p.open}</td><td style="text-align:left;white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
+        `<td class="mono">${p.open}</td><td class="l" style="white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
     }).join("");
   }
 
@@ -1172,8 +1188,8 @@ function mountReport(root, DATA){
         `happen. But the signal is clear: Keeping the position as long till it hits the next `+
         `reversal or gets stopped out is the less profitable strategy of all. Taking profit `+
         `early but not too early seems to be the conclusion. The sweet spot is found at `+
-        `1.9R for this dataseries. The longer the trade is kept after 1.9R, the lower the `+
-        `profit for the same drawdown.`);
+        `${best.cap}R for this dataseries. The longer the trade is kept after ${best.cap}R, `+
+        `the lower the profit for the same drawdown.`);
   }
 
   // ---- the fixed-risk chart: what each cap really did on the same bet ----------------

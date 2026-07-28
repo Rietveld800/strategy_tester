@@ -3,8 +3,12 @@
 # Solve each strategy's DEFAULT RISK: the percentage of liquid capital per trade that puts
 # that strategy at engine.TARGET_DD (6%) maximum drawdown on the current data.
 #
-#   venv\Scripts\python.exe solve_risk.py            # every registered strategy
-#   venv\Scripts\python.exe solve_risk.py quickfixpro   # just one
+#   venv\Scripts\python.exe solve_risk.py             # every registered strategy
+#   venv\Scripts\python.exe solve_risk.py quickfixwick   # just one
+#
+# NOT every strategy is published at its solved risk. Only quickfix is (`risk_solved=True`);
+# the three quick exits are published at a flat 1% by the user's choice, so their solve is
+# printed for information and they are never called stale. See `Strategy` in strategies.py.
 #
 # Those numbers live as constants in `strategies.py` (`Strategy.risk_pct`) because everything
 # downstream -- the workbooks, the JSON ledgers, the pages' opening risk, the "1R = x%" line
@@ -15,9 +19,11 @@
 # constant currently in the registry is still right.
 #
 # Why per strategy at all: a drawdown budget is the thing actually being chosen, and return
-# is what comes out of it. Opening every page at one bet size shows three different depths of
-# hole and invites ranking them on return alone -- which flatters whichever strategy was
-# allowed to dig deepest. Solved this way, the three pages are directly comparable.
+# is what comes out of it. Opening every page at one bet size shows different depths of hole
+# and invites ranking them on return alone -- which flatters whichever strategy was allowed
+# to dig deepest. Solved this way, the pages are directly comparable. (`comparison.html`
+# makes the same argument across strategies rather than across caps, and does the same
+# bisection in the browser to do it.)
 #
 # Method: maximum drawdown rises monotonically with risk (a bigger bet swings the balance
 # further), so a plain bisection finds it. It calls run_portfolio's OWN `account()` -- never
@@ -67,7 +73,12 @@ def main(argv):
         first_day = rp.first_trading_day(raw, all_days)
         risk = solve(raw, all_days, first_day)
         if risk is None:
-            print(f"{s.key:12} cannot reach {eng.TARGET_DD:g}% at any risk")
+            # Not a failure. Quickfixclose lands here by construction: its exits are all on
+            # the right side of entry on gross terms, so the account barely dips and no bet
+            # size reaches a 6% hole. Which is exactly why it is published at a chosen 1%.
+            print(f"{s.key:12} cannot reach {eng.TARGET_DD:g}% at any risk"
+                  + ("" if s.risk_solved else f"  (published at a chosen "
+                                              f"{s.risk_pct:g}%, so this is expected)"))
             continue
         with rp.at_risk(risk):
             st = rp.account(raw, all_days, first_day)[1]
@@ -89,10 +100,15 @@ def main(argv):
         print(f"{s.key:12} solved {shown:<6g} -> ${st['final']:>10,.0f} "
               f"({st['ret']:+8.2f}%)  maxDD {st['max_dd']:5.2f}%  "
               f"ret/DD {st['ret'] / st['max_dd']:5.1f}x")
+        # A strategy published at a CHOSEN risk is never stale: its registered number was
+        # never meant to hit the target, so measuring it against one would be nagging about
+        # a decision rather than reporting a drift. The solve above is still printed, since
+        # "what 6% would cost this strategy" is worth knowing even when it is not the setting.
         print(f"{'':12} registry {s.risk_pct:<6g} -> ${reg['final']:>9,.0f} "
               f"({reg['ret']:+8.2f}%)  maxDD {reg['max_dd']:5.2f}%  "
-              + ("still on target" if ok else "OFF TARGET -- UPDATE IT"))
-        if not ok:
+              + ("chosen, not solved" if not s.risk_solved else
+                 "still on target" if ok else "OFF TARGET -- UPDATE IT"))
+        if s.risk_solved and not ok:
             stale.append((s, shown))
 
     if stale:

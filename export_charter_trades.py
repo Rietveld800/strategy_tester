@@ -6,22 +6,26 @@
 # management (position sizing, portfolio P&L) lives in run_portfolio.py and is not needed
 # here.
 #
-# WHAT GETS AN OVERLAY. Two lists, because Rule 4 comes in two shapes:
+# WHAT GETS AN OVERLAY. Two lists, because Rule 4 comes in a family plus three one-offs:
 #
 #   CHARTER_CAPS        a few settings of the CAP FAMILY. Not one file per strategy: a
 #                       cap-family strategy is just a dial position, so the useful comparison
 #                       on a price chart is a handful of caps (2026-07-27).
 #   CHARTER_STRATEGIES  strategies whose Rule 4 is NOT a cap, exported by KEY because there
-#                       is no cap number to name the file after. Quickfixpro today.
+#                       is no cap number to name the file after. All three of them: they are
+#                       genuinely different exits, so seeing them against each other on the
+#                       price bars is the point.
 #
 # This list is INDEPENDENT of the reports' cap grid and need not sit on it -- 2.25R is
 # exported and is on no grid the reports draw. run_pipeline backtests whatever it names.
 #
 # Each trade carries the entry/exit the way it plots on price: entry at the first-reversal
-# price on the entry bar, exit at the fill level (R cap / entry-bar target / stop / opposite
-# reversal) on the exit bar. An 'unknown_pl' trade is booked at the stop, so its exit price
-# is the stop. An 'open_at_end' trade never exited, so exit_date/exit are null (charter draws
-# it as open).
+# price on the entry bar, exit at the fill level (R cap / entry-bar wick / the day's close /
+# the next open / stop / opposite reversal) on the exit bar. An 'unknown_pl' trade is booked
+# at the stop, so its exit price is the stop. An 'open_at_end' trade never exited, so
+# exit_date/exit are null (charter draws it as open). A quickfixclose trade exits on its OWN
+# entry bar, so its entry marker and its exit marker land on the same bar -- correct, and the
+# only overlay where that happens.
 #
 #   python export_charter_trades.py
 #
@@ -49,10 +53,11 @@ import strategies
 # comparison the tight caps are worth reading against.
 CHARTER_CAPS = [1.9, 2.0, 2.25, 2.5, 5.0]
 
-# Strategies outside the cap family, exported whole. EMPTY since 2026-07-28: Quickfixpro was
-# the only one and was retired (user). The list stays because the export handles a strategy
-# and a cap through exactly the same code path, so re-adding one is a single key.
-CHARTER_STRATEGIES = []
+# Strategies outside the cap family, exported whole (2026-07-28). Unlike the caps these are
+# worth drawing TOGETHER: they do not share a Rule 4 shape, so their exits land on genuinely
+# different bars and prices instead of fanning off one point. Read against a cap overlay they
+# show the whole spread of what "take the profit" can mean on one setup.
+CHARTER_STRATEGIES = ["quickfixwick", "quickfixclose", "quickfixopen"]
 
 
 def charter_key(cap):
@@ -70,8 +75,8 @@ def hand_offs(caps=None, keys=None):
     """Every overlay this export owns, as (file key, title, rule 4 line, variant token).
 
     Caps first, then the non-cap strategies. Charter lists the boxes in FILENAME order, and
-    'quickfixpro' sorts after every 'cap..' name, so the caps stay together in cap order and
-    the strategies follow them.
+    every 'quickfix...' name sorts after every 'cap..' name, so the caps stay together in cap
+    order and the strategies follow them.
     """
     caps = CHARTER_CAPS if caps is None else caps
     keys = CHARTER_STRATEGIES if keys is None else keys
@@ -152,7 +157,7 @@ def main(argv):
     caps = [float(a) for a in argv] if argv else list(CHARTER_CAPS)
     items = hand_offs(caps=caps)
     # Only the caps being exported, not the whole dial grid: run_markets adds each registered
-    # strategy's own Rule 4 on top, which is what brings Quickfixpro's run along.
+    # strategy's own Rule 4 on top, which is what brings the three non-cap runs along.
     results = eng.run_markets(strategies.REGISTRY, caps=caps)
     print()
     for item in items:

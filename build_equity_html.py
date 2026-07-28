@@ -11,7 +11,7 @@
 # second renderer to keep in step.
 #
 #   python build_equity_html.py            # every registered strategy + report.html
-#   python build_equity_html.py quickfixpro   # just one page (report.html still gets all)
+#   python build_equity_html.py quickfixwick   # just one page (report.html still gets all)
 #
 # PDF: the pages do NOT bundle a JavaScript PDF library. The browser's own print-to-PDF
 # produces selectable vector text at a fraction of the size, where an html2canvas-style
@@ -270,6 +270,17 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 .dlgbtns button.pri{background:var(--accent);border-color:var(--accent);color:#fff;}
 .dlgbtns button:hover{border-color:var(--accent);}
 .rep + .rep{margin-top:48px;padding-top:8px;}
+/* comparison page: the four Rule 4s side by side, then the two bar charts */
+.cmpcards{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:24px 0 0;}
+@media(max-width:720px){.cmpcards{grid-template-columns:1fr}}
+.cmpcard{background:var(--surface);padding:13px 16px 15px;}
+.cmpcard .nm{font-weight:650;font-size:14px;letter-spacing:-.01em;}
+.cmpcard .r4{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);
+  font-weight:600;margin:6px 0 3px;}
+.cmpcard .rt{font-size:12.5px;color:var(--ink2);line-height:1.5;}
+.cmpcard .rt b{color:var(--ink);font-weight:600;}
+.barplot{min-height:300px;}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ---- print / PDF -------------------------------------------------------------
@@ -383,9 +394,9 @@ __DAILY__
 </section>"""
 
 # Rule 4's cap dial, and the section that sweeps the whole cap axis. Both are filled in only
-# for a strategy whose Rule 4 IS the cap family. Quickfixpro's Rule 4 has no number in it, so
-# a dial would have nothing to move and the sweep would be a chart of a different strategy --
-# they are simply left out of its section rather than shown disabled.
+# for a strategy whose Rule 4 IS the cap family. The other three Rule 4s have no number in
+# them, so a dial would have nothing to move and the sweep would be a chart of a different
+# strategy -- they are simply left out of those sections rather than shown disabled.
 CAPBAR_HTML = r"""
   <section class="riskbar capbar noprint">
     <span class="lbl">Rule 4 &middot; profit cap</span>
@@ -466,8 +477,12 @@ DAILY_HTML = r"""
   </div>
 """
 
-SCRIPT = r"""<script>
-const DATASETS = __DATASETS__;
+# The JS EVERY page shares. Chiefly it holds the one money-management replay: `simulate` is
+# a direct port of run_portfolio.py's loop, and both `mountReport` (the strategy pages and
+# report.html) and `mountComparison` (comparison.html) call THIS one. A second copy would be
+# free to drift, and then two pages of the same site would quote different final capitals for
+# the same account. Same argument as the cap charts' `lite` flag, one level up.
+CORE_JS = r"""<script>
 const STRATS = __STRATS__;
 // The REFERENCE risk: what the shared variant grid in _variants.json is priced at, and the
 // only risk at which the pages' own figures are pinned to a server figure. It is NOT what a
@@ -475,10 +490,11 @@ const STRATS = __STRATS__;
 // that strategy at the 6% drawdown budget.
 const REF_RISK = __REFRISK__;
 // Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
-// strategy on the page: two strategies sitting on the same cap are one run, stored once. `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra`
-// holds the settings that are NOT caps (Quickfixpro's entry-bar target): same packed rows,
-// same replay, but not a point on that axis, so a strategy sitting on one carries neither
-// the dial nor the sweep.
+// strategy on the page: two strategies sitting on the same cap are one run, stored once.
+// `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra` holds
+// the settings that are NOT caps (the entry-bar wick, the day close, the next open): same
+// packed rows, same replay, but not points on that axis, so a strategy sitting on one
+// carries neither the dial nor the sweep.
 //
 // Why this is precomputed while the risk % is replayed live: risk changes only the DOLLAR
 // SIZING of a fixed trade list, so the browser can redo the arithmetic. Rule 4 changes the
@@ -531,10 +547,192 @@ const signFix = (v,d) => v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
 const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
 // 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
 // a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
-// 'target_bar' = Quickfixpro's target, the entry bar's own extreme.
+// 'target_bar' = Quickfixwick's target, one tick past the entry bar's own wick.
+// 'exit_close' / 'exit_open' = the two BAR EXITS: the entry bar's own close (Quickfixclose)
+// and the open of the bar after it (Quickfixopen). Neither is a level that was reached, so
+// they are named for the moment rather than for a target.
 const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L",
   bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
-  data_end:"data ended",open_at_end:"open at end",target_bar:"bar target"})[r]||r;
+  data_end:"data ended",open_at_end:"open at end",target_bar:"bar wick",
+  exit_close:"day close",exit_open:"next open"})[r]||r;
+
+// One calendar for every setting, so moving the cap dial does not shift the equity curve's
+// x-axis underneath the reader: 4R and 8R are drawn over exactly the same period, and so are
+// four different strategies on the comparison page.
+const DAYS = VARIANTS.days;
+const START_CAP = __STARTCAP__;
+
+function niceTicks(min,max,n){
+  const raw=(max-min)/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), norm=raw/mag;
+  let step = norm<1.5?1:norm<3?2:norm<7?5:10; step*=mag;
+  const out=[]; for(let v=Math.ceil(min/step)*step; v<=max+1e-6; v+=step) out.push(v);
+  return out;
+}
+const NS="http://www.w3.org/2000/svg";
+const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+function txt(x,y,s,anchor,size,fill,ls){
+  const t=mk("text",{x:x,y:y,"font-size":size,fill:fill});
+  if(anchor)t.setAttribute("text-anchor",anchor); if(ls)t.setAttribute("letter-spacing",ls);
+  t.textContent=s; return t;
+}
+
+// ---- shared-account money management, replayed in the browser --------------------
+// A direct port of run_portfolio.py's loop, and the ONLY one on any page here. It is only
+// possible because the trades are CAPITAL-INDEPENDENT: which trades fire, their R multiples,
+// and their slippage cost in R are all fixed by price and reversals, so changing the risk %
+// changes the dollar sizing and nothing else. Rules mirrored exactly, and in this order:
+//   1) a new trade risks `risk`% of LIQUID capital = cash - risk tied up in open trades;
+//   2) cash moves ONLY when a trade closes; open trades are never marked to market;
+//   3) within a day ALL entries are sized first, THEN the exits book P&L;
+//   4) same-day entries are sized in market-name order, each off the base the earlier ones
+//      left. Plain < > comparison, not localeCompare, to match Python's sort.
+// The gross curve is replayed alongside on its own cash/committed pair -- costs change the
+// sizing base as the run compounds, so it cannot be derived from the net one afterwards.
+//
+// `lite` skips the daily narrative (the per-day activity strings and the point series),
+// which is all the cap charts and the comparison page need and is where nearly all the cost
+// is -- sorting the open markets into a string on all 180 days, 75 times over, would be felt
+// on every keystroke. It is the SAME function either way on purpose.
+//
+// A note that matters for quickfixclose: its trades enter and exit on the SAME day, so the
+// entries loop commits their risk and the exits loop releases it before the day's snapshot
+// is taken. `max_open` and `time_in_market` therefore read 0, which is not a bug -- it is
+// the literal truth that nothing is ever held at the end of a day.
+function simulate(risk, rows, lite, start){
+  const START = start == null ? START_CAP : start;
+  const R = rows;
+  const ent = {}, exi = {};
+  R.forEach((t,i) => {
+    (ent[t.din] || (ent[t.din] = [])).push(i);
+    (exi[t.xd] || (exi[t.xd] = [])).push(i);
+  });
+  const tr = R.map(t => Object.assign({}, t, {base:0, riskD:0, pnl:0, pnlpct:0}));
+  let cash = START, committed = 0, peak = START, maxdd = 0;
+  let gcash = START, gcommitted = 0;
+  const open = {}, gopen = {}, pts = [];
+  let maxOpen = 0, totalCost = 0, daysIn = 0;
+
+  for (const day of DAYS){
+    const es = (ent[day] || []).slice().sort((a,b) =>
+      R[a].market < R[b].market ? -1 : R[a].market > R[b].market ? 1 : 0);
+    const enotes = [];
+    for (const i of es){
+      const base = Math.max(cash - committed, 0), riskD = base * risk / 100;
+      tr[i].base = base; tr[i].riskD = riskD;
+      open[i] = riskD; committed += riskD;
+      const gbase = Math.max(gcash - gcommitted, 0);
+      gopen[i] = gbase * risk / 100; gcommitted += gopen[i];
+      if (!lite) enotes.push(R[i].market + " " + R[i].side + " (risk " +
+                  Math.round(riskD).toLocaleString("en-US") + ")");
+    }
+    const xnotes = [];
+    for (const i of (exi[day] || [])){
+      const riskD = open[i]; delete open[i]; committed -= riskD;
+      const pnl = tr[i].r * riskD;
+      cash += pnl; totalCost += tr[i].cr * riskD;
+      tr[i].pnl = pnl;
+      tr[i].pnlpct = tr[i].base ? pnl / tr[i].base * 100 : 0;
+      const griskD = gopen[i]; delete gopen[i]; gcommitted -= griskD;
+      gcash += tr[i].gr * griskD;
+      if (!lite) xnotes.push(R[i].market + " " + R[i].reason + " (" +
+        (R[i].reason === "open_at_end" ? "open->closed 0"
+          : (pnl >= 0 ? "+" : "−") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
+    }
+    const nOpen = Object.keys(open).length;
+    if (cash > peak) peak = cash;
+    const dd = peak > 0 ? (cash - peak) / peak * 100 : 0;
+    if (-dd > maxdd) maxdd = -dd;
+    if (nOpen > maxOpen) maxOpen = nOpen;
+    if (nOpen > 0) daysIn++;
+    if (!lite) pts.push({date:day, cash:cash, open:nOpen, dd:dd,
+              markets:Object.keys(open).map(i => R[i].market).sort().join(", "),
+              entries:enotes.join("; "), exits:xnotes.join("; ")});
+  }
+
+  // Closed trades only, in EXIT order -- the streaks are "as they were lived".
+  const closed = tr.filter(t => t.reason !== "open_at_end");
+  const seq = lite ? [] : closed.slice().sort((a,b) =>
+    a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
+    a.din < b.din ? -1 : a.din > b.din ? 1 :
+    a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
+  let lw=0, ll=0, cw=0, cl=0;
+  for (const t of seq){
+    if (t.pnl > 0){ cw++; cl=0; } else if (t.pnl < 0){ cl++; cw=0; } else { cw=0; cl=0; }
+    if (cw > lw) lw = cw;
+    if (cl > ll) ll = cl;
+  }
+  const wins = closed.filter(t => t.pnl > 0), loss = closed.filter(t => t.pnl < 0);
+  const mean = (xs,f) => xs.length ? xs.reduce((s,x) => s+f(x), 0)/xs.length : 0;
+  // Win rate keys off R, not dollars, so it stays meaningful at risk = 0 (where every
+  // position is sized to nothing and no trade can book a dollar of profit or loss).
+  const rWins = closed.filter(t => t.r > 0).length;
+
+  return {points:pts, trades:tr, stats:{
+    final:cash, ret:(cash/START-1)*100, maxdd:-maxdd,
+    rdd: maxdd > 0 ? ((cash/START-1)*100)/maxdd : null,
+    gross_final:gcash, gross_ret:(gcash/START-1)*100, total_cost:totalCost,
+    n_trades:closed.length,
+    win_rate: closed.length ? 100*rWins/closed.length : 0,
+    max_open:maxOpen,
+    time_in_market: DAYS.length ? 100*daysIn/DAYS.length : 0,
+    long_win:lw, long_loss:ll,
+    avg_win:mean(wins,t=>t.pnl), avg_loss:mean(loss,t=>t.pnl),
+    avg_win_pct:mean(wins,t=>t.pnlpct), avg_loss_pct:mean(loss,t=>t.pnlpct)
+  }};
+}
+
+// ---- one setting, priced two ways --------------------------------------------------
+// `statsAt` is one lite replay of one Rule 4 setting at one risk. `leveredAt` is the same
+// thing at the risk that puts THAT setting at TARGET_DD, found by bisection. Both are used
+// by the cap charts (across the cap axis) and by the comparison page (across strategies), so
+// they live out here: one bisection, one cache, and the two page types cannot disagree about
+// what 6% costs a given setting.
+const ROWCACHE={};
+const rowsFor = tok => ROWCACHE[tok] || (ROWCACHE[tok] = unpackCap(tok));
+// null for anything that is not a point on the cap axis: "none", and the three Rule 4
+// shapes that are not caps at all. Number("wick") is NaN, which would plot somewhere.
+const capOf = tok => { const x = Number(tok); return (tok === "none" || !isFinite(x)) ? null : x; };
+function statsAt(risk, tok){
+  const s = simulate(risk, rowsFor(tok), true).stats;
+  return {tok:tok, cap:capOf(tok), risk:risk, final:s.final, ret:s.ret, dd:s.maxdd,
+          rdd:s.rdd, n:s.n_trades, wr:s.win_rate};
+}
+
+// The project's drawdown budget, and the round reference risk the "real result" charts are
+// titled with. The two constants to change.
+const TARGET_DD = 6.0;
+const FIXED_RISK = 1.0;
+
+// Drawdown rises monotonically with risk (a bigger bet swings the balance further), so a
+// plain bisection finds the risk that hits the budget. Returns null when the setting cannot
+// reach it AT ANY BET, which is not a failure case to hide: quickfixclose lands there, because
+// its exits are all on the right side of entry on gross terms and the account barely dips.
+function riskForDrawdown(tok){
+  const dd = r => -simulate(r, rowsFor(tok), true).stats.maxdd;
+  let lo=0, hi=8;
+  if(dd(hi)<TARGET_DD){ hi=100; if(dd(hi)<TARGET_DD) return null; }   // unreachable
+  for(let i=0;i<24 && hi-lo>1e-3;i++){
+    const mid=(lo+hi)/2;
+    if(dd(mid)<TARGET_DD) lo=mid; else hi=mid;
+  }
+  return (lo+hi)/2;
+}
+// Solved points, cached PER TOKEN rather than per chart: a setting that appears on more than
+// one chart is bisected once, and two caches could otherwise drift.
+const LEVERED={};
+function leveredAt(tok){
+  if(tok in LEVERED) return LEVERED[tok];
+  const r = riskForDrawdown(tok);
+  return LEVERED[tok] = (r==null
+    ? {tok:tok, cap:capOf(tok), risk:null, final:null, ret:null, dd:null,
+       rdd:null, n:null, wr:null}
+    : statsAt(r, tok));
+}
+</script>"""
+
+# The report pages' own script: the per-strategy renderer and the page-level wiring.
+REPORT_JS = r"""<script>
+const DATASETS = __DATASETS__;
 
 // ---- one strategy's report, mounted into `root` ----------------------------------
 // A factory rather than top-level code: the print report mounts SEVERAL of these on one
@@ -542,9 +740,6 @@ const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L
 function mountReport(root, DATA){
   const $ = k => root.querySelector('[data-el="'+k+'"]');
   const START = DATA.start;
-  // One calendar for the whole cap grid, so moving the dial does not shift the equity
-  // curve's x-axis underneath the reader: 4R and 8R are drawn over exactly the same period.
-  const DAYS = VARIANTS.days;
   // Both dials belong to the STRATEGY, so each mounted section keeps its own. CAP is its
   // Rule 4 setting (Rule 4 is what tells the strategies apart); RISK starts at the risk that
   // puts THIS strategy at the 6% drawdown budget, which differs per strategy -- that is the
@@ -555,107 +750,13 @@ function mountReport(root, DATA){
   const IN_FAMILY = VARIANTS.caps.indexOf(CAP) >= 0;
   let RAW = unpackCap(CAP);
 
-  // ---- shared-account money management, replayed in the browser ------------------
-  // A direct port of run_portfolio.py's loop. It is only possible because the trades are
-  // CAPITAL-INDEPENDENT: which trades fire, their R multiples, and their slippage cost in R
-  // are all fixed by price and reversals, so changing the risk % changes the dollar sizing
-  // and nothing else. Rules mirrored exactly, and in this order:
-  //   1) a new trade risks `risk`% of LIQUID capital = cash - risk tied up in open trades;
-  //   2) cash moves ONLY when a trade closes; open trades are never marked to market;
-  //   3) within a day ALL entries are sized first, THEN the exits book P&L;
-  //   4) same-day entries are sized in market-name order, each off the base the earlier ones
-  //      left. Plain < > comparison, not localeCompare, to match Python's sort.
-  // The gross curve is replayed alongside on its own cash/committed pair -- costs change the
-  // sizing base as the run compounds, so it cannot be derived from the net one afterwards.
-  // `rows` defaults to the cap in force; the sweep chart passes another cap's trades in.
-  // `lite` skips the daily narrative (the per-day activity strings and the point series),
-  // which is all the sweep needs and is where nearly all the cost is -- sorting the open
-  // markets into a string on all 180 days, 34 times over, would be felt on every keystroke.
-  // It is the SAME function either way on purpose: a second stripped-down copy of the money
-  // management would be free to drift from this one, and the sweep would quietly lie.
-  function simulate(risk, rows, lite){
-    const R = rows || RAW;
-    const ent = {}, exi = {};
-    R.forEach((t,i) => {
-      (ent[t.din] || (ent[t.din] = [])).push(i);
-      (exi[t.xd] || (exi[t.xd] = [])).push(i);
-    });
-    const tr = R.map(t => Object.assign({}, t, {base:0, riskD:0, pnl:0, pnlpct:0}));
-    let cash = START, committed = 0, peak = START, maxdd = 0;
-    let gcash = START, gcommitted = 0;
-    const open = {}, gopen = {}, pts = [];
-    let maxOpen = 0, totalCost = 0, daysIn = 0;
+  // The ONE money-management replay lives at the top of the page (see CORE_JS): the cap
+  // charts, the risk dial and comparison.html all run through it. This binds it to this
+  // section's own defaults -- the cap in force and this strategy's starting capital -- so
+  // the call sites below read as they always did.
+  const sim = (risk, rows, lite) => simulate(risk, rows || RAW, lite, START);
 
-    for (const day of DAYS){
-      const es = (ent[day] || []).slice().sort((a,b) =>
-        R[a].market < R[b].market ? -1 : R[a].market > R[b].market ? 1 : 0);
-      const enotes = [];
-      for (const i of es){
-        const base = Math.max(cash - committed, 0), riskD = base * risk / 100;
-        tr[i].base = base; tr[i].riskD = riskD;
-        open[i] = riskD; committed += riskD;
-        const gbase = Math.max(gcash - gcommitted, 0);
-        gopen[i] = gbase * risk / 100; gcommitted += gopen[i];
-        if (!lite) enotes.push(R[i].market + " " + R[i].side + " (risk " +
-                    Math.round(riskD).toLocaleString("en-US") + ")");
-      }
-      const xnotes = [];
-      for (const i of (exi[day] || [])){
-        const riskD = open[i]; delete open[i]; committed -= riskD;
-        const pnl = tr[i].r * riskD;
-        cash += pnl; totalCost += tr[i].cr * riskD;
-        tr[i].pnl = pnl;
-        tr[i].pnlpct = tr[i].base ? pnl / tr[i].base * 100 : 0;
-        const griskD = gopen[i]; delete gopen[i]; gcommitted -= griskD;
-        gcash += tr[i].gr * griskD;
-        if (!lite) xnotes.push(R[i].market + " " + R[i].reason + " (" +
-          (R[i].reason === "open_at_end" ? "open->closed 0"
-            : (pnl >= 0 ? "+" : "−") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
-      }
-      const nOpen = Object.keys(open).length;
-      if (cash > peak) peak = cash;
-      const dd = peak > 0 ? (cash - peak) / peak * 100 : 0;
-      if (-dd > maxdd) maxdd = -dd;
-      if (nOpen > maxOpen) maxOpen = nOpen;
-      if (nOpen > 0) daysIn++;
-      if (!lite) pts.push({date:day, cash:cash, open:nOpen, dd:dd,
-                markets:Object.keys(open).map(i => R[i].market).sort().join(", "),
-                entries:enotes.join("; "), exits:xnotes.join("; ")});
-    }
-
-    // Closed trades only, in EXIT order -- the streaks are "as they were lived".
-    const closed = tr.filter(t => t.reason !== "open_at_end");
-    const seq = lite ? [] : closed.slice().sort((a,b) =>
-      a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
-      a.din < b.din ? -1 : a.din > b.din ? 1 :
-      a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
-    let lw=0, ll=0, cw=0, cl=0;
-    for (const t of seq){
-      if (t.pnl > 0){ cw++; cl=0; } else if (t.pnl < 0){ cl++; cw=0; } else { cw=0; cl=0; }
-      if (cw > lw) lw = cw;
-      if (cl > ll) ll = cl;
-    }
-    const wins = closed.filter(t => t.pnl > 0), loss = closed.filter(t => t.pnl < 0);
-    const mean = (xs,f) => xs.length ? xs.reduce((s,x) => s+f(x), 0)/xs.length : 0;
-    // Win rate keys off R, not dollars, so it stays meaningful at risk = 0 (where every
-    // position is sized to nothing and no trade can book a dollar of profit or loss).
-    const rWins = closed.filter(t => t.r > 0).length;
-
-    return {points:pts, trades:tr, stats:{
-      final:cash, ret:(cash/START-1)*100, maxdd:-maxdd,
-      rdd: maxdd > 0 ? ((cash/START-1)*100)/maxdd : null,
-      gross_final:gcash, gross_ret:(gcash/START-1)*100, total_cost:totalCost,
-      n_trades:closed.length,
-      win_rate: closed.length ? 100*rWins/closed.length : 0,
-      max_open:maxOpen,
-      time_in_market: DAYS.length ? 100*daysIn/DAYS.length : 0,
-      long_win:lw, long_loss:ll,
-      avg_win:mean(wins,t=>t.pnl), avg_loss:mean(loss,t=>t.pnl),
-      avg_win_pct:mean(wins,t=>t.pnlpct), avg_loss_pct:mean(loss,t=>t.pnlpct)
-    }};
-  }
-
-  let SIM = simulate(RISK), P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
+  let SIM = sim(RISK), P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
 
   // Self-check: at the REFERENCE risk the replay MUST reproduce the server's own figure for
   // the cap in force. If it ever does not, the JS port has drifted from run_portfolio.py --
@@ -670,7 +771,7 @@ function mountReport(root, DATA){
   // simulate is cheap, and the guard now runs everywhere.
   function selfCheck(){
     const want = VARIANTS.v[CAP].final;
-    const got = simulate(REF_RISK, null, true).stats.final;
+    const got = sim(REF_RISK, null, true).stats.final;
     if (Math.abs(got - want) > 0.5){
       console.warn(DATA.strategy + " @ cap " + CAP + ": replay mismatch at " + REF_RISK +
         "%: page " + got.toFixed(2) + " vs server " + want.toFixed(2) +
@@ -681,15 +782,22 @@ function mountReport(root, DATA){
   }
 
   function renderKpis(){
+    // A strategy that opens and closes on the SAME bar (quickfixclose) is never holding
+    // anything when a day is counted, so both of these read 0. That is the literal truth and
+    // it is worth saying out loud, because "max concurrent 0" beside 103 trades otherwise
+    // looks like a broken number rather than the defining property of the strategy.
+    const intraday = ST.max_open === 0 && ST.n_trades > 0;
     const kpis = [
       ["Final capital", fmtUSD(ST.final), "", "net, from "+fmtK(START)],
       ["Total return", pct(ST.ret), ST.ret>=0?"pos":"neg", "gross "+pct(ST.gross_ret)],
       ["Max drawdown", ST.maxdd.toFixed(2)+"%", "neg", "peak to trough"],
       ["Return / DD", ST.rdd==null?"—":ST.rdd.toFixed(1)+"x", (ST.rdd!=null&&ST.rdd>=0)?"pos":"",
        "return per point of drawdown"],
-      ["Time in market", ST.time_in_market.toFixed(0)+"%", "", "of trading days"],
+      ["Time in market", ST.time_in_market.toFixed(0)+"%", "",
+       intraday ? "never held to a day's end" : "of trading days"],
       ["Win rate", ST.win_rate.toFixed(1)+"%", "", ST.n_trades+" trades"],
-      ["Max concurrent", String(ST.max_open), "", "positions open"],
+      ["Max concurrent", String(ST.max_open), "",
+       intraday ? "every trade shut the same day" : "positions open"],
     ];
     $("kpis").innerHTML = kpis.map(k =>
       `<div class="kpi"><span class="k">${k[0]}</span><span class="v ${k[2]} mono">${k[1]}</span>`+
@@ -851,23 +959,9 @@ function mountReport(root, DATA){
     }).join("")+"</tr>").join("");
   }
 
-  function niceTicks(min,max,n){
-    const raw=(max-min)/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), norm=raw/mag;
-    let step = norm<1.5?1:norm<3?2:norm<7?5:10; step*=mag;
-    const out=[]; for(let v=Math.ceil(min/step)*step; v<=max+1e-6; v+=step) out.push(v);
-    return out;
-  }
-
+  // niceTicks / mk / txt are shared with the comparison page and live in CORE_JS.
   const svg=$("svg"), plot=$("plot"), tip=$("tip");
-  const NS="http://www.w3.org/2000/svg";
-  const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
   let geom=null, firstDraw=true;
-
-  function txt(x,y,s,anchor,size,fill,ls){
-    const t=mk("text",{x:x,y:y,"font-size":size,fill:fill});
-    if(anchor)t.setAttribute("text-anchor",anchor); if(ls)t.setAttribute("letter-spacing",ls);
-    t.textContent=s; return t;
-  }
 
   function render(){
     const W=plot.clientWidth||880;
@@ -993,14 +1087,8 @@ function mountReport(root, DATA){
   //
   // Both are drawn by one plotter over one x axis (the cap grid). Two near-identical
   // renderers would drift apart.
-  const ROWCACHE={};
-  const rowsFor = tok => ROWCACHE[tok] || (ROWCACHE[tok] = unpackCap(tok));
-  const capOf = tok => tok === "none" ? null : Number(tok);
-  function statsAt(risk, tok){
-    const s = simulate(risk, rowsFor(tok), true).stats;
-    return {tok:tok, cap:capOf(tok), risk:risk, final:s.final, ret:s.ret, dd:s.maxdd,
-            rdd:s.rdd, n:s.n_trades, wr:s.win_rate};
-  }
+  // rowsFor / capOf / statsAt / leveredAt are in CORE_JS: the comparison page asks the same
+  // questions of the same settings, and one cache means the two pages cannot disagree.
 
   // ---- shared plotter ---------------------------------------------------------------
   // `panels` stack down the card: the first is the tall one, the rest are compact rows.
@@ -1146,33 +1234,10 @@ function mountReport(root, DATA){
   // drawdown removes that, and asks the question the ranking metric implies -- levered to
   // the same hole, which cap ends up with the most money?
   //
-  // Drawdown rises monotonically with risk (a bigger bet swings the balance further), so a
-  // plain bisection finds it. Solved ONCE per page and cached: this chart is independent of
-  // the risk dial by construction, so it never needs redoing.
-  const TARGET_DD = 6.0;               // percent; the one constant to change here
-  function riskForDrawdown(tok){
-    const dd = r => -simulate(r, rowsFor(tok), true).stats.maxdd;
-    let lo=0, hi=8;
-    if(dd(hi)<TARGET_DD){ hi=100; if(dd(hi)<TARGET_DD) return null; }   // unreachable
-    for(let i=0;i<24 && hi-lo>1e-3;i++){
-      const mid=(lo+hi)/2;
-      if(dd(mid)<TARGET_DD) lo=mid; else hi=mid;
-    }
-    return (lo+hi)/2;
-  }
-  // Solved points, cached PER TOKEN rather than per chart: the wide grid and the zoomed one
-  // overlap at 2R, 2.5R and 3R, and a bisection is ~24 lite simulates -- solving those three
-  // twice would be pure waste, and worse, two caches could drift if either chart's inputs
-  // ever changed independently.
-  const LEVERED={};
-  function leveredAt(tok){
-    if(tok in LEVERED) return LEVERED[tok];
-    const r = riskForDrawdown(tok);
-    return LEVERED[tok] = (r==null
-      ? {tok:tok, cap:capOf(tok), risk:null, final:null, ret:null, dd:null,
-         rdd:null, n:null, wr:null}
-      : statsAt(r, tok));
-  }
+  // The bisection itself (`riskForDrawdown`, `leveredAt`, TARGET_DD) is in CORE_JS and is
+  // cached per token, so a setting on more than one chart is solved once. Solved ONCE per
+  // page: this chart is independent of the risk dial by construction, so it never needs
+  // redoing.
   let NORM=null;
   function buildNorm(){ return NORM || (NORM = VARIANTS.caps.map(leveredAt)); }
   const drawNorm = !$("nwplot") ? function(){} :
@@ -1263,8 +1328,8 @@ function mountReport(root, DATA){
   // makes the levered chart's point land.
   //
   // Deliberately NOT the risk dial's value, so it stays cacheable and so the two charts are
-  // a fixed pair rather than one of them sliding around under the reader.
-  const FIXED_RISK = 1.0;              // percent; the round reference the chart is titled with
+  // a fixed pair rather than one of them sliding around under the reader. FIXED_RISK is in
+  // CORE_JS, because the comparison page's top chart is pinned at the same number.
   let FIXED=null;
   function buildFixed(){
     return FIXED || (FIXED = VARIANTS.caps.map(tok => statsAt(FIXED_RISK, tok)));
@@ -1347,7 +1412,7 @@ function mountReport(root, DATA){
     // redrawn only when the cap marker moves or the card is resized.
   }
   function recompute(){
-    SIM = simulate(RISK); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
+    SIM = sim(RISK); P = SIM.points; N = P.length; T = SIM.trades; ST = SIM.stats;
     renderAll(); selfCheck();
   }
   // ---- the risk dial ---------------------------------------------------------------
@@ -1448,7 +1513,7 @@ function mountReport(root, DATA){
   function setCap(tok, typed){
     // IN_FAMILY guards the URL route as much as the control: report.html accepts a
     // "&cap=key:tok" pair, and letting one re-dial a strategy that is not on the cap axis
-    // would print a Quickfixpro section showing a cap run's trades.
+    // would print a Quickfixwick section showing a cap run's trades.
     if (!IN_FAMILY || !VARIANTS.v[tok] || tok === CAP) return;
     CAP = tok;
     if (tok !== "none") lastNum = tok;
@@ -1792,16 +1857,33 @@ def section_html(strategy, data, riskbar, daily):
 
 
 def strat_meta():
-    return json.dumps([{"key": s.key, "title": s.title, "rule4": s.rule4}
+    """The registry as the pages see it.
+
+    `r4` is the variant token the strategy's own backtest is filed under, and `risk` its
+    published default -- the comparison page needs both to price each strategy, and the PDF
+    picker ignores them. `solved` says whether that risk is the measured 6%-drawdown one or
+    a chosen number, which is a caveat the comparison page has to print rather than hide.
+    """
+    return json.dumps([{"key": s.key, "title": s.title, "rule4": s.rule4,
+                        "rule4_text": s.rule4_text, "r4": s.token,
+                        "risk": s.risk_pct, "solved": s.risk_solved}
                        for s in strategies.REGISTRY], separators=(",", ":"))
 
 
-def script_html(datasets, variants, boot):
-    return (SCRIPT
-            .replace("__DATASETS__", json.dumps(datasets, separators=(",", ":")))
+def core_js(variants):
+    """The script block every page type emits first: the variant grid, the unpacker and the
+    one money-management replay both renderers run on."""
+    return (CORE_JS
             .replace("__VARIANTS__", json.dumps(variants, separators=(",", ":")))
             .replace("__STRATS__", strat_meta())
             .replace("__REFRISK__", f"{eng.RISK_PCT:g}")
+            .replace("__STARTCAP__", f"{eng.STARTING_CAPITAL:g}"))
+
+
+def script_html(datasets, variants, boot):
+    return (core_js(variants) + "\n"
+            + REPORT_JS
+            .replace("__DATASETS__", json.dumps(datasets, separators=(",", ":")))
             .replace("__BOOT__", boot))
 
 
@@ -1810,8 +1892,12 @@ def build(strategy):
     data = load_data(strategy)
     variants = load_variants()
     check_variants(strategy, data, variants)
+    # Compare sits FIRST of the three buttons: it is the page that answers "and which of
+    # these should I use", which is the question a reader arrives at a single strategy's
+    # page already holding.
     body = (f'<div class="wrap">\n<nav class="nav noprint"><span class="lbl">Strategy</span>'
             f'{nav_html(strategy)}<span class="navbtns">'
+            f'<a class="pdfbtn" href="{COMPARISON_PATH.name}">Compare</a>'
             f'<button class="pdfbtn" data-el="concl" type="button">Conclusions</button>'
             f'<button class="pdfbtn" data-el="pdfopen" type="button">Export PDF</button>'
             f'</span></nav>\n'
@@ -1874,6 +1960,418 @@ def build_report(picked):
           f"({', '.join(s.key for s in picked)})")
 
 
+# --- comparison.html ------------------------------------------------------------------
+# The four strategies against each other, which is a question no strategy page can answer
+# and the cap section cannot either: the cap charts sweep ONE Rule 4 shape across its own
+# parameter, and three of these four have no such parameter.
+#
+# Same two-chart argument as "Choosing the profit cap", one level up. First the real result
+# at a constant 1% risk, which is honest about what happened and cannot rank anything because
+# the drawdown is free to move; then the same four levered to a constant 6% drawdown, which
+# is the ranking. BARS rather than lines, because the x axis here is four names, not a
+# continuous number line -- joining them with a line would imply an ordering and a rate of
+# change between neighbours that do not exist.
+COMPARISON_PATH = eng.OUT_DIR / "comparison.html"
+
+COMPARISON_HTML = r"""
+  <header>
+    <div class="eyebrow">__EYEBROW__</div>
+    <h1>Four ways to take the profit</h1>
+    <p class="lede">__LEDE__</p>
+  </header>
+
+  <section class="cmpcards" data-el="cards"></section>
+
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">The four strategies at a constant 1% risk per trade</span>
+      <span class="s">real result &middot; drawdown varies &middot; not a ranking</span>
+    </div>
+    <p class="chartnote">What each one actually did on the same fixed bet, over the same days
+      and the same setups. The risk is pinned so the <b>drawdown is free to move</b>, which
+      is why the tallest capital bar is not automatically the best strategy, part of its
+      return is the deeper hole it was allowed to dig. Rank them on the chart below.</p>
+    <div class="plot barplot" data-el="fxplot">
+      <svg data-el="fxsvg" role="img" aria-label="Final capital, max drawdown, return over drawdown and win rate for each strategy at a constant 1 percent risk"></svg>
+      <div class="tip" data-el="fxtip"></div>
+    </div>
+    <div class="findings" data-el="fxfindings"></div>
+  </section>
+
+  <section class="card sweepcard">
+    <div class="charthead">
+      <span class="t">The same four levered to a constant 6% drawdown</span>
+      <span class="s">risk solved per strategy &middot; equal pain &middot; this is the ranking</span>
+    </div>
+    <p class="chartnote">Risk is a free variable, so the honest question is: held to the
+      <b>same 6% maximum drawdown</b>, which strategy ends up with the most money? The risk
+      is solved per strategy to make that true, and the second pane is what each one is then
+      allowed to bet.</p>
+    <div class="plot barplot" data-el="nwplot">
+      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk per trade allowed and win rate for each strategy at a constant 6 percent drawdown"></svg>
+      <div class="tip" data-el="nwtip"></div>
+    </div>
+    <div class="findings" data-el="nwfindings"></div>
+  </section>
+
+  <h2 class="section-h">The numbers</h2>
+  <div class="tradecard">
+    <div class="charthead" style="padding:12px 14px 10px">
+      <span class="t">Both readings, side by side</span>
+      <span class="s"><span data-el="tblcount"></span></span>
+    </div>
+    <div class="tradescroll">
+      <table class="trades"><thead><tr>
+        <th class="l" style="width:15%">Strategy</th>
+        <th class="l" style="width:25%">Rule 4</th>
+        <th style="width:7%">Trades</th>
+        <th style="width:8%">Win %</th>
+        <th style="width:11%">Capital @1%</th>
+        <th style="width:8%">Max DD</th>
+        <th style="width:7%">Ret/DD</th>
+        <th style="width:9%">Risk for 6%</th>
+        <th style="width:10%">Capital @6%</th>
+      </tr></thead><tbody data-el="cmpbody"></tbody></table>
+    </div>
+  </div>
+
+  <p class="note">__NOTE__</p>
+  <footer class="mono">__FOOTER__</footer>
+"""
+
+COMPARISON_JS = r"""<script>
+// ---- comparison.html: the four strategies against each other ----------------------
+// It calls the SAME `simulate`, `statsAt` and `leveredAt` as the strategy pages (CORE_JS),
+// so a figure here and the same figure on a strategy page cannot disagree. What is different
+// is only the x axis: four Rule 4 SHAPES rather than one shape's parameter.
+const $ = k => document.querySelector('[data-el="'+k+'"]');
+
+// Every registered strategy, at its own Rule 4 token. Order is the registry's, which puts
+// quickfix (the reference, and the only cap-family member here) first.
+const FIXED_PTS = STRATS.map(s => Object.assign(statsAt(FIXED_RISK, s.r4), {s:s}));
+const NORM_PTS  = STRATS.map(s => Object.assign(leveredAt(s.r4), {s:s}));
+
+const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
+const ddTxt = v => v==null?"—":Math.abs(v).toFixed(2)+"%";
+const rddTxt = v => v==null?"—":v.toFixed(1)+"x";
+const riskTxt = v => v==null?"—":v.toFixed(2)+"%";
+
+// ---- the bar plotter ---------------------------------------------------------------
+// One plotter for both charts, the same way the cap section has one line plotter: two
+// near-identical renderers drift apart.
+//
+// BARS, ZERO BASELINE, always. A bar's length is read as its value, so a truncated axis
+// would misstate every comparison on the page -- which is exactly the thing these two charts
+// exist to get right. The panes still auto-scale their TOP, so a pane's pixel height is how
+// much of the spread between the four is visible; the heights match the cap section's
+// (250px main, 90px readouts) for the same reason they were raised there.
+function barPlotter(plotEl, svgEl, tipEl, tipRows){
+  let g=null;
+  function draw(items, panels){
+    if(!items.length) return;
+    const W=plotEl.clientWidth||880, mL=64, mR=16, plotW=W-mL-mR;
+    const padT=18, xAxisH=30, gap=28;
+    const tops=[]; let H=padT;
+    panels.forEach(p=>{ tops.push(H); H+=p.h+gap; });
+    H=H-gap+xAxisH;
+    svgEl.setAttribute("viewBox",`0 0 ${W} ${H}`); svgEl.setAttribute("height",H);
+    while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+    const n=items.length, slot=plotW/n;
+    // A generous gap between neighbours: bars this few should not read as one block, and the
+    // value labels above them need room not to collide.
+    const bw=Math.min(slot-30, 104), cx=i=> mL+slot*i+slot/2;
+    const ys=[];
+
+    panels.forEach((p,pi)=>{
+      const top=tops[pi], bot=top+p.h;
+      const val=q=> { const v=q[p.k]; return v==null?null:(p.abs?Math.abs(v):v); };
+      const finite=items.map(val).filter(v=>v!=null);
+      // ONE value orders of magnitude above the rest flattens every other bar to a stub, and
+      // then the pane shows nothing except that the outlier is big -- which the reader could
+      // have got from the label. So scale to the REST and draw the outlier BROKEN at the top
+      // with its true value on it: the label carries the number, the bar only says "off this
+      // scale". The axis still starts at zero, so no bar that IS on the scale is misread.
+      //
+      // It fires today on return/drawdown: quickfixclose's drawdown is a rounding error, so
+      // the ratio comes out in the thousands and the metric has stopped meaning anything.
+      // Written generally because any pane could meet an outlier later.
+      const desc=finite.slice().sort((a,b)=>b-a);
+      const scaleOn=(desc.length>1 && desc[0] > 10*Math.max(desc[1],1e-9))
+        ? desc.slice(1) : desc;
+      const ceiling=Math.max.apply(null, scaleOn.concat(p.ref!=null?[p.ref]:[], [0]));
+      const yHi=(ceiling*1.20)||1;                 // headroom for the label above the tallest
+      const y=v=> bot-(v/yHi)*p.h;
+      ys.push(y);
+
+      (pi===0?niceTicks(0,yHi,3):[ceiling]).forEach(v=>{
+        if(v<0||v>yHi) return;
+        svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(v),y2:y(v),stroke:"var(--grid)","stroke-width":1}));
+        svgEl.appendChild(txt(mL-9,y(v)+3.5,p.fmt(v),"end",10.5,"var(--ink3)"));
+      });
+      svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:bot,y2:bot,stroke:"var(--border)","stroke-width":1}));
+      if(p.label) svgEl.appendChild(txt(mL+4,top-5,p.label,"start",10.5,"var(--ink3)",".04em"));
+      if(p.ref!=null){
+        svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(p.ref),y2:y(p.ref),stroke:"var(--ref)",
+          "stroke-width":1.2,"stroke-dasharray":"3 4"}));
+        svgEl.appendChild(txt(W-mR-2,y(p.ref)-5,p.fmt(p.ref)+" start","end",10,"var(--ink3)"));
+      }
+
+      items.forEach((q,i)=>{
+        const v=val(q);
+        // A strategy with no answer for this pane draws NO BAR and says so on the baseline.
+        // Quickfixclose has no 6%-drawdown risk at any bet size, and a zero-height bar would
+        // read as "it earns nothing" instead of "the question does not apply".
+        if(v==null){
+          svgEl.appendChild(txt(cx(i),bot-6,"n/a","middle",11,"var(--ink3)"));
+          return;
+        }
+        const off=v>yHi, ty=off?top+14:y(v);
+        svgEl.appendChild(mk("rect",{x:(cx(i)-bw/2).toFixed(1),y:ty.toFixed(1),
+          width:bw.toFixed(1),height:Math.max(bot-ty,0).toFixed(1),
+          fill:p.color,rx:4,opacity:.92}));
+        if(off){
+          // The break mark: two strokes in the surface colour across the bar, the standard
+          // "this bar does not end here" glyph.
+          [0,5].forEach(d=>svgEl.appendChild(mk("line",{
+            x1:(cx(i)-bw/2).toFixed(1), x2:(cx(i)+bw/2).toFixed(1),
+            y1:(ty+8+d).toFixed(1), y2:(ty+3+d).toFixed(1),
+            stroke:"var(--surface)","stroke-width":2.5})));
+        }
+        // Direct label on every bar. Four bars is few enough that labelling all of them is
+        // clearer than a hover-only readout, and it means the chart is still readable in the
+        // printed PDF, where nothing can be hovered.
+        const lab=txt(cx(i),ty-7,(p.mfmt||p.fmt)(v)+(off?" ▲":""),"middle",
+                      pi===0?12.5:11,"var(--ink)");
+        if(pi===0) lab.setAttribute("font-weight",600);
+        svgEl.appendChild(lab);
+      });
+    });
+
+    // x axis: the strategy names, written once under the last pane.
+    items.forEach((q,i)=>{
+      svgEl.appendChild(txt(cx(i),H-10,q.s.title,"middle",12,"var(--ink2)"));
+    });
+
+    // Hover: a full-height hit slot per strategy, so the target is the column and not the
+    // bar, which on the short panes would be a few pixels tall.
+    const hit=[];
+    items.forEach((q,i)=>{
+      const r=mk("rect",{x:(mL+slot*i).toFixed(1),y:padT,width:slot.toFixed(1),
+        height:(H-xAxisH-padT).toFixed(1),fill:"transparent"});
+      svgEl.appendChild(r); hit.push(r);
+    });
+    const band=mk("rect",{y:padT,height:(H-xAxisH-padT).toFixed(1),fill:"var(--accent-soft)",
+      opacity:0,width:slot.toFixed(1),x:mL});
+    svgEl.insertBefore(band, svgEl.firstChild);
+    g={W,mL,slot,items,band,padT};
+  }
+  function move(ev){
+    if(!g)return;
+    const r=plotEl.getBoundingClientRect(), scale=g.W/r.width;
+    let i=Math.floor(((ev.clientX-r.left)*scale-g.mL)/g.slot);
+    if(i<0||i>=g.items.length){ leave(); return; }
+    const q=g.items[i];
+    g.band.setAttribute("x",(g.mL+g.slot*i).toFixed(1));
+    g.band.setAttribute("opacity",.5);
+    tipEl.innerHTML=tipRows(q);
+    tipEl.style.opacity=1;
+    const tw=tipEl.offsetWidth, th=tipEl.offsetHeight;
+    const cx=(g.mL+g.slot*i+g.slot/2)/scale;
+    let lx=cx-tw/2; lx=Math.max(2,Math.min(r.width-tw-2,lx));
+    tipEl.style.left=lx+"px"; tipEl.style.top=(g.padT/scale+8)+"px";
+  }
+  function leave(){ if(!g)return; g.band.setAttribute("opacity",0); tipEl.style.opacity=0; }
+  plotEl.addEventListener("pointermove",move);
+  plotEl.addEventListener("pointerleave",leave);
+  return draw;
+}
+
+// Pane colours follow the cap section's, measure for measure: capital green, drawdown red,
+// risk red, return/DD slate, win rate ink. Colour here says WHICH MEASURE, not which
+// strategy -- the strategies are already named on the axis and every bar is labelled with
+// its own value, so spending the colour channel on identity would buy nothing and would put
+// four hues in a place that needs none.
+const FIXED_PANELS = () => [
+  {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
+  {k:"dd", h:90, abs:1, color:"var(--neg)", label:"MAX DRAWDOWN", fmt:v=>v.toFixed(1)+"%"},
+  {k:"rdd", h:90, color:"var(--bars)", label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
+  {k:"wr", h:90, color:"var(--ink2)", label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
+];
+// No return/DD pane on the levered chart: drawdown is pinned at 6% by construction there, so
+// return/DD is just return divided by a constant and the pane would redraw the capital bars
+// in different units. Same reason it is missing from the levered cap chart.
+const NORM_PANELS = () => [
+  {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
+  {k:"risk", h:90, color:"var(--neg)", label:"RISK PER TRADE ALLOWED", fmt:v=>v.toFixed(2)+"%"},
+  {k:"wr", h:90, color:"var(--ink2)", label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
+];
+
+const drawFixed = barPlotter($("fxplot"), $("fxsvg"), $("fxtip"), p =>
+  `<div class="d">${p.s.title}</div>`+
+  row("Final capital", fmtUSD(p.final)) + row("Return", pct(p.ret)) +
+  row("Max drawdown", ddTxt(p.dd)) + row("Risk per trade", riskTxt(FIXED_RISK)) +
+  row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
+  row("Trades", p.n));
+
+const drawNorm = barPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
+  `<div class="d">${p.s.title}</div>`+
+  (p.risk==null ? row("Risk needed","no "+TARGET_DD+"% at any bet") :
+    row("Risk per trade", riskTxt(p.risk)) + row("Final capital", fmtUSD(p.final)) +
+    row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
+    row("Win rate", p.wr.toFixed(1)+"%") + row("Trades", p.n)));
+
+// ---- what the charts say, read out of the charts ------------------------------------
+// Generated, not typed, exactly like the cap section's first passage: every number below
+// comes off the two grids at render time, so it cannot go stale against the data.
+function renderFindings(){
+  const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
+  const fx=FIXED_PTS.slice(), nw=NORM_PTS.filter(p=>p.final!=null);
+  const fxBest=fx.reduce((a,b)=>b.final>a.final?b:a);
+  const ddHi=fx.reduce((a,b)=>Math.abs(b.dd)>Math.abs(a.dd)?b:a);
+  const ddLo=fx.reduce((a,b)=>Math.abs(b.dd)<Math.abs(a.dd)?b:a);
+  const r1=v=>Math.abs(v).toFixed(1);
+  const r2=v=>Math.abs(v).toFixed(2);
+  $("fxfindings").innerHTML = h("Why this one cannot rank them",
+    `Best here is <b>${fxBest.s.title}</b> at <b>${fmtUSD(fxBest.final)}</b>. But on the same `+
+    `1% bet these four dig completely different holes, <b>${r2(ddHi.dd)}%</b> for `+
+    `${ddHi.s.title} against <b>${r2(ddLo.dd)}%</b> for ${ddLo.s.title}, so they are not `+
+    `being asked the same question and the tallest bar is not the answer to it. Return over `+
+    `drawdown is on this chart for that reason, and it is also where the limit of the metric `+
+    `shows: divide by a drawdown that is a rounding error and the ratio runs off the pane. `+
+    `The chart below asks the question properly, by giving each strategy the bet size that `+
+    `puts it in the same hole.`);
+
+  const unreach=NORM_PTS.filter(p=>p.final==null);
+  const nwBest=nw.length?nw.reduce((a,b)=>b.final>a.final?b:a):null;
+  const nwWorst=nw.length?nw.reduce((a,b)=>b.final<a.final?b:a):null;
+  const rHi=nw.length?nw.reduce((a,b)=>b.risk>a.risk?b:a):null;
+  let body = nwBest
+    ? `<span class="hl">Optimal point ${nwBest.s.title}</span> at `+
+      `<b>${fmtUSD(nwBest.final)}</b>, allowed <b>${riskTxt(nwBest.risk)}</b> per trade`+
+      (nwWorst && nwWorst!==nwBest
+        ? `, against ${fmtUSD(nwWorst.final)} for ${nwWorst.s.title} at `+
+          `${riskTxt(nwWorst.risk)}`
+        : ``)+
+      `. The bet size is the whole mechanism: the strategy that draws down least is the one `+
+      `that can be levered hardest, and `+
+      (rHi ? `${rHi.s.title} is allowed the most at ${riskTxt(rHi.risk)}` : ``)+`.`
+    : `No strategy on this page reaches a ${TARGET_DD}% drawdown at any bet size.`;
+  if(unreach.length){
+    body += ` <b>${unreach.map(p=>p.s.title).join(" and ")}</b> `+
+      `${unreach.length>1?"have":"has"} no bar at all: on this sample `+
+      `${unreach.length>1?"they":"it"} cannot be made to lose ${TARGET_DD}% at ANY bet size, `+
+      `so there is no leverage that puts `+
+      `${unreach.length>1?"them":"it"} on the same footing as the rest. That is a result, `+
+      `not a gap, and it is the strongest thing this chart says, read it against the fill `+
+      `assumptions in the note below rather than as a free lunch.`;
+  }
+  $("nwfindings").innerHTML = h("Where it pays", body);
+}
+
+// ---- the rule cards and the table ----------------------------------------------------
+function renderCards(){
+  $("cards").innerHTML = STRATS.map(s =>
+    `<div class="cmpcard"><div class="nm">${s.title}</div>`+
+    `<div class="r4">Rule 4 &middot; ${s.rule4}</div>`+
+    `<div class="rt">${s.rule4_text}</div></div>`).join("");
+}
+function renderTable(){
+  $("tblcount").textContent = STRATS.length + " strategies · rules 1 to 3 identical";
+  const cell=(v,cls)=>`<td class="${cls||"mono"}">${v}</td>`;
+  $("cmpbody").innerHTML = STRATS.map((s,i) => {
+    const f=FIXED_PTS[i], n=NORM_PTS[i];
+    return "<tr>"+
+      `<td class="l">${s.title}</td>`+
+      `<td class="l">${s.rule4}</td>`+
+      cell(f.n) + cell(f.wr.toFixed(1)+"%") + cell(fmtUSD(f.final)) +
+      cell(ddTxt(f.dd)) + cell(rddTxt(f.rdd)) +
+      cell(n.risk==null?"no 6%":riskTxt(n.risk)) +
+      cell(n.final==null?"&mdash;":fmtUSD(n.final)) + "</tr>";
+  }).join("");
+}
+
+function renderAll(){
+  drawFixed(FIXED_PTS, FIXED_PANELS());
+  drawNorm(NORM_PTS, NORM_PANELS());
+}
+renderCards(); renderTable(); renderFindings(); renderAll();
+new ResizeObserver(renderAll).observe($("fxplot"));
+new ResizeObserver(renderAll).observe($("nwplot"));
+window.addEventListener("beforeprint", renderAll);
+</script>"""
+
+
+def build_comparison():
+    """comparison.html -- the four strategies against each other, on one shared account.
+
+    It carries a TRIMMED variant grid: the four tokens the page actually prices, not all 75.
+    The full grid is 430 KB and exists so the strategy pages can move a cap dial; this page
+    has no dial and would only be paying to ship 71 settings nobody can reach from it.
+    """
+    variants = load_variants()
+    want = {s.token for s in strategies.REGISTRY}
+    missing = sorted(want - set(variants["v"]))
+    if missing:
+        raise SystemExit(f"comparison: no backtest for Rule 4 {missing} -- rerun "
+                         f"run_portfolio.py after changing strategies.py")
+    slim = dict(variants)
+    slim["v"] = {t: variants["v"][t] for t in want}
+    slim["caps"] = [t for t in variants["caps"] if t in want]
+    slim["extra"] = [t for t in variants["extra"] if t in want]
+    slim["labels"] = {t: variants["labels"][t] for t in want}
+    slim["texts"] = {t: variants["texts"][t] for t in want}
+
+    eyebrow = (f"Strategy comparison &middot; daily &middot; "
+               f"${eng.STARTING_CAPITAL / 1000:.0f}k starting capital")
+    lede = (f"All {len(strategies.REGISTRY)} strategies share <b>rules 1 to 3</b> exactly, so "
+            f"they take the <b>same setups on the same bars</b>, and the only thing that "
+            f"differs is Rule 4, where the profit is taken. Everything below is therefore a "
+            f"comparison of <b>exits and nothing else</b>. One shared account per strategy, "
+            f"the same days, net of the same slippage. Read the two charts in order: the "
+            f"first is what happened, the second is the ranking.")
+    # The honesty note. It is longer than the strategy pages' because the two quickest exits
+    # lean hardest on the daily-proxy fill model, and this is the page that invites reading
+    # them against each other.
+    note = (f"<b>Backtest on daily bars, net of slippage.</b> Costs are charged as tick "
+            f"slippage, 1 tick on entry, 1 on a limit take-profit or a scheduled "
+            f"close-out, 3 on a stop, converted to R through each trade's own risk "
+            f"distance. The two quickest exits rest hardest on the fill model: "
+            f"<b>Quickfixclose</b> assumes one daily bar gives us both a fill at the "
+            f"reversal level intraday and a fill at that day's close, and because the entry "
+            f"trigger requires the close to be beyond the entry price it can only lose when "
+            f"slippage exceeds the move, which is why its drawdown is near zero. "
+            f"<b>Quickfixopen</b> assumes the next open is fillable and carries no stop, so "
+            f"an adverse gap costs more than 1R. Neither is a free lunch, both are the "
+            f"daily-proxy assumption showing through, and intraday prices are what would "
+            f"settle it.")
+    footer = (f"source: &lt;strategy&gt;_portfolio_daily.xlsx and _variants.json &middot; "
+              f"top chart at a constant 1% risk, bottom levered to a constant "
+              f"{eng.TARGET_DD:g}% drawdown &middot; the shared money management is replayed "
+              f"in the browser from the same code the strategy pages run")
+
+    back = "".join(f'<a href="{page_path(s).name}">{s.title}</a>'
+                   for s in strategies.REGISTRY)
+    body = ('<div class="wrap">\n'
+            '<nav class="nav noprint"><span class="lbl">Strategy</span>' + back +
+            '<span class="navbtns">'
+            '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
+            '</span></nav>\n'
+            + COMPARISON_HTML
+            .replace("__EYEBROW__", eyebrow)
+            .replace("__LEDE__", lede)
+            .replace("__NOTE__", note)
+            .replace("__FOOTER__", footer)
+            + "\n</div>")
+    html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+            f'<title>Strategy comparison</title>\n{CSS}\n</head>\n<body>\n{body}\n'
+            f'{core_js(slim)}\n{COMPARISON_JS}\n</body>\n</html>\n')
+    COMPARISON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    COMPARISON_PATH.write_text(html, encoding="utf-8")
+    print(f"wrote {COMPARISON_PATH.name}  {len(html):,} bytes")
+
+
 CONCLUSIONS_PATH = eng.OUT_DIR / "conclusions.html"
 
 CONCLUSIONS_SCRIPT = r"""<script>
@@ -1922,6 +2420,7 @@ def build_conclusions():
         '<div class="wrap">\n'
         '<nav class="nav"><span class="lbl">Back to</span>' + back +
         '<span class="navbtns">'
+        f'<a class="pdfbtn" href="{COMPARISON_PATH.name}">Compare</a>'
         '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
         '</span></nav>\n'
         '<header>\n'
@@ -1961,8 +2460,10 @@ def main(argv):
     for s in strategies.selected(argv):
         build(s)
     build_conclusions()
-    # The report always carries EVERY strategy that has results, whichever pages were built:
-    # the picker filters it client-side, so a partial rebuild must not shrink it.
+    # Both of these always carry EVERY strategy, whichever pages were built: report.html
+    # filters client-side from its picker, and the comparison is meaningless with a subset.
+    # A partial rebuild must not shrink either of them.
+    build_comparison()
     have = [s for s in strategies.REGISTRY
             if (eng.OUT_DIR / f"_equity_{s.key}.json").exists()]
     if have:

@@ -144,6 +144,17 @@ new exit reason has to be added to `VAR_REASONS`, `prettyReason` AND charter's
 `build_equity_html.py` needs `_variants.json`, so `run_portfolio.py` must run first. `venv\`
 has pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
 
+**REFRESHING THE WHOLE SYSTEM** (2026-07-28): `python ../trading_system/refresh.py`, or the
+**Update** button at the top of charter's icon rail, which runs that file and streams it into
+the page. It runs `hyperliquid_bot`'s `src/orchestration/main.py`, then this project's
+`run_pipeline.py`, then charter's builder, each with that project's own venv interpreter, and
+STOPS AT THE FIRST FAILURE (every step reads what the one before it wrote). It lives in the
+umbrella because the sequence belongs to no department: a runner inside any one project would
+hand it knowledge of the other two. It is a convenience runner, not an orchestrator, and
+nothing here depends on it — this project's scripts are unchanged and still run by hand.
+`solve_risk.py` is NOT in it, same as it is not in `run_pipeline.py`. Note the Socrates update
+for the day lands around 08:10 local; a run before that legitimately shows no new bar.
+
 Each strategy gets its own page `output/equity_<strategy>.html`, plus `output/report.html`
 (every strategy, print/PDF). Pages carry a strategy-switcher row generated from the registry,
 the **four rules** (1-3 shared text in `strategies.py`, 4 from the strategy's `Rule4`), the

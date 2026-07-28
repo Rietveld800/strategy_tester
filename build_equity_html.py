@@ -431,13 +431,25 @@ RISKBAR_HTML = r"""
   </section>
 """
 
+# The day-by-day calendar: capital, drawdown, positions open and what happened. It was a
+# collapsed <details class="noprint"> on the interactive page only, and absent from
+# report.html entirely -- so the printed PDF never carried it and the user went looking
+# (2026-07-28). Now ONE block used by both page types, always visible, scrolling inside its
+# own box on screen and opened out by the print stylesheet like the other tables.
 DAILY_HTML = r"""
-  <details class="noprint">
-    <summary>Daily data</summary>
-    <div class="tscroll"><table><thead><tr>
-      <th>Date</th><th>Capital</th><th>Drawdown</th><th>Open</th><th>Activity</th>
-    </tr></thead><tbody data-el="tbody"></tbody></table></div>
-  </details>
+  <h2 class="section-h">Daily data</h2>
+  <div class="tradecard">
+    <div class="charthead" style="padding:12px 14px 10px">
+      <span class="t">Every trading day</span>
+      <span class="s"><span data-el="dcount"></span></span>
+    </div>
+    <div class="tradescroll">
+      <table class="trades"><thead><tr>
+        <th class="l">Date</th><th>Capital</th><th>Drawdown</th><th>Open</th>
+        <th class="l">Activity</th>
+      </tr></thead><tbody data-el="tbody"></tbody></table>
+    </div>
+  </div>
 """
 
 SCRIPT = r"""<script>
@@ -672,13 +684,15 @@ function mountReport(root, DATA){
 
   function renderDaily(){
     const el = $("tbody");
-    if (!el) return;                       // the print report omits the daily table
+    if (!el) return;
+    const dc = $("dcount");
+    if (dc) dc.textContent = P.length + " trading days";
     el.innerHTML = P.map(p => {
       const act = [p.entries?`<span style="color:var(--pos)">${p.entries}</span>`:"",
                    p.exits?`<span style="color:var(--neg)">${p.exits}</span>`:""].filter(Boolean).join(" &nbsp; ");
       return `<tr><td class="mono">${p.date}</td><td class="mono">${fmtUSD(p.cash)}</td>`+
         `<td class="mono ${p.dd<0?'neg':''}">${p.dd.toFixed(2)}%</td>`+
-        `<td class="mono">${p.open}</td><td style="text-align:left;white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
+        `<td class="mono">${p.open}</td><td class="l" style="white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
     }).join("");
   }
 
@@ -1210,8 +1224,8 @@ function mountReport(root, DATA){
         `happen. But the signal is clear: Keeping the position as long till it hits the next `+
         `reversal or gets stopped out is the less profitable strategy of all. Taking profit `+
         `early but not too early seems to be the conclusion. The sweet spot is found at `+
-        `1.9R for this dataseries. The longer the trade is kept after 1.9R, the lower the `+
-        `profit for the same drawdown.`);
+        `${best.cap}R for this dataseries. The longer the trade is kept after ${best.cap}R, `+
+        `the lower the profit for the same drawdown.`);
   }
 
   // ---- the fixed-risk chart: what each cap really did on the same bet ----------------
@@ -1709,13 +1723,13 @@ def section_html(strategy, data, riskbar, daily):
             f"<span class=\"riskecho\">{strategy.risk_pct:g}%</span> of liquid "
             f"capital, the risk that holds this strategy to a {eng.TARGET_DD:g}% "
             f"maximum drawdown. Figures are net of realistic slippage.")
-    # Supplied verbatim by the user (2026-07-28), em dashes and all -- which is why this one
-    # sentence keeps them while the rest of the report does not. Everything that used to
-    # follow it (the intraday-path caveat, commission, "evidence of an edge") was cut on the
-    # same instruction; the caveat text still exists in strategies.py for the rules block.
-    note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage "
-            f"&mdash; {slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
-            f"limit take-profit, {slip.get('stop', 3)} on a stop &mdash; converted to R "
+    # The user's sentence (2026-07-28), with its em dashes turned into commas on the second
+    # pass so the whole report is consistent. Everything that used to follow it (the
+    # intraday-path caveat, commission, "evidence of an edge") was cut on the same
+    # instruction; the caveat text still exists in strategies.py for the rules block.
+    note = (f"<b>Backtest, net of slippage.</b> Costs are charged as tick slippage, "
+            f"{slip.get('entry', 1)} tick on entry, {slip.get('target', 1)} on a "
+            f"limit take-profit, {slip.get('stop', 3)} on a stop, converted to R "
             f"through each trade's own risk distance.")
     footer = (f"source: {strategy.key}_portfolio_daily.xlsx &middot; "
               f"{n_all} markets tested, <span data-el=\"footmk\">{data['n_markets']}</span> "
@@ -1792,7 +1806,7 @@ def build_report(picked):
     # 6%-drawdown risk. The risk box used to be shared, on the reasoning that a like-for-like
     # comparison needs one bet size -- but equal DRAWDOWN is the like-for-like this project
     # ranks on, and one box cannot show three different defaults.
-    sections = "\n".join(section_html(s, d, RISKBAR_HTML, "")
+    sections = "\n".join(section_html(s, d, RISKBAR_HTML, DAILY_HTML)
                          for s, d in zip(picked, datasets))
     head = (
         '<div class="wrap">\n'

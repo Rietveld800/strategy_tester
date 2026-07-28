@@ -100,7 +100,15 @@ the REFERENCE risk the shared variant grid is priced at and the pages self-check
 tracks quickfix's number but nothing depends on them being equal. `run_portfolio.at_risk()`
 is the context manager that sets the money management's risk for one run and restores it.
 
-At 1.9R / 1.39% on 2026-07-28 data: **$306,160, +206.16%, 6.00% DD, 34.4x, 84 trades.**
+At 1.9R / 1.39% on 2026-07-28 data: **$322,044, +222.04%, 6.00% DD, 37.0x, 90 trades.**
+**THAT LINE IS A DATED SNAPSHOT AND IS NOT MAINTAINED PER BAR** (user, 2026-07-28): every one
+of those numbers moves with each new array day, so it is stale the next morning by
+construction, and chasing it daily would be a chore with no reader. `output/report.html` is
+rebuilt on every run and is the live answer. Refresh this line when a figure is quoted in a
+decision, or when the rules or the fill model change; what has to stay correct here is the
+STRUCTURE (the rules, the defaults, the invariants), which no new bar touches. The 1.39% risk
+and the 6.00% drawdown it targets are NOT part of the daily drift — check them with
+`solve_risk.py` when the sample has grown meaningfully, not every day.
 Published figures were rewritten repeatedly in two days by changes to the FILL MODEL alone,
 strategies untouched -- treat the fill assumptions as the biggest open risk and never present
 any of it as settled. See `README.md` for the full rules, money-management/slippage model,
@@ -120,7 +128,7 @@ not show them). Files on disk are always written at the strategy's default cap a
 0R stays in the grid deliberately as the SANITY ANCHOR — it is what exposed the
 already-through gap bug, by coming out best on the whole grid, which is impossible on its
 face. Levered to equal drawdown the plateau starts at **1.3R** (allowed risk 0.19% at 0R ->
-1.39% at 1.3R, flat to 2R, 1.18% at 2.1R) and the top four settings sit within 6% of each
+1.39% at 1.3R, flat to 2R, 1.18% at 2.1R) and the top five settings sit within 5% of each
 other. Critically, ret/DD at a FIXED risk is NOT risk-invariant, and the levered top point has
 read 2.5R, 2R, 3.75R and now 1.9R across successive changes to the FILL MODEL and to the
 grid's resolution, never to the strategies. 3.75R is not even a setting any more (tenth-R
@@ -194,7 +202,7 @@ to the point"):
 1. TOP -- **at a constant 1% risk** (`FIXED_RISK`), the real result. Panes: capital, MAX
    DRAWDOWN, the risk (a FLAT line, there precisely to show it never moves), RETURN/DD, win
    rate. It CANNOT rank the caps and says so from its own numbers: with the bet fixed the
-   drawdown fans 4.3% to 28.0%, so a wider cap's bigger return is partly the deeper hole it
+   drawdown fans 6.0% to 36.7%, so a wider cap's bigger return is partly the deeper hole it
    was allowed to dig. Seeing that fan is what makes the chart below land.
 2. BOTTOM -- **levered to a constant 6% drawdown** (`TARGET_DD`), the ranking. Panes: capital,
    RISK PER TRADE ALLOWED (renamed from "needed", user), win rate. Risk solved per cap by

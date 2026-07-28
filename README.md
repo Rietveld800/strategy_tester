@@ -864,8 +864,9 @@ To refresh **everything** — new data included — there is one command,
 `python ../trading_system/refresh.py`, or the **Update** button at the top of charter's
 icon rail, which runs it and streams the output into the page. That is the umbrella's
 convenience runner: it calls each project's own entry point (`hyperliquid_bot`'s
-`main.py`, this project's `run_pipeline.py`, charter's builder) in data-flow order and
-stops at the first failure. It changes nothing here; the steps below are what it runs.
+`sync_arrays.py` — the array sync alone, since nothing here reads the rest of that
+pipeline — then this project's `run_pipeline.py`, then charter's builder) in data-flow
+order and stops at the first failure. It changes nothing here; the steps below are what it runs.
 
 To refresh the overlay alone, end to end:
 

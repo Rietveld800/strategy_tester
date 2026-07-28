@@ -146,7 +146,9 @@ has pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
 
 **REFRESHING THE WHOLE SYSTEM** (2026-07-28): `python ../trading_system/refresh.py`, or the
 **Update** button at the top of charter's icon rail, which runs that file and streams it into
-the page. It runs `hyperliquid_bot`'s `src/orchestration/main.py`, then this project's
+the page. It runs `hyperliquid_bot`'s `src/orchestration/sync_arrays.py` (the ARRAY SYNC
+ALONE, not its `main.py` — nothing downstream reads the rest of that pipeline), then this
+project's
 `run_pipeline.py`, then charter's builder, each with that project's own venv interpreter, and
 STOPS AT THE FIRST FAILURE (every step reads what the one before it wrote). It lives in the
 umbrella because the sequence belongs to no department: a runner inside any one project would

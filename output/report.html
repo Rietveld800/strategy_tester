@@ -11,6 +11,7 @@
   --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
   --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
   --bars:#5C7D8A; --pos:#0F7B57;
+  --opened:#7B1FA2; --closed:#1565C0;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -19,6 +20,7 @@
     --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
     --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
     --bars:#79A0B2; --pos:#3CC796;
+    --opened:#C77DFF; --closed:#64B5F6;
   }
 }
 :root[data-theme="light"]{
@@ -27,6 +29,7 @@
   --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
   --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
   --bars:#5C7D8A; --pos:#0F7B57;
+  --opened:#7B1FA2; --closed:#1565C0;
 }
 :root[data-theme="dark"]{
   --bg:#0D1512; --surface:#121C18; --ink:#E9EFEB; --ink2:#9BAAA3; --ink3:#66756E;
@@ -34,6 +37,7 @@
   --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
   --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
   --bars:#79A0B2; --pos:#3CC796;
+  --opened:#C77DFF; --closed:#64B5F6;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -210,6 +214,7 @@ table.trades th:hover{color:var(--ink);}
 table.trades th.sorted{color:var(--accent);}
 table.trades .ar{font-size:9px;margin-left:2px;}
 table.trades td.l,table.trades th.l{text-align:left;}
+table.trades td.act{white-space:normal;font-size:11px;}
 /* the two text columns (market, reason) wrap; the rest stay one line */
 table.trades td:first-child,table.trades th:first-child,
 table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
@@ -253,6 +258,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     --accent:#0F7B57; --accent-soft:rgba(15,123,87,.10); --accent-line:#0F7B57;
     --neg:#B4402A; --neg-soft:rgba(180,64,42,.12); --ref:rgba(20,32,28,.35);
     --bars:#5C7D8A; --pos:#0F7B57;
+    --opened:#7B1FA2; --closed:#1565C0;
   }
   @page{size:A4 portrait;margin:13mm 11mm;}
   html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -263,6 +269,14 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
   .wrap{max-width:none;padding:0;}
   /* scroll boxes must open up: a PDF cannot be scrolled */
   .tradescroll,.tscroll{max-height:none!important;overflow:visible!important;}
+  /* The blotter is TWELVE columns and simply does not fit 188mm of A4 portrait at the
+     screen type size: measured at the real print width, a quarter of the market names
+     wrapped and the dates, R and P&L columns overflowed too. Shrinking the type and the
+     cell padding for print fits it, which is far better than starving one column to feed
+     another -- the column widths themselves are percentages and stay as they are. */
+  table.trades{font-size:9px;}
+  table.trades th,table.trades td{padding:3px 4px;}
+  table.trades td.act{font-size:8.5px;}
   table.trades th,table th{position:static;}
   /* one strategy per page, and never split a block across the fold */
   .rep{break-before:page;}
@@ -362,8 +376,9 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     </div>
     <div class="tradescroll">
       <table class="trades"><thead><tr>
-        <th class="l">Date</th><th>Capital</th><th>Drawdown</th><th>Open</th>
-        <th class="l">Activity</th>
+        <th class="l" style="width:11%">Date</th><th style="width:11%">Capital</th>
+        <th style="width:11%">Drawdown</th><th style="width:6%">Open</th>
+        <th class="l" style="width:61%">Activity</th>
       </tr></thead><tbody data-el="tbody"></tbody></table>
     </div>
   </div>
@@ -652,11 +667,14 @@ function mountReport(root, DATA){
     const dc = $("dcount");
     if (dc) dc.textContent = P.length + " trading days";
     el.innerHTML = P.map(p => {
-      const act = [p.entries?`<span style="color:var(--pos)">${p.entries}</span>`:"",
-                   p.exits?`<span style="color:var(--neg)">${p.exits}</span>`:""].filter(Boolean).join(" &nbsp; ");
+      // Purple = positions OPENED, blue = positions CLOSED (user, 2026-07-28). Deliberately
+      // not the green/red used everywhere else on the page: there green and red mean WON and
+      // LOST, and an entry has no outcome yet, so colouring it green said something untrue.
+      const act = [p.entries?`<span style="color:var(--opened)">${p.entries}</span>`:"",
+                   p.exits?`<span style="color:var(--closed)">${p.exits}</span>`:""].filter(Boolean).join(" &nbsp; ");
       return `<tr><td class="mono">${p.date}</td><td class="mono">${fmtUSD(p.cash)}</td>`+
         `<td class="mono ${p.dd<0?'neg':''}">${p.dd.toFixed(2)}%</td>`+
-        `<td class="mono">${p.open}</td><td class="l" style="white-space:normal;font-size:11px">${act||"&mdash;"}</td></tr>`;
+        `<td class="mono">${p.open}</td><td class="l act">${act||"&mdash;"}</td></tr>`;
     }).join("");
   }
 
@@ -679,21 +697,28 @@ function mountReport(root, DATA){
   }
 
   const COLS = [
-    {k:"market",l:"Market",t:"s",w:15},{k:"side",l:"Side",t:"s",w:6},
-    {k:"din",l:"In",t:"d",w:8.5},{k:"dout",l:"Out",t:"d",w:8.5},{k:"bars",l:"Bars",t:"n",w:5},
+    // widths sum to 100. Market carries names like US_30_Year_T_Bond_Futures_CBOT and gets
+    // the room; Side and Bars hold "short" and "1" and give it up.
+    {k:"market",l:"Market",t:"s",w:21},{k:"side",l:"Side",t:"s",w:5},
+    {k:"din",l:"In",t:"d",w:8.5},{k:"dout",l:"Out",t:"d",w:8.5},{k:"bars",l:"Bars",t:"n",w:4},
     {k:"pin",l:"In",t:"n",f:fmtPrice,w:8},{k:"pout",l:"Out",t:"n",f:fmtPrice,w:8},
-    {k:"sl",l:"Stop",t:"n",f:fmtPrice,w:8},{k:"r",l:"R",t:"n",f:v=>signFix(v,2),color:1,w:6.5},
+    {k:"sl",l:"Stop",t:"n",f:fmtPrice,w:8},{k:"r",l:"R",t:"n",f:v=>signFix(v,2),color:1,w:5},
     {k:"pnl",l:"P&L $",t:"n",f:signUSD,color:1,w:8},
-    {k:"pnlpct",l:"P&L %",t:"n",f:v=>signFix(v,2)+"%",color:1,w:8},
-    {k:"reason",l:"Reason",t:"s",f:prettyReason,w:10.5},
+    {k:"pnlpct",l:"P&L %",t:"n",f:v=>signFix(v,2)+"%",color:1,w:7},
+    {k:"reason",l:"Reason",t:"s",f:prettyReason,w:9},
   ];
   $("ttbl").insertAdjacentHTML("afterbegin",
     "<colgroup>"+COLS.map(c=>`<col style="width:${c.w}%">`).join("")+"</colgroup>");
   let sortKey="din", sortDir=1;
+  // `w` is a PERCENTAGE and it has to reach the markup: table-layout:fixed sizes columns
+  // from the first row, so a header with no widths gives every column an equal share. These
+  // widths were defined in COLS from the start and never emitted, which is why the printed
+  // blotter wrapped long market names while Side and Bars sat half empty (found in the PDF,
+  // 2026-07-28). Same for mHead below.
   function renderHead(){
     $("thead").innerHTML = "<tr>"+COLS.map(c=>{
       const on=c.k===sortKey, ar=on?`<span class="ar">${sortDir>0?"▲":"▼"}</span>`:"";
-      return `<th data-k="${c.k}" class="${c.t!=='n'?'l':''}${on?' sorted':''}">${c.l}${ar}</th>`;
+      return `<th data-k="${c.k}" style="width:${c.w}%" class="${c.t!=='n'?'l':''}${on?' sorted':''}">${c.l}${ar}</th>`;
     }).join("")+"</tr>";
     root.querySelectorAll('[data-el="thead"] th').forEach(th => th.onclick = () => {
       const k = th.dataset.k;
@@ -768,7 +793,7 @@ function mountReport(root, DATA){
   function mHead(){
     $("mhead").innerHTML = "<tr>"+MCOLS.map(c=>{
       const on=c.k===mKey, ar=on?`<span class="ar">${mDir>0?"▲":"▼"}</span>`:"";
-      return `<th data-k="${c.k}" class="${c.t!=='n'?'l':''}${on?' sorted':''}">${c.l}${ar}</th>`;
+      return `<th data-k="${c.k}" style="width:${c.w}%" class="${c.t!=='n'?'l':''}${on?' sorted':''}">${c.l}${ar}</th>`;
     }).join("")+"</tr>";
     root.querySelectorAll('[data-el="mhead"] th').forEach(th => th.onclick = () => {
       const k = th.dataset.k;
@@ -1180,15 +1205,18 @@ function mountReport(root, DATA){
       // out of the grid. If the data moves, these have to be revisited by hand; that is the
       // trade being made for saying it in the author's voice.
       h("Why",
-        `<b>Taking profit early prevents long loss streaks. And so the drawdown is naturally `+
-        `lower at the same amount of risk taken. A lower drawdown allows for taking more `+
-        `risk which results in the highest return for the same drawdown.</b>`) +
+        `<b>Taking profit early prevents long loss streaks resulting in less drawdown for the `+
+        `same amount of risk taken. A lower drawdown allows for taking more risk which `+
+        `equals the highest return for the same drawdown.</b>`) +
+      // The user's words, lightly corrected on their instruction (2026-07-28): "less" ->
+      // "least", "as long till it hits" -> "until it hits", "dataseries" -> "data series",
+      // plus the commas around the two interrupting clauses. Meaning and voice unchanged.
       h("How much to trust it",
-        `The sample size is still small. Over time longer loss streaks are expected to `+
-        `happen. But the signal is clear: Keeping the position as long till it hits the next `+
-        `reversal or gets stopped out is the less profitable strategy of all. Taking profit `+
-        `early but not too early seems to be the conclusion. The sweet spot is found at `+
-        `${best.cap}R for this dataseries. The longer the trade is kept after ${best.cap}R, `+
+        `The sample size is still small. Over time, longer loss streaks are expected to `+
+        `happen. But the signal is clear: keeping the position until it hits the next `+
+        `reversal or gets stopped out is the least profitable strategy of all. Taking profit `+
+        `early, but not too early, seems to be the conclusion. The sweet spot is found at `+
+        `${best.cap}R for this data series. The longer the trade is kept after ${best.cap}R, `+
         `the lower the profit for the same drawdown.`);
   }
 

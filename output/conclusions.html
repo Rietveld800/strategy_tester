@@ -11,6 +11,7 @@
   --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
   --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
   --bars:#5C7D8A; --pos:#0F7B57;
+  --opened:#7B1FA2; --closed:#1565C0;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -19,6 +20,7 @@
     --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
     --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
     --bars:#79A0B2; --pos:#3CC796;
+    --opened:#C77DFF; --closed:#64B5F6;
   }
 }
 :root[data-theme="light"]{
@@ -27,6 +29,7 @@
   --accent:#0F7B57; --accent-soft:rgba(15,123,87,.13); --accent-line:#0F7B57;
   --neg:#C0503A; --neg-soft:rgba(192,80,58,.14); --ref:rgba(20,32,28,.30);
   --bars:#5C7D8A; --pos:#0F7B57;
+  --opened:#7B1FA2; --closed:#1565C0;
 }
 :root[data-theme="dark"]{
   --bg:#0D1512; --surface:#121C18; --ink:#E9EFEB; --ink2:#9BAAA3; --ink3:#66756E;
@@ -34,6 +37,7 @@
   --accent:#2FB488; --accent-soft:rgba(47,180,136,.15); --accent-line:#3CC796;
   --neg:#E0715A; --neg-soft:rgba(224,113,90,.15); --ref:rgba(233,239,235,.26);
   --bars:#79A0B2; --pos:#3CC796;
+  --opened:#C77DFF; --closed:#64B5F6;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -210,6 +214,7 @@ table.trades th:hover{color:var(--ink);}
 table.trades th.sorted{color:var(--accent);}
 table.trades .ar{font-size:9px;margin-left:2px;}
 table.trades td.l,table.trades th.l{text-align:left;}
+table.trades td.act{white-space:normal;font-size:11px;}
 /* the two text columns (market, reason) wrap; the rest stay one line */
 table.trades td:first-child,table.trades th:first-child,
 table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
@@ -253,6 +258,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
     --accent:#0F7B57; --accent-soft:rgba(15,123,87,.10); --accent-line:#0F7B57;
     --neg:#B4402A; --neg-soft:rgba(180,64,42,.12); --ref:rgba(20,32,28,.35);
     --bars:#5C7D8A; --pos:#0F7B57;
+    --opened:#7B1FA2; --closed:#1565C0;
   }
   @page{size:A4 portrait;margin:13mm 11mm;}
   html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -263,6 +269,14 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
   .wrap{max-width:none;padding:0;}
   /* scroll boxes must open up: a PDF cannot be scrolled */
   .tradescroll,.tscroll{max-height:none!important;overflow:visible!important;}
+  /* The blotter is TWELVE columns and simply does not fit 188mm of A4 portrait at the
+     screen type size: measured at the real print width, a quarter of the market names
+     wrapped and the dates, R and P&L columns overflowed too. Shrinking the type and the
+     cell padding for print fits it, which is far better than starving one column to feed
+     another -- the column widths themselves are percentages and stay as they are. */
+  table.trades{font-size:9px;}
+  table.trades th,table.trades td{padding:3px 4px;}
+  table.trades td.act{font-size:8.5px;}
   table.trades th,table th{position:static;}
   /* one strategy per page, and never split a block across the fold */
   .rep{break-before:page;}

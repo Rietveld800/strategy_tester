@@ -109,7 +109,7 @@ STARTING_CAPITAL = 100_000.0
 # does not name one. Keeping it fixed is what makes that guard meaningful -- the grid is
 # shared by every page, so it cannot be priced per strategy. It is set to quickfix's own
 # default because quickfix is the reference strategy; nothing depends on them being equal.
-RISK_PCT = 1.175
+RISK_PCT = 1.39
 TARGET_DD = 6.0             # the drawdown budget each strategy's default risk is solved for
 FEES = 0.0                  # per-trade cost, in equity percent; 0 for now
 

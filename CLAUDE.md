@@ -149,6 +149,19 @@ at and the pages self-check against; it tracks quickfix's number but nothing dep
 being equal. `run_portfolio.at_risk()` is the context manager that sets the money
 management's risk for one run and restores it.
 
+**STREAKS ARE COUNTED IN ENTRY ORDER** (user, 2026-07-29), off **net R**, not in exit order
+off dollars. The blotter is sorted by entry, so a reader counting losing rows counts entry
+order; quoting the exit sequence made the report disagree with what is plainly on the page.
+Found on quickfixwick: three losers opened 2026-01-29, one not closing until 2026-02-03 after
+an unrelated winner closed on 02-02, so exit order split a visible run of 5 into 4. The
+drawdown is still measured in exit order by `account()` -- that one IS about the order trades
+closed. Keying off R rather than dollars also makes streaks risk-dial-independent, like win
+rate. Both `_streaks_and_avgs` and the JS `simulate` were changed; they must stay mirrors.
+
+**"optimized" IS QUICKFIX-ONLY in the page title** (user, 2026-07-29). Its cap and its risk
+are both solved, so the word is a claim the page can back; the other three are a fixed shape
+at a chosen 1%. `page_title()` keys off `risk_solved and in_grid`, not off the key.
+
 On 2026-07-28 data, each at its published default:
 **quickfix 1.9R/1.39% $322,044, 6.00% DD, 90 trades, 64.4% wr.**
 **quickfixwick 1% $398,510, 7.47% DD, 87 trades, 66.7%.**

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Quickfixopen equity curve optimized</title>
+<title>Quickfixopen equity curve</title>
 <style>
 :root{
   --bg:#F6F8F5; --surface:#FFFFFF; --ink:#16201C; --ink2:#4A5852; --ink3:#7C8A84;
@@ -305,7 +305,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 <section class="rep" data-root>
   <header>
     <div class="eyebrow">Quickfixopen strategy &middot; daily &middot; $100k starting capital</div>
-    <h1>Quickfixopen equity curve optimized</h1>
+    <h1>Quickfixopen equity curve</h1>
     <p class="lede"><span data-el="lede4">Holds through one night and no longer: the position is closed at the open of the price bar that follows the entry bar. That open is the first price of the day, so the exit is unconditional, and what the trade earns is exactly what the nightly session did to it.</span> All <b>41 markets</b> in the archive were tested, <b>Dec 2025 &ndash; Jul 2026</b>; the rules fired on <b data-el="ledemk">28</b> of them, and the rest are listed with zero trades under <em>By market</em>. Capital moves only when a trade closes; each new trade risks <span class="riskecho">1%</span> of liquid capital, the risk that holds this strategy to a 6% maximum drawdown. Figures are net of realistic slippage.</p>
   </header>
 
@@ -554,15 +554,18 @@ function simulate(risk, rows, lite, start){
               entries:enotes.join("; "), exits:xnotes.join("; ")});
   }
 
-  // Closed trades only, in EXIT order -- the streaks are "as they were lived".
+  // Closed trades only, in ENTRY order, keyed off net R -- the exact mirror of
+  // run_portfolio._streaks_and_avgs, and see its docstring for why entry and not exit: the
+  // blotter is sorted by entry, so this is the sequence a reader counting rows is counting.
+  // R rather than dollars keeps it risk-independent, like the win rate: whether a position
+  // won is not a function of how big it was, and at risk = 0 every dollar P&L is 0.
   const closed = tr.filter(t => t.reason !== "open_at_end");
   const seq = lite ? [] : closed.slice().sort((a,b) =>
-    a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
     a.din < b.din ? -1 : a.din > b.din ? 1 :
     a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
   let lw=0, ll=0, cw=0, cl=0;
   for (const t of seq){
-    if (t.pnl > 0){ cw++; cl=0; } else if (t.pnl < 0){ cl++; cw=0; } else { cw=0; cl=0; }
+    if (t.r > 0){ cw++; cl=0; } else if (t.r < 0){ cl++; cw=0; } else { cw=0; cl=0; }
     if (cw > lw) lw = cw;
     if (cl > ll) ll = cl;
   }

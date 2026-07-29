@@ -649,15 +649,18 @@ function simulate(risk, rows, lite, start){
               entries:enotes.join("; "), exits:xnotes.join("; ")});
   }
 
-  // Closed trades only, in EXIT order -- the streaks are "as they were lived".
+  // Closed trades only, in ENTRY order, keyed off net R -- the exact mirror of
+  // run_portfolio._streaks_and_avgs, and see its docstring for why entry and not exit: the
+  // blotter is sorted by entry, so this is the sequence a reader counting rows is counting.
+  // R rather than dollars keeps it risk-independent, like the win rate: whether a position
+  // won is not a function of how big it was, and at risk = 0 every dollar P&L is 0.
   const closed = tr.filter(t => t.reason !== "open_at_end");
   const seq = lite ? [] : closed.slice().sort((a,b) =>
-    a.xd < b.xd ? -1 : a.xd > b.xd ? 1 :
     a.din < b.din ? -1 : a.din > b.din ? 1 :
     a.market < b.market ? -1 : a.market > b.market ? 1 : 0);
   let lw=0, ll=0, cw=0, cl=0;
   for (const t of seq){
-    if (t.pnl > 0){ cw++; cl=0; } else if (t.pnl < 0){ cl++; cw=0; } else { cw=0; cl=0; }
+    if (t.r > 0){ cw++; cl=0; } else if (t.r < 0){ cl++; cw=0; } else { cw=0; cl=0; }
     if (cw > lw) lw = cw;
     if (cl > ll) ll = cl;
   }
@@ -1732,6 +1735,20 @@ def month_year(iso):
     return f"{MONTHS[int(m) - 1]} {y}"
 
 
+def page_title(strategy):
+    """The h1 and the <title>.
+
+    "optimized" belongs to QUICKFIX ALONE (user, 2026-07-29). Its cap and its risk are both
+    solved -- 1.9R tops the levered cap chart and 1.39% is the risk that puts it there -- so
+    the word is a claim the page can back. The other three are a fixed Rule 4 shape at a
+    chosen 1%: nothing about them has been optimized, and saying so would be a claim about
+    work that was never done. Keyed off `risk_solved and in_grid`, which is exactly the pair
+    of properties that makes the claim true, rather than off the key.
+    """
+    tuned = strategy.risk_solved and strategy.r4.in_grid
+    return f"{strategy.title} equity curve" + (" optimized" if tuned else "")
+
+
 def nav_html(current):
     """The strategy switcher: one button per registered strategy, current one filled."""
     out = []
@@ -1838,7 +1855,7 @@ def section_html(strategy, data, riskbar, daily):
     # chart of somebody else's strategy would both be worse than their absence.
     return (SECTION_HTML
             .replace("__EYEBROW__", eyebrow)
-            .replace("__H1__", f"{strategy.title} equity curve optimized")
+            .replace("__H1__", page_title(strategy))
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(strategy))
             .replace("__MECHANICS__", strategies.entry_mechanics(strategy.risk_pct))
@@ -1904,7 +1921,7 @@ def build(strategy):
             + section_html(strategy, data, RISKBAR_HTML, DAILY_HTML) + "\n</div>")
     html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-            f'<title>{strategy.title} equity curve optimized</title>\n{CSS}\n</head>\n'
+            f'<title>{page_title(strategy)}</title>\n{CSS}\n</head>\n'
             f'<body data-strategy="{strategy.key}">\n{body}\n'
             f'{script_html([data], variants, PDF_SCRIPT)}\n</body>\n</html>\n')
     path = page_path(strategy)

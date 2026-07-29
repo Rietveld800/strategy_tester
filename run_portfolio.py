@@ -442,17 +442,34 @@ def _avg_bars(closed):
 
 
 def _streaks_and_avgs(raw):
-    """Longest win/loss run (in exit order) and average win/loss in $ and %.
+    """Longest win/loss run (in ENTRY order) and average win/loss in $ and %.
 
     % is each trade's P&L over the capital it was sized against (its liquid base at
     entry) -- it is the R multiple times RISK_PCT, near enough. Open-at-end
     trades are excluded (no realised outcome).
+
+    ENTRY ORDER, not exit order (user, 2026-07-29). The streaks ran in exit order until
+    then, on the reasoning that the account balance moves as trades CLOSE. It was wrong for
+    the reader: the blotter is sorted by entry, so somebody counting losing rows down the
+    page counts the run in entry order, and the report was quoting a different sequence. It
+    showed up on quickfixwick, where three losing positions were opened on 2026-01-29 and
+    one of them did not close until 2026-02-03, after an unrelated winner had closed in
+    between -- so a run the reader plainly sees as 5 was reported as 4.
+    The question this number answers is "how many positions in a row lost", which is about
+    the order they were TAKEN. The drawdown, which is about the order they closed, is a
+    separate figure and still measured in exit order by `account()`.
+    Ties inside a day are broken by market name, the same order everything else sizes in.
+
+    It keys off net R rather than dollars, like the win rate, so it does not depend on the
+    bet size: whether a position won is not a function of how big it was. That also keeps it
+    meaningful at risk = 0, where every P&L in dollars is 0 and the old test scored every
+    trade as neither a win nor a loss.
     """
     closed = [t for t in raw if t["exit_reason"] != "open_at_end"]
-    seq = sorted(closed, key=lambda t: (t["exit_d"], t["entry_d"], t["market"]))
+    seq = sorted(closed, key=lambda t: (t["entry_d"], t["market"]))
     lw = ll = cw = cl = 0
     for t in seq:
-        p = t["pnl_dollars"]
+        p = t["r"]
         cw, cl = (cw + 1, 0) if p > 0 else ((0, cl + 1) if p < 0 else (0, 0))
         lw, ll = max(lw, cw), max(ll, cl)
     wins = [t for t in closed if t["pnl_dollars"] > 0]

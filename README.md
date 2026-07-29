@@ -459,7 +459,8 @@ Each at its own **published default** risk, which is why the drawdown column is 
 | Average hold | 1.2 bars | 1.2 bars | 0.0 bars | 1.0 bars |
 | Max concurrent | 5 | 4 | 0 | 4 |
 | Time in market | 49% | 45% | 0% | 41% |
-| Longest losing run | 4 | 4 | 1 | 2 |
+| Longest losing run | 4 | 5 | 1 | 2 |
+| Longest winning run | 6 | 15 | 58 | 26 |
 
 quickfix's drawdown is 6.00% by construction: 1.39% is the risk solved to put 1.9R exactly
 there, off the cap chart at the bottom of its page. The other three are at a flat 1%, so
@@ -661,6 +662,37 @@ never push the real rows off the top. The full list travels in
 `_equity_<strategy>.json` as `markets_all` (name + obsolete flag), written by
 `run_portfolio.py` from the backtest results.
 
+### Streaks are counted in ENTRY order
+
+**Longest winning / losing run counts positions in the order they were TAKEN**, not the
+order they closed (user, 2026-07-29). It ran in exit order until then, on the reasoning that
+the balance moves as trades close — which was wrong for the reader, because the blotter is
+sorted by **entry**, so anybody counting losing rows down the page counts entry order and the
+report was quoting a different sequence.
+
+It surfaced on quickfixwick. Three losing positions were opened on **2026-01-29**, and one of
+them (`S_P_500_Index`) did not close until **2026-02-03**, after an unrelated winner had
+closed on 02-02. In exit order that winner splits the run, giving 4; in entry order the run
+is the 5 consecutive losers the blotter plainly shows.
+
+The question this figure answers is "how many positions in a row lost", which is about the
+order they were taken. The **drawdown** — which is about the order they closed — is a
+separate figure and is still measured in exit order by `account()`.
+
+It also keys off **net R** rather than dollars, like the win rate, so it does not move with
+the risk dial: whether a position won is not a function of how big it was. That also keeps it
+meaningful at risk = 0, where every dollar P&L is 0 and the old test scored every trade as
+neither a win nor a loss.
+
+### "optimized" in the page title
+
+**Only quickfix's page says "equity curve optimized".** Its cap *and* its risk are both
+solved — 1.9R tops the levered cap chart, 1.39% is the risk that puts it there — so the word
+is a claim the page can back. The other three are a fixed Rule 4 shape at a chosen 1%:
+nothing about them has been optimized, and the title said so anyway until 2026-07-29.
+`page_title()` keys off `risk_solved and in_grid`, which is exactly the pair of properties
+that makes the claim true, rather than off the strategy key.
+
 ### The rules block
 
 Each page states the strategy in full before any figure: the four numbered rules as cards
@@ -777,7 +809,8 @@ entries-before-exits ordering and the market-name sizing order.
 - Nothing is persisted: a section always opens at that strategy's own documented default
   (`Strategy.risk_pct`) so it agrees with the workbook. Reload to get back to it.
 - Risk-**independent** figures stay put as you move the dial — trade count, **win rate**, R
-  multiples, average hold, time in market, max concurrent. Only the money moves: final
+  multiples, average hold, time in market, max concurrent, and the **win/loss streaks**.
+  Only the money moves: final
   capital, P&L, and max drawdown (deeper in percent as a bigger bet compounds harder), and
   therefore return/drawdown.
   **Win rate not moving is the point, not a bug.** Risk changes the dollar size of a

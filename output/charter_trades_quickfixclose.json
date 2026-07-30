@@ -9,7 +9,7 @@
   "starting_capital": 100000.0,
   "risk_pct": 1.39,
   "n_markets": 28,
-  "n_trades": 103
+  "n_trades": 105
  },
  "markets": {
   "Bitcoin_Per_USD_Binance": {
@@ -891,6 +891,18 @@
      "reason": "exit_close",
      "r": 1.823,
      "bars": 0
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-29",
+     "entry": 2.69,
+     "exit_date": "2026-07-29",
+     "exit": 2.722,
+     "stop": 2.665,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.28,
+     "bars": 0
     }
    ]
   },
@@ -1358,6 +1370,18 @@
      "target": null,
      "reason": "exit_close",
      "r": 1.896,
+     "bars": 0
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-28",
+     "entry": 101.411,
+     "exit_date": "2026-07-28",
+     "exit": 101.266,
+     "stop": 101.491,
+     "target": null,
+     "reason": "exit_close",
+     "r": 1.812,
      "bars": 0
     }
    ]

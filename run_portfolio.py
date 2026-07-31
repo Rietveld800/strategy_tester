@@ -98,13 +98,15 @@ def cost_in_r(trade):
         # orderly close-out at the bell, not a stop triggered into a gap, so it is charged
         # the limit/target rate rather than the stop rate.
         #
-        # And it includes the two BAR EXITS, for the same reason. 'exit_close' is a
+        # And it includes the BAR EXITS, for the same reason. 'exit_close' is a
         # market-on-close and 'exit_open' a market-on-open: both are scheduled orders placed
         # into the most liquid minutes of the session, so they belong with the limit rate
         # rather than with a stop that fires into a move nobody chose the timing of. They
-        # are the whole strategy in quickfixclose's and quickfixopen's case, so the choice
-        # matters more there than anywhere else -- at 2 ticks round trip it is already the
-        # difference between a winner and a loser on their smallest trades.
+        # are the whole strategy for the six quick exits, so the choice matters more there
+        # than anywhere else -- at 2 ticks round trip it is already the difference between a
+        # winner and a loser on quickfixclose's smallest trades. (A bar-exit strategy that is
+        # STOPPED out is charged the stop rate like anything else; only the scheduled exit
+        # gets the limit rate.)
         exit_ticks = SLIP_TARGET_TICKS
     return (SLIP_ENTRY_TICKS + exit_ticks) * trade["tick"] / rpu
 
@@ -263,7 +265,7 @@ def run(strategy, results):
 # One packed table of EVERY cap in strategies.CAP_CHOICES, written once and shared by every
 # strategy's page -- the cap family is a single family, so two strategies sitting on the
 # same cap are one run and must not be stored twice. Every registered Rule 4 that is NOT a cap
-# (the wick target, the day close, the next open) is filed in the same table under its own
+# (the wick target and the five bar exits) is filed in the same table under its own
 # token; they are listed separately from `caps` in the document, because the caps are the
 # dial's axis and a different Rule 4 shape is not a point on it.
 #
@@ -281,8 +283,12 @@ VAR_COLS = ["m", "side", "din", "dout", "xd", "gr", "cr", "bars",
 # APPEND-ONLY. The table travels WITH the rows, so the order is technically free to change,
 # but keeping it append-only makes a hand-read of an old file far less confusing.
 #   target_bar   Quickfixwick's exit: one tick past the entry bar's own wick.
-#   exit_close   Quickfixclose's: the entry bar's own close.
-#   exit_open    Quickfixopen's: the open of the bar after the entry bar.
+#   exit_close   a market-on-close, on whichever bar the strategy names.
+#   exit_open    a market-on-open, on whichever bar the strategy names.
+# The last two name the ORDER TYPE, not the bar, so all five bar-exit strategies share them
+# (bar 0's close through bar 2's close) and none of them needed a new reason. That is
+# deliberate: the reason is what the ledger says HAPPENED, and "sold at the close" is the
+# same event whether it was bar 0's close or bar 2's.
 # A new exit reason has to be added HERE, to `prettyReason` in build_equity_html.py AND to
 # charter's TRADE_COLORS, or it will unpack as undefined on the pages and draw grey on the
 # charts.

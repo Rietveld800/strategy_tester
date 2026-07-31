@@ -11,7 +11,7 @@
 # position per market at a time means a later signal can be taken that a longer hold would
 # have missed. Same rules, same signals; the realised trade list still differs.)
 #
-# --- Rule 4 comes in FOUR SHAPES ------------------------------------------------------
+# --- Rule 4 comes in THREE SHAPES ------------------------------------------------------
 # 1. THE CAP FAMILY (`target_policy`) -- ride to the first opposite reversal beyond entry,
 #    but never past `cap` R. One policy with one number in it. Quickfix is that family at
 #    1.9R; the reports carry the cap as a DIAL across the whole CAP_CHOICES grid, so a page
@@ -27,32 +27,58 @@
 #    family, so it goes through the same exit machinery (stop, gaps, ambiguity), but it is
 #    not priced off a reversal or an R multiple, so it is not a point on the cap dial.
 #
-# 3. THE ENTRY BAR'S CLOSE (`close_exit`) -- flat the same day, at the entry bar's own
-#    close. Quickfixclose.
+# 3. THE BAR EXITS (`close_exit(k)` / `open_exit(k)`) -- a second FAMILY, parameterised by
+#    WHICH BAR the trade is marked out on. Bars are numbered from the entry bar: the entry
+#    bar is BAR 0, the bar after it is bar 1, and so on (user, 2026-07-31). Five of them are
+#    registered today:
 #
-# 4. THE NEXT BAR'S OPEN (`open_exit`) -- flat at the open of the bar that follows the entry
-#    bar, so the trade is carried through one nightly session and no further. Quickfixopen.
+#      quickfixclose   the close of bar 0   flat the same day
+#      quickfixopen1   the open  of bar 1   through one night
+#      quickfixclose1  the close of bar 1   through one night and the next full day
+#      quickfixopen2   the open  of bar 2   through two nights and one full day
+#      quickfixclose2  the close of bar 2   through two nights and two full days
 #
-# Shapes 3 and 4 are NOT price targets, they are BAR EVENTS: "get out at this bar's close",
-# "get out at the next bar's open". No level is being watched, so `check_exit`'s in-range /
-# gap / ambiguity resolution has nothing to resolve, and they are expressed as a `bar_exit`
-# on the Rule4 instead of as a target policy (see `Rule4` and `engine.backtest`).
+#    (quickfixopen1 was called quickfixopen until 2026-07-31; the '1' now says which bar it
+#    means, which is the whole point of the naming. quickfixclose keeps its bare name by the
+#    user's choice -- read it as bar 0.)
 #
-# THE STOP NEVER TRADES on those two. Quickfixclose is closed on the bar that opened it, and
-# the stop sits one tick beyond that bar's own extreme, so it cannot be reached; quickfixopen
-# is closed at the FIRST price of the next bar, so nothing can trade ahead of the exit. The
-# stop is still what SIZES the position (1R = the stop distance), which is its important
-# job -- but it is not a floor under the loss: an adverse overnight gap takes quickfixopen
-# out for more than 1R, exactly as a gapped stop does everywhere else in this project.
+# Shape 3 is NOT a price target, it is a BAR EVENT: "get out at this bar's close", "get out
+# at bar 2's open". No level is being watched, so `check_exit` has no target to resolve, and
+# it is expressed as a `bar_exit` on the Rule4 instead of as a target policy (see `Rule4` and
+# `engine.backtest`).
+#
+# THE STOP STILL WORKS on a bar exit that holds past its entry bar (user, 2026-07-31: only
+# RULE 4 changes, and the stop is not rule 4). On every bar between the entry and the exit
+# bar the stop is resolved exactly as it is for a target policy, gap fills included; there is
+# simply no target beside it. The ordering on the exit bar itself is not a guess:
+#
+#   an OPEN exit is taken BEFORE the stop -- the open is the bar's first price, so nothing
+#     can trade ahead of it;
+#   a CLOSE exit is taken AFTER the stop -- a stop triggers intraday, a market-on-close fires
+#     at the bell, so a stop inside that bar's range was hit first.
+#
+# `Rule4.bar_exit_at` is which of the two, and it is REQUIRED beside a `bar_exit` for exactly
+# that reason.
+#
+# THE STOP NEVER TRADES on the two shortest holds, and that is a consequence rather than a
+# rule: quickfixclose is closed on the bar that opened it, and the stop sits one tick beyond
+# that bar's own already-spent extreme; quickfixopen1 is closed at the FIRST price of the
+# next bar, so nothing can trade ahead of the exit. On the three longer holds the stop is a
+# real floor again. Everywhere, the stop is what SIZES the position (1R = the stop distance),
+# which is its important job -- but where it does not trade it is not a floor under the loss:
+# an adverse overnight gap takes quickfixopen1 out for more than 1R, exactly as a gapped stop
+# does everywhere else in this project.
 #
 # A `Rule4` (below) is ONE setting: its policy or bar exit, the token its backtest is filed
 # under, whether it is a point on the cap axis (`in_grid`), and every line of prose that
 # quotes it. `Strategy` is a key, a title and one of these.
 #
-# To add a FIFTH shape: write the factory beside these, build a `Rule4` with `in_grid=False`
-# and its own prose, and register a `Strategy` on it. Nothing downstream needs changing
-# except a new exit reason, which must be added to `VAR_REASONS`, `prettyReason` AND
-# charter's `TRADE_COLORS`.
+# To add ANOTHER BAR EXIT -- bar 3's close, say -- it is one `Rule4(bar_exit=close_exit(3),
+# bar_exit_at="close", ...)` plus its prose and a `Strategy`. To add a genuinely new SHAPE,
+# write the factory beside these. Nothing downstream needs changing except a new exit reason,
+# which must be added to `VAR_REASONS`, `prettyReason` AND charter's `TRADE_COLORS` -- note
+# that the bar exits do NOT invent one: 'exit_close' and 'exit_open' name the ORDER TYPE (a
+# market-on-close, a market-on-open), not which bar it was sent on, so all five share them.
 #
 # --- The target policy ------------------------------------------------------------
 # Signature: policy(pos, bull, bear) -> (price_or_None, reason)
@@ -68,19 +94,23 @@
 #          names it for the side of the level that closed it), "target_bar" (the entry bar's
 #          extreme), or "none" when no target is in force on this bar.
 #
-# --- The bar exit (shapes 3 and 4) --------------------------------------------------
+# --- The bar exit (shape 3) ---------------------------------------------------------
 # Signature: bar_exit(pos, bar, k) -> (price, reason) or None
 #
 #   pos    the open position, as above.
-#   bar    the bar being evaluated -- which is the whole point: these shapes exit on a bar
-#          EVENT (its close, the next one's open) rather than at a level, so unlike a target
-#          policy they are handed the bar and read a price straight off it.
-#   k      bars since entry. 0 IS the entry bar: a bar exit is the only thing in this engine
-#          that may close a trade there, and `engine.backtest` calls it once at k=0 straight
-#          after the entry is booked for exactly that reason.
+#   bar    the bar being evaluated -- which is the whole point: this shape exits on a bar
+#          EVENT (that bar's close, that bar's open) rather than at a level, so unlike a
+#          target policy it is handed the bar and reads a price straight off it.
+#   k      bars since entry, and the bar exit's only parameter. 0 IS the entry bar: a bar
+#          exit is the only thing in this engine that may close a trade there, and
+#          `engine.backtest` calls it once at k=0 straight after the entry is booked for
+#          exactly that reason.
 #
-# Returning None means "not on this bar" and the position stays open. A Rule4 carries either
-# a policy or a bar_exit, never both.
+# Returning None means "not on this bar" and the position stays open -- which is what carries
+# a k=2 exit through bars 0 and 1, with the stop live underneath it the whole way. A Rule4
+# carries either a policy or a bar_exit, never both, and a bar_exit always comes with
+# `bar_exit_at` ("open" or "close"), which is what tells the engine whether the exit resolves
+# before or after the stop on the exit bar.
 #
 # It is called on EVERY bar the trade is open, never once at entry, so a cap-family target
 # tracks the reversal ladder as Socrates redraws it: a newly appearing nearer reversal moves
@@ -200,48 +230,65 @@ def entry_bar_policy():
     return policy
 
 
-def close_exit():
-    """Rule 4 for Quickfixclose: out at the ENTRY BAR's own close, the same day.
+def close_exit(k_exit=0):
+    """Rule 4 as a MARKET-ON-CLOSE on bar `k_exit`, counting the entry bar as bar 0.
 
     A bar exit rather than a target, because there is no level being watched: the trade is
-    marked out at whatever that day closed at. k == 0 is the entry bar, and it is the only
-    bar this rule ever fires on, so the position never sees a second day.
+    marked out at whatever that bar closed at. Every bar before `k_exit` returns None, so the
+    position simply keeps running -- with the stop live underneath it, since the stop is not
+    Rule 4 (user, 2026-07-31). On the exit bar the stop is resolved FIRST: a stop triggers
+    the moment price touches it, a market-on-close fires at the bell, so a stop inside that
+    bar's range was hit before the close. `bar_exit_at="close"` is what tells the engine so.
 
-    It cannot lose on GROSS terms, and that is a property of the entry rule rather than a
-    flattering assumption: the entry trigger requires the bar to close BEYOND the entry
-    price (a short only fires when the close is below the first reversal, which is where it
-    filled), so marking out at that same close is always on the right side of entry. What
-    can still lose is the NET trade, when the move from the reversal to the close is smaller
-    than the two ticks of slippage charged to get in and out. That is where this strategy's
-    losers come from, and it is why it has a drawdown at all.
+    k_exit=0 (Quickfixclose) is the special one, and its two properties are worth stating
+    because neither survives k_exit >= 1:
 
-    The stop never trades here -- it sits one tick beyond this very bar's extreme, which is
-    already spent by the time the close confirms the entry. It still sizes the position.
+      - it CANNOT LOSE ON GROSS TERMS, and that is a property of the entry rule rather than
+        a flattering assumption: the entry trigger requires the bar to close BEYOND the entry
+        price (a short only fires when the close is below the first reversal, which is where
+        it filled), so marking out at that same close is always on the right side of entry.
+        What can still lose is the NET trade, when the move from the reversal to the close is
+        smaller than the two ticks of slippage charged to get in and out. That is where its
+        losers come from, and it is why it has a drawdown at all.
+      - THE STOP NEVER TRADES: it sits one tick beyond this very bar's extreme, which is
+        already spent by the time the close confirms the entry. It still sizes the position.
+
+    At k_exit=1 (Quickfixclose1) and k_exit=2 (Quickfixclose2) both of those go away. The
+    trade is held through whole bars it did not enter on, so its close can land either side
+    of entry, and the stop is a real floor again on every one of those bars.
     """
     def rule(pos, bar, k):
-        return (bar.close, "exit_close") if k == 0 else None
+        return (bar.close, "exit_close") if k == k_exit else None
     return rule
 
 
-def open_exit():
-    """Rule 4 for Quickfixopen: out at the OPEN of the bar that follows the entry bar.
+def open_exit(k_exit=1):
+    """Rule 4 as a MARKET-ON-OPEN on bar `k_exit`, counting the entry bar as bar 0.
 
-    The trade is carried through one nightly session and no further. k == 0 (the entry bar)
-    returns None, so the position survives the day it was opened; on the next bar the open
-    is taken, unconditionally.
+    k_exit=1 (Quickfixopen1) carries the trade through one nightly session and no further;
+    k_exit=2 (Quickfixopen2) through two nights and the whole day between them. Every bar
+    before `k_exit` returns None, so the position keeps running, and on those bars the stop
+    is live exactly as it is for any other Rule 4.
 
-    Unconditional is the honest word. The open is the first price of that bar, so nothing
-    can trade ahead of it: there is no order the market could have filled first, which means
-    no stop test and no path ambiguity to resolve. What the trade earns is exactly what the
-    overnight session did to it, which is the whole question this strategy asks.
+    On the exit bar itself the open is taken BEFORE the stop is even tested, and
+    `bar_exit_at="open"` is what says so. Unconditional is the honest word: the open is the
+    first price of that bar, so nothing can trade ahead of it -- there is no order the market
+    could have filled first, which means no path ambiguity to resolve. (If that same open
+    gapped past the stop, the two agree anyway: a gapped stop also fills at the open.)
 
-    The flip side, stated plainly because it is the risk: the stop is not a floor. An adverse
-    gap takes the trade out at the gap, well past the stop, for more than 1R -- the same
-    arithmetic as a gapped stop anywhere else in this project, except that here EVERY exit
-    is at an open, so it is not a rare case.
+    The flip side, stated plainly because it is the risk: on the exit bar the stop is not a
+    floor. An adverse gap takes the trade out at the gap, well past the stop, for more than
+    1R -- the same arithmetic as a gapped stop anywhere else in this project, except that
+    here EVERY exit is at an open, so it is not a rare case.
+
+    k_exit=0 is not offered: an exit at the entry bar's own open would be a fill BEFORE the
+    entry trigger (which is that bar's close) had confirmed anything.
     """
+    if k_exit < 1:
+        raise ValueError("open_exit: k_exit must be at least 1 (bar 0's open precedes entry)")
+
     def rule(pos, bar, k):
-        return None if k == 0 else (bar.open, "exit_open")
+        return (bar.open, "exit_open") if k == k_exit else None
     return rule
 
 
@@ -305,10 +352,17 @@ class Rule4:
       `policy`    a price TARGET, recomputed on every bar and resolved by the engine's
                   shared exit machinery (stop first, then gaps, then ambiguity). The cap
                   family and Quickfixwick.
-      `bar_exit`  a BAR EVENT -- "this bar's close", "the next bar's open". No level is being
-                  watched, so there is nothing for that machinery to resolve, and the engine
-                  takes the price the rule names. Quickfixclose and Quickfixopen. It is also
-                  the only thing that may close a trade on its ENTRY bar.
+      `bar_exit`  a BAR EVENT -- "bar 1's close", "bar 2's open". No level is being watched,
+                  so there is no target for that machinery to resolve, and the engine takes
+                  the price the rule names. The five bar exits. It is also the only thing
+                  that may close a trade on its ENTRY bar.
+
+    A bar exit MUST come with `bar_exit_at`, "open" or "close", which is not decoration: it
+    is how the engine orders the exit against the STOP on the exit bar. An open exit is taken
+    before the stop (nothing trades ahead of a bar's first price); a close exit after it (a
+    stop triggers intraday, a market-on-close fires at the bell). On every earlier bar the
+    stop is resolved on its own, so a bar exit held past its entry bar is stopped out
+    normally.
 
     `in_grid` says whether this setting is a point on the report's CAP DIAL. The cap family
     is (every one of CAP_CHOICES is a real backtest the pages can move between); a Rule 4 of
@@ -317,16 +371,21 @@ class Rule4:
     None otherwise; do not read it as "no cap" without checking `in_grid` first.
     """
 
-    __slots__ = ("token", "label", "policy", "bar_exit", "texts", "cap", "in_grid")
+    __slots__ = ("token", "label", "policy", "bar_exit", "bar_exit_at", "texts", "cap",
+                 "in_grid")
 
-    def __init__(self, token, label, texts, policy=None, bar_exit=None, cap=None,
-                 in_grid=False):
+    def __init__(self, token, label, texts, policy=None, bar_exit=None, bar_exit_at=None,
+                 cap=None, in_grid=False):
         if (policy is None) == (bar_exit is None):
             raise ValueError(f"Rule4 {token!r}: give exactly one of policy / bar_exit")
+        if (bar_exit is not None) != (bar_exit_at in ("open", "close")):
+            raise ValueError(f"Rule4 {token!r}: a bar_exit needs bar_exit_at='open' or "
+                             f"'close' (and a policy must not carry one)")
         self.token = token      # key in _variants.json and in the pages' variant table
-        self.label = label      # how the setting is written on a page: '2.5R', 'day close'
+        self.label = label      # how the setting is written on a page: '2.5R', 'bar 1 close'
         self.policy = policy    # a price target, or None
         self.bar_exit = bar_exit  # a bar event, or None
+        self.bar_exit_at = bar_exit_at  # 'open' (before the stop) or 'close' (after it)
         self.texts = texts      # rule4 / rule4_text / lede / caveat / label
         self.cap = cap          # the cap in R, for the family only
         self.in_grid = in_grid  # is this a position on the report's cap dial?
@@ -341,14 +400,21 @@ def cap_rule4(cap):
                  texts=cap_texts(cap), cap=cap, in_grid=True)
 
 
-# --- the three Rule 4 shapes that are NOT caps --------------------------------------
-# Their prose is WRITTEN rather than generated, because there is no number in any of them to
-# generate it from. Phrased for the short side like every other rule text, and free of em
-# dashes like all report prose (user, 2026-07-28).
+# --- the six Rule 4 settings that are NOT caps ---------------------------------------
+# The entry-bar wick, and the five BAR EXITS (bar 0's close through bar 2's close).
 #
-# All three carry in_grid=False, so their pages drop the cap dial and the "Choosing the
-# profit cap" section: neither has anything to say about a strategy that is not a point on
-# the cap axis. That machinery is exactly what it was built for.
+# Their prose is WRITTEN rather than generated. The bar exits are a family with one number in
+# them, so generating it was considered and dropped: what has to be said changes qualitatively
+# with that number rather than quantitatively. Bar 0's close cannot lose on gross terms and
+# has no live stop; bar 1's open has no live stop either but is all overnight; the three
+# longer holds have a live stop and a real losing side. A generator would have been three
+# branches and one shared sentence, which is worse than five paragraphs that each say what is
+# true. Phrased for the short side like every other rule text, and free of em dashes like all
+# report prose (user, 2026-07-28).
+#
+# All six carry in_grid=False, so their pages drop the cap dial and the "Choosing the profit
+# cap" section: neither has anything to say about a strategy that is not a point on the cap
+# axis. That machinery is exactly what it was built for.
 
 WICK = Rule4(
     token="wick",
@@ -376,12 +442,13 @@ WICK = Rule4(
             "below it"),
     ))
 
-DAY_CLOSE = Rule4(
+CLOSE_0 = Rule4(
     token="close",
-    label="day close",
-    bar_exit=close_exit(),
+    label="bar 0 close",
+    bar_exit=close_exit(0),
+    bar_exit_at="close",
     texts=dict(
-        label="day close",
+        label="bar 0 close",
         rule4="exit = the entry bar's own close, flat the same day",
         rule4_text=(
             "Close the position at <b>the entry bar's own close</b>. The trade is opened and "
@@ -401,16 +468,17 @@ DAY_CLOSE = Rule4(
             "fill at the close are assumed to be the same day's first and last prices"),
     ))
 
-NEXT_OPEN = Rule4(
-    token="open",
-    label="next open",
-    bar_exit=open_exit(),
+OPEN_1 = Rule4(
+    token="open1",
+    label="bar 1 open",
+    bar_exit=open_exit(1),
+    bar_exit_at="open",
     texts=dict(
-        label="next open",
+        label="bar 1 open",
         rule4="exit = the open of the price bar that follows the entry bar",
         rule4_text=(
-            "Close the position at <b>the open of the next price bar</b>, usually the "
-            "following day. The trade is carried through one nightly session and no "
+            "Close the position at <b>the open of the next price bar</b>, bar 1, usually "
+            "the following day. The trade is carried through one nightly session and no "
             "further. That open is the first price of the bar, so nothing can trade ahead "
             "of it and the exit is <b>unconditional</b>: there is no level to reach and no "
             "path to be ambiguous about. <b>The stop never trades</b>, it is here only to "
@@ -418,12 +486,87 @@ NEXT_OPEN = Rule4(
             "for more than 1R."),
         lede=(
             "Holds through one night and no longer: the position is closed at the open of "
-            "the price bar that follows the entry bar. That open is the first price of the "
-            "day, so the exit is unconditional, and what the trade earns is exactly what "
-            "the nightly session did to it."),
+            "bar 1, the price bar that follows the entry bar. That open is the first price "
+            "of the day, so the exit is unconditional, and what the trade earns is exactly "
+            "what the nightly session did to it."),
         caveat=(
             "the whole result is the overnight move, so it rests entirely on the next bar's "
             "open being a fillable price"),
+    ))
+
+CLOSE_1 = Rule4(
+    token="close1",
+    label="bar 1 close",
+    bar_exit=close_exit(1),
+    bar_exit_at="close",
+    texts=dict(
+        label="bar 1 close",
+        rule4="exit = the close of the price bar that follows the entry bar",
+        rule4_text=(
+            "Close the position at <b>the close of bar 1</b>, the price bar that follows "
+            "the entry bar. The trade is carried through one nightly session and then the "
+            "whole of the next day, and is marked out at that day's closing price. This is "
+            "the first of these exits that gives the move a full session to work: it is not "
+            "reading the open reaction, it is asking what the day made of it. <b>The stop "
+            "is live</b> for that whole bar, and it fires ahead of the close, a stop "
+            "triggers the moment price touches it while a market-on-close waits for the "
+            "bell."),
+        lede=(
+            "Gives the move one full day: the position is held through the night and closed "
+            "at the close of bar 1, the price bar after the entry bar. The stop is live "
+            "throughout that bar, so a trade that goes wrong is cut at 1R rather than "
+            "carried to the bell."),
+        caveat=(
+            "a stop inside bar 1's range is assumed to have been hit before that bar's "
+            "close, which is true of a stop order but cannot be checked on a daily bar"),
+    ))
+
+OPEN_2 = Rule4(
+    token="open2",
+    label="bar 2 open",
+    bar_exit=open_exit(2),
+    bar_exit_at="open",
+    texts=dict(
+        label="bar 2 open",
+        rule4="exit = the open of price bar 2",
+        rule4_text=(
+            "Close the position at <b>the open of bar 2</b>, two bars after the entry bar. "
+            "The trade is carried through two nightly sessions and the whole day between "
+            "them. That open is the first price of its bar, so the exit itself is "
+            "<b>unconditional</b> and nothing can trade ahead of it. <b>The stop is live</b> "
+            "on bar 1, the full day in between, so this is Quickfixopen1 with one more day "
+            "of room and a real floor under it for that day."),
+        lede=(
+            "Holds through two nights and the day between them: the position is closed at "
+            "the open of bar 2. The stop is live for the whole of bar 1, and only the exit "
+            "bar's own open is beyond its reach."),
+        caveat=(
+            "two of the three sessions are overnight moves, so the result rests on bar 2's "
+            "open being a fillable price"),
+    ))
+
+CLOSE_2 = Rule4(
+    token="close2",
+    label="bar 2 close",
+    bar_exit=close_exit(2),
+    bar_exit_at="close",
+    texts=dict(
+        label="bar 2 close",
+        rule4="exit = the close of price bar 2",
+        rule4_text=(
+            "Close the position at <b>the close of bar 2</b>, two bars after the entry bar. "
+            "The trade is given two full sessions to work and is then marked out at the "
+            "second one's closing price, so it is the longest fixed hold of these exits. "
+            "<b>The stop is live</b> across both of those bars and fires ahead of the close "
+            "on the exit bar. What this asks is whether the reaction to the entry keeps "
+            "paying past the first day, or whether the move is spent by then."),
+        lede=(
+            "The longest fixed hold: the position is carried through two full price bars "
+            "and closed at the close of bar 2. The stop is live for both of them, so a "
+            "trade that turns is cut rather than held to the second bell."),
+        caveat=(
+            "a stop inside either bar's range is assumed to have been hit before that bar's "
+            "close, which is true of a stop order but cannot be checked on a daily bar"),
     ))
 
 
@@ -489,7 +632,7 @@ class Strategy:
              its own 6% risk makes them comparable at equal PAIN rather than equal bet size.
              Re-solve it whenever the rules, the fill model or the data change and paste the
              number back here -- stale is the failure mode to watch for.
-      False  it is CHOSEN: a plain 1% (user, 2026-07-28). The three quick-exit strategies are
+      False  it is CHOSEN: a plain 1% (user, 2026-07-28). The six quick-exit strategies are
              published this way. Their exits are so fast that the R scale stops meaning much,
              and quickfixclose barely draws down at all, so a 6%-drawdown solve would either
              not converge or hand back a bet size nobody would take. `solve_risk.py` still
@@ -545,9 +688,9 @@ class Strategy:
 
 
 # --- the registry -------------------------------------------------------------------
-# FOUR strategies, one per Rule 4 shape. They share Rules 1-3 exactly, so they take exactly
-# the same setups, and comparing them compares nothing but where the profit is taken. That
-# comparison is what `output/comparison.html` exists for.
+# SEVEN strategies. They share Rules 1-3 exactly, so they take exactly the same setups, and
+# comparing them compares nothing but where the profit is taken. That comparison is what
+# `output/comparison.html` exists for.
 #
 # quickfix's `risk_pct` is MEASURED: the risk that puts it at engine.TARGET_DD (6%) maximum
 # drawdown on the current data, printed by `solve_risk.py`. Re-run that script and paste the
@@ -555,7 +698,7 @@ class Strategy:
 # gap fills were added on 2026-07-27, and it will move again as the sample grows.
 # engine.RISK_PCT (the reference the shared variant grid is priced at) tracks it.
 #
-# The other three are published at a flat 1%, CHOSEN not solved (user, 2026-07-28), which is
+# The other six are published at a flat 1%, CHOSEN not solved (user, 2026-07-28), which is
 # what `risk_solved=False` records. See `Strategy` for why.
 #
 # quickfix's default cap was 5R until 2026-07-27, then 2.5R. It is 1.9R because that is where
@@ -565,8 +708,8 @@ class Strategy:
 QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(1.9),
                     risk_pct=1.39)
 
-# The three quick exits. Not caps: three different Rule 4 SHAPES, so none of them carries a
-# cap dial or the "Choosing the profit cap" charts (in_grid=False on their Rule 4 objects).
+# The six quick exits. Not caps, so none of them carries a cap dial or the "Choosing the
+# profit cap" charts (in_grid=False on their Rule 4 objects).
 #
 # Quickfixwick carried a different key from 2026-07-27 to 2026-07-28, was retired, and came
 # back under its present name on 2026-07-28 (user) because the name says what it does: it
@@ -574,10 +717,23 @@ QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(1.9),
 # key was removed everywhere on the user's instruction -- it is in git; do not reinstate it.
 QUICKFIXWICK = Strategy(key="quickfixwick", title="Quickfixwick", rule4=WICK,
                         risk_pct=1.0, risk_solved=False)
-QUICKFIXCLOSE = Strategy(key="quickfixclose", title="Quickfixclose", rule4=DAY_CLOSE,
+
+# The BAR EXIT family, in hold order. The number in the key is the BAR the trade is marked
+# out on, counting the entry bar as bar 0 (user, 2026-07-31).
+#
+# QUICKFIXOPEN was renamed QUICKFIXOPEN1 on 2026-07-31, same rule, same trades: with bar 2's
+# open registered beside it, "open" no longer says which bar it means. Quickfixclose keeps its
+# bare name by the user's choice and is bar 0; read the absent number as a 0.
+QUICKFIXCLOSE = Strategy(key="quickfixclose", title="Quickfixclose", rule4=CLOSE_0,
                          risk_pct=1.0, risk_solved=False)
-QUICKFIXOPEN = Strategy(key="quickfixopen", title="Quickfixopen", rule4=NEXT_OPEN,
-                        risk_pct=1.0, risk_solved=False)
+QUICKFIXOPEN1 = Strategy(key="quickfixopen1", title="Quickfixopen1", rule4=OPEN_1,
+                         risk_pct=1.0, risk_solved=False)
+QUICKFIXCLOSE1 = Strategy(key="quickfixclose1", title="Quickfixclose1", rule4=CLOSE_1,
+                          risk_pct=1.0, risk_solved=False)
+QUICKFIXOPEN2 = Strategy(key="quickfixopen2", title="Quickfixopen2", rule4=OPEN_2,
+                         risk_pct=1.0, risk_solved=False)
+QUICKFIXCLOSE2 = Strategy(key="quickfixclose2", title="Quickfixclose2", rule4=CLOSE_2,
+                          risk_pct=1.0, risk_solved=False)
 
 # SLOWFIX -- the cap family at no cap -- was retired from the registry on 2026-07-28 (user):
 # once every cap became reachable on one dial, a whole registered strategy for the uncapped
@@ -585,7 +741,8 @@ QUICKFIXOPEN = Strategy(key="quickfixopen", title="Quickfixopen", rule4=NEXT_OPE
 # "no cap" is still a setting of the dial, still the dashed reference line on both charts,
 # and still the worst point of the family at equal drawdown, which is the finding that made
 # showing it in full redundant. Its outputs were deleted with it.
-REGISTRY = [QUICKFIX, QUICKFIXWICK, QUICKFIXCLOSE, QUICKFIXOPEN]
+REGISTRY = [QUICKFIX, QUICKFIXWICK, QUICKFIXCLOSE, QUICKFIXOPEN1, QUICKFIXCLOSE1,
+            QUICKFIXOPEN2, QUICKFIXCLOSE2]
 BY_KEY = {s.key: s for s in REGISTRY}
 
 

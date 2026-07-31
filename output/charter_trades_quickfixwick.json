@@ -776,13 +776,13 @@
      "side": "long",
      "entry_date": "2026-07-29",
      "entry": 2.69,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-07-30",
+     "exit": 2.756,
      "stop": 2.665,
      "target": 2.756,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "target_bar",
+     "r": 2.64,
+     "bars": 1
     }
    ]
   },

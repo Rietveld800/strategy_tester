@@ -1,8 +1,8 @@
 {
  "meta": {
-  "strategy": "quickfixopen",
-  "title": "Quickfixopen",
-  "cap": "open",
+  "strategy": "quickfixopen1",
+  "title": "Quickfixopen1",
+  "cap": "open1",
   "rule4": "exit = the open of the price bar that follows the entry bar",
   "timeframe": "daily",
   "source": "strategy_tester",
@@ -788,13 +788,13 @@
      "side": "long",
      "entry_date": "2026-07-29",
      "entry": 2.69,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-07-30",
+     "exit": 2.732,
      "stop": 2.665,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_open",
+     "r": 1.68,
+     "bars": 1
     }
    ]
   },

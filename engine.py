@@ -82,7 +82,7 @@
 #     entry bar's high/low are already spent by the time its close confirms the entry, and
 #     the stop sits one tick beyond that bar's own extreme, so neither side can trigger
 #     there. A BAR EXIT is the one exception, and only because it watches no level:
-#     Quickfixclose is marked out at that same bar's close, which is a price the bar has
+#     Quickfixclose0 is marked out at that same bar's close, which is a price the bar has
 #     already printed rather than one we are guessing the path to.
 #   - a bar exit that fires LATER than bar 1 is held through whole bars it did not enter on,
 #     and the stop is live on every one of them (see `no_target`). So the gap rules, the
@@ -484,7 +484,7 @@ def backtest(bars, tick, dp, rule4, close_at_end=False, risk_pct=None):
                          else policy(pos, sig_bull, sig_bear)[0])
         # A target policy cannot exit here: the entry bar's range is spent and the stop sits
         # one tick beyond it, so management starts on the next bar. A BAR EXIT can, and
-        # Quickfixclose is exactly that -- marked out at this bar's own close.
+        # Quickfixclose0 is exactly that -- marked out at this bar's own close.
         if bar_exit is not None:
             hit = bar_exit(pos, bar, 0)
             if hit is not None:

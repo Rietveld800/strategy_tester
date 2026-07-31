@@ -104,7 +104,7 @@ def cost_in_r(trade):
         # rather than with a stop that fires into a move nobody chose the timing of. They
         # are the whole strategy for the six quick exits, so the choice matters more there
         # than anywhere else -- at 2 ticks round trip it is already the difference between a
-        # winner and a loser on quickfixclose's smallest trades. (A bar-exit strategy that is
+        # winner and a loser on quickfixclose0's smallest trades. (A bar-exit strategy that is
         # STOPPED out is charged the stop rate like anything else; only the scheduled exit
         # gets the limit rate.)
         exit_ticks = SLIP_TARGET_TICKS

@@ -218,6 +218,10 @@ table.trades td.act{white-space:normal;font-size:11px;}
 /* the two text columns (market, reason) wrap; the rest stay one line */
 table.trades td:first-child,table.trades th:first-child,
 table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
+/* td/th default to nowrap and the table is table-layout:fixed, so a long cell that is
+   neither first nor last OVERFLOWS its column instead of wrapping. The comparison page's
+   Rule 4 column is the only one, and it was printing over the Trades figures. */
+table.trades td.wrap,table.trades th.wrap{white-space:normal;word-break:break-word;}
 .tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:20px;
   background:var(--grid);color:var(--ink3);font-size:9.5px;letter-spacing:.04em;
   text-transform:uppercase;font-weight:600;vertical-align:1px;}
@@ -304,7 +308,7 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 </head>
 <body>
 <div class="wrap">
-<nav class="nav"><span class="lbl">Back to</span><a href="equity_quickfix.html">Quickfix</a><a href="equity_quickfixwick.html">Quickfixwick</a><a href="equity_quickfixclose.html">Quickfixclose</a><a href="equity_quickfixopen1.html">Quickfixopen1</a><a href="equity_quickfixclose1.html">Quickfixclose1</a><a href="equity_quickfixopen2.html">Quickfixopen2</a><a href="equity_quickfixclose2.html">Quickfixclose2</a><span class="navbtns"><a class="pdfbtn" href="comparison.html">Compare</a><a class="pdfbtn" href="report.html" target="_blank">Open report</a></span></nav>
+<nav class="nav"><span class="lbl">Back to</span><a href="equity_quickfix.html">Quickfix</a><a href="equity_quickfixwick.html">Quickfixwick</a><a href="equity_quickfixclose0.html">Quickfixclose0</a><a href="equity_quickfixopen1.html">Quickfixopen1</a><a href="equity_quickfixclose1.html">Quickfixclose1</a><a href="equity_quickfixopen2.html">Quickfixopen2</a><a href="equity_quickfixclose2.html">Quickfixclose2</a><span class="navbtns"><a class="pdfbtn" href="comparison.html">Compare</a><a class="pdfbtn" href="report.html" target="_blank">Open report</a></span></nav>
 <header>
   <div class="eyebrow">Report &middot; conclusions</div>
   <h1>Conclusions</h1>

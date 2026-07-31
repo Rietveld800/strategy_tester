@@ -242,6 +242,10 @@ table.trades td.act{white-space:normal;font-size:11px;}
 /* the two text columns (market, reason) wrap; the rest stay one line */
 table.trades td:first-child,table.trades th:first-child,
 table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
+/* td/th default to nowrap and the table is table-layout:fixed, so a long cell that is
+   neither first nor last OVERFLOWS its column instead of wrapping. The comparison page's
+   Rule 4 column is the only one, and it was printing over the Trades figures. */
+table.trades td.wrap,table.trades th.wrap{white-space:normal;word-break:break-word;}
 .tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:20px;
   background:var(--grid);color:var(--ink3);font-size:9.5px;letter-spacing:.04em;
   text-transform:uppercase;font-weight:600;vertical-align:1px;}
@@ -598,7 +602,7 @@ function txt(x,y,s,anchor,size,fill,ls){
 // is -- sorting the open markets into a string on all 180 days, 75 times over, would be felt
 // on every keystroke. It is the SAME function either way on purpose.
 //
-// A note that matters for quickfixclose: its trades enter and exit on the SAME day, so the
+// A note that matters for quickfixclose0: its trades enter and exit on the SAME day, so the
 // entries loop commits their risk and the exits loop releases it before the day's snapshot
 // is taken. `max_open` and `time_in_market` therefore read 0, which is not a bug -- it is
 // the literal truth that nothing is ever held at the end of a day.
@@ -712,7 +716,7 @@ const FIXED_RISK = 1.0;
 
 // Drawdown rises monotonically with risk (a bigger bet swings the balance further), so a
 // plain bisection finds the risk that hits the budget. Returns null when the setting cannot
-// reach it AT ANY BET, which is not a failure case to hide: quickfixclose lands there, because
+// reach it AT ANY BET, which is not a failure case to hide: quickfixclose0 lands there, because
 // its exits are all on the right side of entry on gross terms and the account barely dips.
 function riskForDrawdown(tok){
   const dd = r => -simulate(r, rowsFor(tok), true).stats.maxdd;
@@ -789,7 +793,7 @@ function mountReport(root, DATA){
   }
 
   function renderKpis(){
-    // A strategy that opens and closes on the SAME bar (quickfixclose) is never holding
+    // A strategy that opens and closes on the SAME bar (quickfixclose0) is never holding
     // anything when a day is counted, so both of these read 0. That is the literal truth and
     // it is worth saying out loud, because "max concurrent 0" beside 103 trades otherwise
     // looks like a broken number rather than the defining property of the strategy.
@@ -2037,7 +2041,9 @@ COMPARISON_HTML = r"""
     <p class="chartnote">Risk is a free variable, so the honest question is: held to the
       <b>same 6% maximum drawdown</b>, which strategy ends up with the most money? The risk
       is solved per strategy to make that true, and the second pane is what each one is then
-      allowed to bet.</p>
+      allowed to bet. A strategy that <b>never reaches 6% at any bet size</b> is marked
+      <b>&dagger;</b> and drawn hollow at its own published risk instead, so it still has a
+      bar to read, but that bar answers a different question and is not part of the ranking.</p>
     <div class="plot barplot" data-el="nwplot">
       <svg data-el="nwsvg" role="img" aria-label="Final capital, risk per trade allowed and win rate for each strategy at a constant 6 percent drawdown"></svg>
       <div class="tip" data-el="nwtip"></div>
@@ -2054,7 +2060,7 @@ COMPARISON_HTML = r"""
     <div class="tradescroll">
       <table class="trades"><thead><tr>
         <th class="l" style="width:15%">Strategy</th>
-        <th class="l" style="width:25%">Rule 4</th>
+        <th class="l wrap" style="width:25%">Rule 4</th>
         <th style="width:7%">Trades</th>
         <th style="width:8%">Win %</th>
         <th style="width:11%">Capital @1%</th>
@@ -2080,7 +2086,25 @@ const $ = k => document.querySelector('[data-el="'+k+'"]');
 // Every registered strategy, at its own Rule 4 token. Order is the registry's, which puts
 // quickfix (the reference, and the only cap-family member here) first.
 const FIXED_PTS = STRATS.map(s => Object.assign(statsAt(FIXED_RISK, s.r4), {s:s}));
-const NORM_PTS  = STRATS.map(s => Object.assign(leveredAt(s.r4), {s:s}));
+
+// The levered chart, with one EXEMPTION (user, 2026-07-31). A strategy that cannot be made
+// to lose TARGET_DD at any bet size has no solved risk, and until now it drew no bar at all.
+// It is now priced at its OWN published risk instead and flagged `exempt`, so the ranking
+// chart has a bar for every strategy and the reader is not left with a blank column to
+// interpret.
+//
+// It lands on quickfixclose0 and, on this data, only there: its drawdown is theoretically
+// near zero, so no leverage reaches 6%. The bar is therefore NOT comparable to its
+// neighbours, which is why it is drawn hollow and dashed, marked with a dagger on the axis,
+// and spelled out in the prose under the chart. A solid bar here would be a lie; no bar at
+// all was merely unhelpful.
+const NORM_PTS = STRATS.map(s => {
+  const lv = leveredAt(s.r4);
+  return lv.final != null
+    ? Object.assign({}, lv, {s:s, exempt:false})
+    : Object.assign(statsAt(s.risk, s.r4), {s:s, exempt:true});
+});
+const EXEMPT = NORM_PTS.filter(p => p.exempt);
 
 const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
 const ddTxt = v => v==null?"—":Math.abs(v).toFixed(2)+"%";
@@ -2132,7 +2156,7 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
       // with its true value on it: the label carries the number, the bar only says "off this
       // scale". The axis still starts at zero, so no bar that IS on the scale is misread.
       //
-      // It fires today on return/drawdown: quickfixclose's drawdown is a rounding error, so
+      // It fires today on return/drawdown: quickfixclose0's drawdown is a rounding error, so
       // the ratio comes out in the thousands and the metric has stopped meaning anything.
       // Written generally because any pane could meet an outlier later.
       const desc=finite.slice().sort((a,b)=>b-a);
@@ -2158,17 +2182,26 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
 
       items.forEach((q,i)=>{
         const v=val(q);
-        // A strategy with no answer for this pane draws NO BAR and says so on the baseline.
-        // Quickfixclose has no 6%-drawdown risk at any bet size, and a zero-height bar would
-        // read as "it earns nothing" instead of "the question does not apply".
+        // A pane with genuinely no value for a strategy draws NO BAR and says so on the
+        // baseline; a zero-height bar would read as "it earns nothing" instead of "the
+        // question does not apply". Since 2026-07-31 the levered chart no longer lands here
+        // for Quickfixclose0 -- an unreachable TARGET_DD is handled as an EXEMPTION with a
+        // hollow bar (see NORM_PTS) rather than as a hole -- but the branch stays for any
+        // pane that really has nothing to show.
         if(v==null){
           svgEl.appendChild(txt(cx(i),bot-6,"n/a","middle",11,"var(--ink3)"));
           return;
         }
         const off=v>yHi, ty=off?top+14:y(v);
-        svgEl.appendChild(mk("rect",{x:(cx(i)-bw/2).toFixed(1),y:ty.toFixed(1),
-          width:bw.toFixed(1),height:Math.max(bot-ty,0).toFixed(1),
-          fill:p.color,rx:4,opacity:.92}));
+        // An EXEMPT bar is a real number on a different basis, so it is drawn hollow and
+        // dashed in the pane's own colour: present and readable, but visibly not one of the
+        // bars the chart's title describes. The dagger on the axis name says which one.
+        svgEl.appendChild(mk("rect",Object.assign(
+          {x:(cx(i)-bw/2).toFixed(1),y:ty.toFixed(1),
+           width:bw.toFixed(1),height:Math.max(bot-ty,0).toFixed(1),rx:4},
+          q.exempt ? {fill:p.color,opacity:.18,stroke:p.color,"stroke-width":1.6,
+                      "stroke-dasharray":"5 3"}
+                   : {fill:p.color,opacity:.92})));
         if(off){
           // The break mark: two strokes in the surface colour across the bar, the standard
           // "this bar does not end here" glyph.
@@ -2187,9 +2220,12 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
       });
     });
 
-    // x axis: the strategy names, written once under the last pane.
+    // x axis: the strategy names, written once under the last pane. A dagger marks a column
+    // whose bars are on a different basis, once for the whole column rather than on each of
+    // its value labels.
     items.forEach((q,i)=>{
-      svgEl.appendChild(txt(cx(i),H-10,q.s.title,"middle",nSize,"var(--ink2)"));
+      svgEl.appendChild(txt(cx(i),H-10,q.s.title+(q.exempt?" †":""),"middle",nSize,
+                            "var(--ink2)"));
     });
 
     // Hover: a full-height hit slot per strategy, so the target is the column and not the
@@ -2254,18 +2290,21 @@ const drawFixed = barPlotter($("fxplot"), $("fxsvg"), $("fxtip"), p =>
   row("Trades", p.n));
 
 const drawNorm = barPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
-  `<div class="d">${p.s.title}</div>`+
-  (p.risk==null ? row("Risk needed","no "+TARGET_DD+"% at any bet") :
-    row("Risk per trade", riskTxt(p.risk)) + row("Final capital", fmtUSD(p.final)) +
-    row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
-    row("Win rate", p.wr.toFixed(1)+"%") + row("Trades", p.n)));
+  `<div class="d">${p.s.title}${p.exempt?" †":""}</div>`+
+  (p.exempt ? row("Basis","exempt, at its own risk") : "")+
+  row("Risk per trade", riskTxt(p.risk)) + row("Final capital", fmtUSD(p.final)) +
+  row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
+  row("Win rate", p.wr.toFixed(1)+"%") + row("Trades", p.n)+
+  (p.exempt ? row("Why", "never reaches "+TARGET_DD+"% at any bet") : ""));
 
 // ---- what the charts say, read out of the charts ------------------------------------
 // Generated, not typed, exactly like the cap section's first passage: every number below
 // comes off the two grids at render time, so it cannot go stale against the data.
 function renderFindings(){
   const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
-  const fx=FIXED_PTS.slice(), nw=NORM_PTS.filter(p=>p.final!=null);
+  // `nw` is the strategies actually held to TARGET_DD. An exempt one is drawn but excluded
+  // here: it is at its own risk, so it cannot be ranked against a solved point.
+  const fx=FIXED_PTS.slice(), nw=NORM_PTS.filter(p=>!p.exempt && p.final!=null);
   const fxBest=fx.reduce((a,b)=>b.final>a.final?b:a);
   const ddHi=fx.reduce((a,b)=>Math.abs(b.dd)>Math.abs(a.dd)?b:a);
   const ddLo=fx.reduce((a,b)=>Math.abs(b.dd)<Math.abs(a.dd)?b:a);
@@ -2281,7 +2320,11 @@ function renderFindings(){
     `The chart below asks the question properly, by giving each strategy the bet size that `+
     `puts it in the same hole.`);
 
-  const unreach=NORM_PTS.filter(p=>p.final==null);
+  // The ranking is over the SOLVED points only. An exempt strategy has a bar, but it is not
+  // in the race: it is priced at its own risk, not at one that produces the same drawdown, so
+  // letting it win "best at 6%" would be exactly the confusion the two-chart argument exists
+  // to prevent.
+  const unreach=NORM_PTS.filter(p=>p.exempt);
   const nwBest=nw.length?nw.reduce((a,b)=>b.final>a.final?b:a):null;
   const nwWorst=nw.length?nw.reduce((a,b)=>b.final<a.final?b:a):null;
   const rHi=nw.length?nw.reduce((a,b)=>b.risk>a.risk?b:a):null;
@@ -2297,13 +2340,20 @@ function renderFindings(){
       (rHi ? `${rHi.s.title} is allowed the most at ${riskTxt(rHi.risk)}` : ``)+`.`
     : `No strategy on this page reaches a ${TARGET_DD}% drawdown at any bet size.`;
   if(unreach.length){
+    const many=unreach.length>1;
     body += ` <b>${unreach.map(p=>p.s.title).join(" and ")}</b> `+
-      `${unreach.length>1?"have":"has"} no bar at all: on this sample `+
-      `${unreach.length>1?"they":"it"} cannot be made to lose ${TARGET_DD}% at ANY bet size, `+
-      `so there is no leverage that puts `+
-      `${unreach.length>1?"them":"it"} on the same footing as the rest. That is a result, `+
-      `not a gap, and it is the strongest thing this chart says, read it against the fill `+
-      `assumptions in the note below rather than as a free lunch.`;
+      `${many?"are":"is"} marked <b>†</b> and ${many?"are":"is"} not in that ranking: on `+
+      `this sample ${many?"they":"it"} cannot be made to lose ${TARGET_DD}% at ANY bet size, `+
+      `so there is no leverage that puts ${many?"them":"it"} on the same footing as the rest. `+
+      `${many?"Those bars are":"That bar is"} drawn hollow at `+
+      `${unreach.map(p=>riskTxt(p.risk)).join(" and ")}, `+
+      `${many?"their":"its"} own published risk, and reads `+
+      `${unreach.map(p=>fmtUSD(p.final)).join(" and ")} `+
+      `at a drawdown of ${unreach.map(p=>ddTxt(p.dd)).join(" and ")}, which is why the `+
+      `${TARGET_DD}% question does not apply. Comparing that height to the solid bars beside `+
+      `it compares two different questions. It is a result rather than a gap, and it is the `+
+      `strongest thing this chart says, read it against the fill assumptions in the note `+
+      `below rather than as a free lunch.`;
   }
   $("nwfindings").innerHTML = h("Where it pays", body);
 }
@@ -2322,11 +2372,11 @@ function renderTable(){
     const f=FIXED_PTS[i], n=NORM_PTS[i];
     return "<tr>"+
       `<td class="l">${s.title}</td>`+
-      `<td class="l">${s.rule4}</td>`+
+      `<td class="l wrap">${s.rule4}</td>`+
       cell(f.n) + cell(f.wr.toFixed(1)+"%") + cell(fmtUSD(f.final)) +
       cell(ddTxt(f.dd)) + cell(rddTxt(f.rdd)) +
-      cell(n.risk==null?"no 6%":riskTxt(n.risk)) +
-      cell(n.final==null?"&mdash;":fmtUSD(n.final)) + "</tr>";
+      cell(riskTxt(n.risk)+(n.exempt?" †":"")) +
+      cell(fmtUSD(n.final)+(n.exempt?" †":"")) + "</tr>";
   }).join("");
 }
 
@@ -2381,7 +2431,7 @@ def build_comparison():
             f"slippage, 1 tick on entry, 1 on a limit take-profit or a scheduled "
             f"close-out, 3 on a stop, converted to R through each trade's own risk "
             f"distance. The two quickest exits rest hardest on the fill model: "
-            f"<b>Quickfixclose</b> assumes one daily bar gives us both a fill at the "
+            f"<b>Quickfixclose0</b> assumes one daily bar gives us both a fill at the "
             f"reversal level intraday and a fill at that day's close, and because the entry "
             f"trigger requires the close to be beyond the entry price it can only lose when "
             f"slippage exceeds the move, which is why its drawdown is near zero. "

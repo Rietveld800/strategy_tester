@@ -32,15 +32,15 @@
 #    bar is BAR 0, the bar after it is bar 1, and so on (user, 2026-07-31). Five of them are
 #    registered today:
 #
-#      quickfixclose   the close of bar 0   flat the same day
+#      quickfixclose0  the close of bar 0   flat the same day
 #      quickfixopen1   the open  of bar 1   through one night
 #      quickfixclose1  the close of bar 1   through one night and the next full day
 #      quickfixopen2   the open  of bar 2   through two nights and one full day
 #      quickfixclose2  the close of bar 2   through two nights and two full days
 #
-#    (quickfixopen1 was called quickfixopen until 2026-07-31; the '1' now says which bar it
-#    means, which is the whole point of the naming. quickfixclose keeps its bare name by the
-#    user's choice -- read it as bar 0.)
+#    (quickfixopen and quickfixclose0 were renamed quickfixopen1 and quickfixclose0 on
+#    2026-07-31; the number now says which bar, on every one of them, and nothing is left for
+#    the reader to infer.)
 #
 # Shape 3 is NOT a price target, it is a BAR EVENT: "get out at this bar's close", "get out
 # at bar 2's open". No level is being watched, so `check_exit` has no target to resolve, and
@@ -61,7 +61,7 @@
 # that reason.
 #
 # THE STOP NEVER TRADES on the two shortest holds, and that is a consequence rather than a
-# rule: quickfixclose is closed on the bar that opened it, and the stop sits one tick beyond
+# rule: quickfixclose0 is closed on the bar that opened it, and the stop sits one tick beyond
 # that bar's own already-spent extreme; quickfixopen1 is closed at the FIRST price of the
 # next bar, so nothing can trade ahead of the exit. On the three longer holds the stop is a
 # real floor again. Everywhere, the stop is what SIZES the position (1R = the stop distance),
@@ -240,7 +240,7 @@ def close_exit(k_exit=0):
     the moment price touches it, a market-on-close fires at the bell, so a stop inside that
     bar's range was hit before the close. `bar_exit_at="close"` is what tells the engine so.
 
-    k_exit=0 (Quickfixclose) is the special one, and its two properties are worth stating
+    k_exit=0 (Quickfixclose0) is the special one, and its two properties are worth stating
     because neither survives k_exit >= 1:
 
       - it CANNOT LOSE ON GROSS TERMS, and that is a property of the entry rule rather than
@@ -443,7 +443,7 @@ WICK = Rule4(
     ))
 
 CLOSE_0 = Rule4(
-    token="close",
+    token="close0",
     label="bar 0 close",
     bar_exit=close_exit(0),
     bar_exit_at="close",
@@ -634,7 +634,7 @@ class Strategy:
              number back here -- stale is the failure mode to watch for.
       False  it is CHOSEN: a plain 1% (user, 2026-07-28). The six quick-exit strategies are
              published this way. Their exits are so fast that the R scale stops meaning much,
-             and quickfixclose barely draws down at all, so a 6%-drawdown solve would either
+             and quickfixclose0 barely draws down at all, so a 6%-drawdown solve would either
              not converge or hand back a bet size nobody would take. `solve_risk.py` still
              prints what the solve WOULD be for them, it just does not call them stale.
 
@@ -721,11 +721,12 @@ QUICKFIXWICK = Strategy(key="quickfixwick", title="Quickfixwick", rule4=WICK,
 # The BAR EXIT family, in hold order. The number in the key is the BAR the trade is marked
 # out on, counting the entry bar as bar 0 (user, 2026-07-31).
 #
-# QUICKFIXOPEN was renamed QUICKFIXOPEN1 on 2026-07-31, same rule, same trades: with bar 2's
-# open registered beside it, "open" no longer says which bar it means. Quickfixclose keeps its
-# bare name by the user's choice and is bar 0; read the absent number as a 0.
-QUICKFIXCLOSE = Strategy(key="quickfixclose", title="Quickfixclose", rule4=CLOSE_0,
-                         risk_pct=1.0, risk_solved=False)
+# Both were renamed on 2026-07-31, same rules and same trades: QUICKFIXOPEN -> QUICKFIXOPEN1
+# when bar 2's open was registered beside it, and QUICKFIXCLOSE0 -> QUICKFIXCLOSE0 an hour
+# later (user: "closer", i.e. the whole family now says which bar it means and none of them
+# leaves the reader to infer a 0).
+QUICKFIXCLOSE0 = Strategy(key="quickfixclose0", title="Quickfixclose0", rule4=CLOSE_0,
+                          risk_pct=1.0, risk_solved=False)
 QUICKFIXOPEN1 = Strategy(key="quickfixopen1", title="Quickfixopen1", rule4=OPEN_1,
                          risk_pct=1.0, risk_solved=False)
 QUICKFIXCLOSE1 = Strategy(key="quickfixclose1", title="Quickfixclose1", rule4=CLOSE_1,
@@ -741,7 +742,7 @@ QUICKFIXCLOSE2 = Strategy(key="quickfixclose2", title="Quickfixclose2", rule4=CL
 # "no cap" is still a setting of the dial, still the dashed reference line on both charts,
 # and still the worst point of the family at equal drawdown, which is the finding that made
 # showing it in full redundant. Its outputs were deleted with it.
-REGISTRY = [QUICKFIX, QUICKFIXWICK, QUICKFIXCLOSE, QUICKFIXOPEN1, QUICKFIXCLOSE1,
+REGISTRY = [QUICKFIX, QUICKFIXWICK, QUICKFIXCLOSE0, QUICKFIXOPEN1, QUICKFIXCLOSE1,
             QUICKFIXOPEN2, QUICKFIXCLOSE2]
 BY_KEY = {s.key: s for s in REGISTRY}
 

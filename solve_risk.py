@@ -73,7 +73,7 @@ def main(argv):
         first_day = rp.first_trading_day(raw, all_days)
         risk = solve(raw, all_days, first_day)
         if risk is None:
-            # Not a failure. Quickfixclose lands here by construction: its exits are all on
+            # Not a failure. Quickfixclose0 lands here by construction: its exits are all on
             # the right side of entry on gross terms, so the account barely dips and no bet
             # size reaches a 6% hole. Which is exactly why it is published at a chosen 1%.
             print(f"{s.key:12} cannot reach {eng.TARGET_DD:g}% at any risk"

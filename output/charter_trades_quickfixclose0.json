@@ -1,8 +1,8 @@
 {
  "meta": {
-  "strategy": "quickfixclose",
-  "title": "Quickfixclose",
-  "cap": "close",
+  "strategy": "quickfixclose0",
+  "title": "Quickfixclose0",
+  "cap": "close0",
   "rule4": "exit = the entry bar's own close, flat the same day",
   "timeframe": "daily",
   "source": "strategy_tester",

@@ -1839,8 +1839,13 @@ def section_html(strategy, data, riskbar, daily):
             f"rest are listed with zero trades under <em>By market</em>. Capital moves only "
             f"when a trade closes; each new trade risks "
             f"<span class=\"riskecho\">{strategy.risk_pct:g}%</span> of liquid "
-            f"capital, the risk that holds this strategy to a {eng.TARGET_DD:g}% "
-            f"maximum drawdown. Figures are net of realistic slippage.")
+            # Only a SOLVED risk is the 6%-drawdown one. Saying so on a page published at a
+            # chosen 1% was a claim about work that was never done, and it was on six of the
+            # seven pages by 2026-07-31. Same test as page_title's "optimized".
+            + (f"capital, the risk that holds this strategy to a {eng.TARGET_DD:g}% "
+               f"maximum drawdown. " if strategy.risk_solved else
+               f"capital, a chosen figure rather than one solved for a drawdown budget. ")
+            + f"Figures are net of realistic slippage.")
     # The user's sentence (2026-07-28), with its em dashes turned into commas on the second
     # pass so the whole report is consistent. Everything that used to follow it (the
     # intraday-path caveat, commission, "evidence of an edge") was cut on the same

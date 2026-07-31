@@ -270,9 +270,12 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 .dlgbtns button.pri{background:var(--accent);border-color:var(--accent);color:#fff;}
 .dlgbtns button:hover{border-color:var(--accent);}
 .rep + .rep{margin-top:48px;padding-top:8px;}
-/* comparison page: the four Rule 4s side by side, then the two bar charts */
-.cmpcards{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);
-  border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:24px 0 0;}
+/* comparison page: every Rule 4 side by side, then the two bar charts. auto-fill rather
+   than a fixed 2 columns, so the grid follows the registry instead of leaving a half-width
+   orphan card whenever the count is odd (it went from four to seven on 2026-07-31). */
+.cmpcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;
+  background:var(--border);border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;margin:24px 0 0;}
 @media(max-width:720px){.cmpcards{grid-template-columns:1fr}}
 .cmpcard{background:var(--surface);padding:13px 16px 15px;}
 .cmpcard .nm{font-weight:650;font-size:14px;letter-spacing:-.01em;}
@@ -492,9 +495,9 @@ const REF_RISK = __REFRISK__;
 // Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
 // strategy on the page: two strategies sitting on the same cap are one run, stored once.
 // `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra` holds
-// the settings that are NOT caps (the entry-bar wick, the day close, the next open): same
-// packed rows, same replay, but not points on that axis, so a strategy sitting on one
-// carries neither the dial nor the sweep.
+// the settings that are NOT caps (the entry-bar wick and the five bar exits): same packed
+// rows, same replay, but not points on that axis, so a strategy sitting on one carries
+// neither the dial nor the sweep.
 //
 // Why this is precomputed while the risk % is replayed live: risk changes only the DOLLAR
 // SIZING of a fixed trade list, so the browser can redo the arithmetic. Rule 4 changes the
@@ -548,17 +551,18 @@ const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString
 // 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
 // a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
 // 'target_bar' = Quickfixwick's target, one tick past the entry bar's own wick.
-// 'exit_close' / 'exit_open' = the two BAR EXITS: the entry bar's own close (Quickfixclose)
-// and the open of the bar after it (Quickfixopen). Neither is a level that was reached, so
-// they are named for the moment rather than for a target.
+// 'exit_close' / 'exit_open' = the BAR EXITS. Neither is a level that was reached, so they
+// are named for the ORDER TYPE rather than for a target: a market-on-close and a
+// market-on-open. Which BAR it was sent on is the strategy, not the reason, so all five bar
+// exits share these two names and the blotter does not need five more.
 const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L",
   bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
   data_end:"data ended",open_at_end:"open at end",target_bar:"bar wick",
-  exit_close:"day close",exit_open:"next open"})[r]||r;
+  exit_close:"close exit",exit_open:"open exit"})[r]||r;
 
 // One calendar for every setting, so moving the cap dial does not shift the equity curve's
 // x-axis underneath the reader: 4R and 8R are drawn over exactly the same period, and so are
-// four different strategies on the comparison page.
+// every strategy on the comparison page.
 const DAYS = VARIANTS.days;
 const START_CAP = __STARTCAP__;
 
@@ -1978,22 +1982,27 @@ def build_report(picked):
 
 
 # --- comparison.html ------------------------------------------------------------------
-# The four strategies against each other, which is a question no strategy page can answer
-# and the cap section cannot either: the cap charts sweep ONE Rule 4 shape across its own
-# parameter, and three of these four have no such parameter.
+# Every registered strategy against every other, which is a question no strategy page can
+# answer and the cap section cannot either: the cap charts sweep ONE Rule 4 shape across its
+# own parameter, and all but one of these have no such parameter.
 #
 # Same two-chart argument as "Choosing the profit cap", one level up. First the real result
 # at a constant 1% risk, which is honest about what happened and cannot rank anything because
-# the drawdown is free to move; then the same four levered to a constant 6% drawdown, which
-# is the ranking. BARS rather than lines, because the x axis here is four names, not a
+# the drawdown is free to move; then the same set levered to a constant 6% drawdown, which
+# is the ranking. BARS rather than lines, because the x axis here is a list of names, not a
 # continuous number line -- joining them with a line would imply an ordering and a rate of
-# change between neighbours that do not exist.
+# change between neighbours that do not exist. (Even the five bar exits, which DO have a
+# natural order, are drawn as bars: they are a sequence of settings, not a measured axis.)
+#
+# Everything that would have to be recounted is generated from len(REGISTRY): the page went
+# from four strategies to seven on 2026-07-31 and the only thing that had to change was the
+# text that had "four" typed into it, which is exactly the thing this replaces.
 COMPARISON_PATH = eng.OUT_DIR / "comparison.html"
 
 COMPARISON_HTML = r"""
   <header>
     <div class="eyebrow">__EYEBROW__</div>
-    <h1>Four ways to take the profit</h1>
+    <h1>__NWORD__ ways to take the profit</h1>
     <p class="lede">__LEDE__</p>
   </header>
 
@@ -2001,7 +2010,7 @@ COMPARISON_HTML = r"""
 
   <section class="card sweepcard">
     <div class="charthead">
-      <span class="t">The four strategies at a constant 1% risk per trade</span>
+      <span class="t">All __N__ strategies at a constant 1% risk per trade</span>
       <span class="s">real result &middot; drawdown varies &middot; not a ranking</span>
     </div>
     <p class="chartnote">What each one actually did on the same fixed bet, over the same days
@@ -2017,7 +2026,7 @@ COMPARISON_HTML = r"""
 
   <section class="card sweepcard">
     <div class="charthead">
-      <span class="t">The same four levered to a constant 6% drawdown</span>
+      <span class="t">The same __N__ levered to a constant 6% drawdown</span>
       <span class="s">risk solved per strategy &middot; equal pain &middot; this is the ranking</span>
     </div>
     <p class="chartnote">Risk is a free variable, so the honest question is: held to the
@@ -2057,10 +2066,10 @@ COMPARISON_HTML = r"""
 """
 
 COMPARISON_JS = r"""<script>
-// ---- comparison.html: the four strategies against each other ----------------------
+// ---- comparison.html: every strategy against every other --------------------------
 // It calls the SAME `simulate`, `statsAt` and `leveredAt` as the strategy pages (CORE_JS),
 // so a figure here and the same figure on a strategy page cannot disagree. What is different
-// is only the x axis: four Rule 4 SHAPES rather than one shape's parameter.
+// is only the x axis: one bar per registered Rule 4 rather than one shape's parameter.
 const $ = k => document.querySelector('[data-el="'+k+'"]');
 
 // Every registered strategy, at its own Rule 4 token. Order is the registry's, which puts
@@ -2080,8 +2089,12 @@ const riskTxt = v => v==null?"—":v.toFixed(2)+"%";
 // BARS, ZERO BASELINE, always. A bar's length is read as its value, so a truncated axis
 // would misstate every comparison on the page -- which is exactly the thing these two charts
 // exist to get right. The panes still auto-scale their TOP, so a pane's pixel height is how
-// much of the spread between the four is visible; the heights match the cap section's
+// much of the spread across the strategies is visible; the heights match the cap section's
 // (250px main, 90px readouts) for the same reason they were raised there.
+//
+// Bar width, label size and the x-axis type all scale with HOW MANY strategies there are, so
+// the chart survives the registry growing (four to seven on 2026-07-31) instead of running
+// the names into each other.
 function barPlotter(plotEl, svgEl, tipEl, tipRows){
   let g=null;
   function draw(items, panels){
@@ -2095,9 +2108,13 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
     while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
 
     const n=items.length, slot=plotW/n;
-    // A generous gap between neighbours: bars this few should not read as one block, and the
-    // value labels above them need room not to collide.
-    const bw=Math.min(slot-30, 104), cx=i=> mL+slot*i+slot/2;
+    // A gap between neighbours: a handful of bars should not read as one block, and the
+    // value labels above them need room not to collide. It narrows as the count grows, but
+    // never below a third of the slot, so the bars stay bars.
+    const bw=Math.min(Math.max(slot-30, slot*0.66), 104), cx=i=> mL+slot*i+slot/2;
+    // Value and name label sizes, stepped down as the axis fills up. The names are the long
+    // ones ("Quickfixclose2" is 14 characters), so they get the earlier step.
+    const vSize=n>6?11.5:12.5, nSize=n>6?10:n>4?11:12;
     const ys=[];
 
     panels.forEach((p,pi)=>{
@@ -2155,11 +2172,11 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
             y1:(ty+8+d).toFixed(1), y2:(ty+3+d).toFixed(1),
             stroke:"var(--surface)","stroke-width":2.5})));
         }
-        // Direct label on every bar. Four bars is few enough that labelling all of them is
-        // clearer than a hover-only readout, and it means the chart is still readable in the
-        // printed PDF, where nothing can be hovered.
+        // Direct label on every bar. A handful of bars is few enough that labelling all of
+        // them is clearer than a hover-only readout, and it means the chart is still readable
+        // in the printed PDF, where nothing can be hovered.
         const lab=txt(cx(i),ty-7,(p.mfmt||p.fmt)(v)+(off?" ▲":""),"middle",
-                      pi===0?12.5:11,"var(--ink)");
+                      pi===0?vSize:11,"var(--ink)");
         if(pi===0) lab.setAttribute("font-weight",600);
         svgEl.appendChild(lab);
       });
@@ -2167,7 +2184,7 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
 
     // x axis: the strategy names, written once under the last pane.
     items.forEach((q,i)=>{
-      svgEl.appendChild(txt(cx(i),H-10,q.s.title,"middle",12,"var(--ink2)"));
+      svgEl.appendChild(txt(cx(i),H-10,q.s.title,"middle",nSize,"var(--ink2)"));
     });
 
     // Hover: a full-height hit slot per strategy, so the target is the column and not the
@@ -2208,7 +2225,7 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
 // risk red, return/DD slate, win rate ink. Colour here says WHICH MEASURE, not which
 // strategy -- the strategies are already named on the axis and every bar is labelled with
 // its own value, so spending the colour channel on identity would buy nothing and would put
-// four hues in a place that needs none.
+// seven hues in a place that needs none.
 const FIXED_PANELS = () => [
   {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
   {k:"dd", h:90, abs:1, color:"var(--neg)", label:"MAX DRAWDOWN", fmt:v=>v.toFixed(1)+"%"},
@@ -2251,7 +2268,7 @@ function renderFindings(){
   const r2=v=>Math.abs(v).toFixed(2);
   $("fxfindings").innerHTML = h("Why this one cannot rank them",
     `Best here is <b>${fxBest.s.title}</b> at <b>${fmtUSD(fxBest.final)}</b>. But on the same `+
-    `1% bet these four dig completely different holes, <b>${r2(ddHi.dd)}%</b> for `+
+    `1% bet these ${fx.length} dig completely different holes, <b>${r2(ddHi.dd)}%</b> for `+
     `${ddHi.s.title} against <b>${r2(ddLo.dd)}%</b> for ${ddLo.s.title}, so they are not `+
     `being asked the same question and the tallest bar is not the answer to it. Return over `+
     `drawdown is on this chart for that reason, and it is also where the limit of the metric `+
@@ -2319,12 +2336,16 @@ window.addEventListener("beforeprint", renderAll);
 </script>"""
 
 
-def build_comparison():
-    """comparison.html -- the four strategies against each other, on one shared account.
+NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
+                "Nine", "Ten", "Eleven", "Twelve"]
 
-    It carries a TRIMMED variant grid: the four tokens the page actually prices, not all 75.
+
+def build_comparison():
+    """comparison.html -- every registered strategy against the others, one shared account.
+
+    It carries a TRIMMED variant grid: only the tokens the page actually prices, not all 75.
     The full grid is 430 KB and exists so the strategy pages can move a cap dial; this page
-    has no dial and would only be paying to ship 71 settings nobody can reach from it.
+    has no dial and would only be paying to ship settings nobody can reach from it.
     """
     variants = load_variants()
     want = {s.token for s in strategies.REGISTRY}
@@ -2339,9 +2360,10 @@ def build_comparison():
     slim["labels"] = {t: variants["labels"][t] for t in want}
     slim["texts"] = {t: variants["texts"][t] for t in want}
 
+    n_strat = len(strategies.REGISTRY)
     eyebrow = (f"Strategy comparison &middot; daily &middot; "
                f"${eng.STARTING_CAPITAL / 1000:.0f}k starting capital")
-    lede = (f"All {len(strategies.REGISTRY)} strategies share <b>rules 1 to 3</b> exactly, so "
+    lede = (f"All {n_strat} strategies share <b>rules 1 to 3</b> exactly, so "
             f"they take the <b>same setups on the same bars</b>, and the only thing that "
             f"differs is Rule 4, where the profit is taken. Everything below is therefore a "
             f"comparison of <b>exits and nothing else</b>. One shared account per strategy, "
@@ -2358,8 +2380,12 @@ def build_comparison():
             f"reversal level intraday and a fill at that day's close, and because the entry "
             f"trigger requires the close to be beyond the entry price it can only lose when "
             f"slippage exceeds the move, which is why its drawdown is near zero. "
-            f"<b>Quickfixopen</b> assumes the next open is fillable and carries no stop, so "
-            f"an adverse gap costs more than 1R. Neither is a free lunch, both are the "
+            f"<b>Quickfixopen1</b> assumes the next open is fillable and its stop cannot "
+            f"trade ahead of that open, so an adverse gap costs more than 1R. The three "
+            f"longer holds do carry a live stop on every bar in between, which is what makes "
+            f"them a different question rather than more of the same one, but they inherit "
+            f"the same daily-bar assumption: a stop inside a bar's range is taken as hit "
+            f"before that bar's close. None of this is a free lunch, all of it is the "
             f"daily-proxy assumption showing through, and intraday prices are what would "
             f"settle it.")
     footer = (f"source: &lt;strategy&gt;_portfolio_daily.xlsx and _variants.json &middot; "
@@ -2376,6 +2402,9 @@ def build_comparison():
             '</span></nav>\n'
             + COMPARISON_HTML
             .replace("__EYEBROW__", eyebrow)
+            .replace("__NWORD__", NUMBER_WORDS[n_strat]
+                     if n_strat < len(NUMBER_WORDS) else str(n_strat))
+            .replace("__N__", str(n_strat))
             .replace("__LEDE__", lede)
             .replace("__NOTE__", note)
             .replace("__FOOTER__", footer)

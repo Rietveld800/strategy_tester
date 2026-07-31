@@ -37,10 +37,14 @@
 #               nearer reversal moves a reversal target in and an elected one falls away.
 #               Only OPPOSITE-side reversals ever close a trade early (bearish for a short,
 #               bullish for a long) -- never a same-side one. Resolved by `check_exit`.
-#             a BAR EXIT (Quickfixclose's day close, Quickfixopen's next open), which names a
-#               price off the bar itself instead of watching a level. Nothing for `check_exit`
-#               to resolve, so it is taken as given -- and it is the ONLY thing that may
-#               close a trade on its own entry bar.
+#             a BAR EXIT (the five "out at bar k's open / close" strategies), which names a
+#               price off the bar itself instead of watching a level. There is no TARGET for
+#               `check_exit` to resolve, so the named price is taken as given -- and it is the
+#               ONLY thing that may close a trade on its own entry bar. The STOP still runs
+#               underneath it on every bar the trade is held through, since the stop is not
+#               Rule 4: an open exit is taken before the stop (nothing trades ahead of a
+#               bar's first price), a close exit after it (a stop triggers intraday, a
+#               market-on-close fires at the bell).
 #           The cap is a DIAL, not a constant: `run_markets` backtests the whole
 #           strategies.CAP_CHOICES grid in one pass so the reports can move it, plus each
 #           registered strategy's own Rule 4 for the ones that are not caps at all.
@@ -80,6 +84,11 @@
 #     there. A BAR EXIT is the one exception, and only because it watches no level:
 #     Quickfixclose is marked out at that same bar's close, which is a price the bar has
 #     already printed rather than one we are guessing the path to.
+#   - a bar exit that fires LATER than bar 1 is held through whole bars it did not enter on,
+#     and the stop is live on every one of them (see `no_target`). So the gap rules, the
+#     bigger-than-1R gapped stop and the -1R convention all apply to Quickfixclose1,
+#     Quickfixopen2 and Quickfixclose2 exactly as they do to a target strategy; what those
+#     three do NOT have is a target that could be ambiguous against the stop.
 
 import json
 import sys
@@ -362,6 +371,20 @@ def check_exit(policy, pos, bar, bull, bear, prev_close):
     return None
 
 
+def no_target(pos, bull, bear):
+    """A target policy that never has a target: 'only the stop is watching this bar'.
+
+    This is how a BAR EXIT gets the stop. Rule 4 is the exit rule, and the stop is not Rule 4
+    (user, 2026-07-31), so a bar exit that holds the trade past its entry bar is stopped out
+    on the bars in between exactly as any other strategy would be, gap fills and all. Passing
+    this to `check_exit` reuses that shared machinery rather than writing a second, subtly
+    different stop test beside it: with no target, `check_exit` reduces to the gapped-stop
+    branch and the in-range stop branch, and neither the ambiguity case nor the target gap
+    can arise.
+    """
+    return None, "none"
+
+
 def r_multiple(pos, exit_price):
     if pos["side"] == "short":
         return (pos["entry"] - exit_price) / pos["risk"]
@@ -381,7 +404,8 @@ def backtest(bars, tick, dp, rule4, close_at_end=False, risk_pct=None):
     `check_exit`, or a BAR EXIT that names a price off the bar itself. A bar exit is also
     the only thing allowed to close a trade on its own ENTRY bar, so it is called once at
     k=0 immediately after the entry is booked; a target policy is not, and management for it
-    starts the next bar as it always has.
+    starts the next bar as it always has. On every LATER bar a bar exit runs beside the stop
+    rather than instead of it (`no_target`), ordered by `rule4.bar_exit_at`.
 
     `close_at_end` decides what happens to a position still open on the LAST bar:
       False (active market)   -> reported as 'open_at_end', unrealized, no P&L. The market
@@ -411,9 +435,24 @@ def backtest(bars, tick, dp, rule4, close_at_end=False, risk_pct=None):
         # 1) manage an open position on this bar (never enter and manage same bar)
         if pos is not None:
             if bar_exit is not None:
-                # A bar EVENT, not a level: no stop test, no gap test, no ambiguity, because
-                # there is no path to guess at. The rule reads a price off the bar.
+                # A bar EVENT, not a level: there is no target to be ambiguous about, and the
+                # rule reads a price straight off the bar. But the STOP is not Rule 4, so it
+                # is still watching every bar the trade is held through (user, 2026-07-31) --
+                # which matters as soon as a bar exit fires later than bar 1.
+                #
+                # The order on the exit bar is not a guess:
+                #   an OPEN exit wins outright. The open is the bar's first price, so nothing
+                #     can have traded ahead of it. (A stop the open gapped through would fill
+                #     at that same open anyway, so the two agree even then.)
+                #   a CLOSE exit yields to the stop. A stop triggers the moment price touches
+                #     it; a market-on-close waits for the bell. So a stop inside that bar's
+                #     range was hit first, and it is resolved with the usual gap handling.
+                # `Rule4.bar_exit_at` is which of the two.
                 hit = bar_exit(pos, bar, i - pos["entry_index"])
+                if hit is None or rule4.bar_exit_at != "open":
+                    stopped = check_exit(no_target, pos, bar, sig_bull, sig_bear, prev.close)
+                    if stopped is not None:
+                        hit = stopped
             else:
                 # prev.close is the last price before this bar opened -- the reference the
                 # gap test needs to tell a jump OVER the target from a target that was

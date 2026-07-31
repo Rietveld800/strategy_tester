@@ -12,7 +12,7 @@
 #                       cap-family strategy is just a dial position, so the useful comparison
 #                       on a price chart is a handful of caps (2026-07-27).
 #   CHARTER_STRATEGIES  strategies whose Rule 4 is NOT a cap, exported by KEY because there
-#                       is no cap number to name the file after. All three of them: they are
+#                       is no cap number to name the file after. All six of them: they are
 #                       genuinely different exits, so seeing them against each other on the
 #                       price bars is the point.
 #
@@ -20,12 +20,12 @@
 # exported and is on no grid the reports draw. run_pipeline backtests whatever it names.
 #
 # Each trade carries the entry/exit the way it plots on price: entry at the first-reversal
-# price on the entry bar, exit at the fill level (R cap / entry-bar wick / the day's close /
-# the next open / stop / opposite reversal) on the exit bar. An 'unknown_pl' trade is booked
-# at the stop, so its exit price is the stop. An 'open_at_end' trade never exited, so
-# exit_date/exit are null (charter draws it as open). A quickfixclose trade exits on its OWN
-# entry bar, so its entry marker and its exit marker land on the same bar -- correct, and the
-# only overlay where that happens.
+# price on the entry bar, exit at the fill level (R cap / entry-bar wick / bar k's open or
+# close / stop / opposite reversal) on the exit bar. An 'unknown_pl' trade is booked at the
+# stop, so its exit price is the stop. An 'open_at_end' trade never exited, so exit_date/exit
+# are null (charter draws it as open). A quickfixclose trade exits on its OWN entry bar, so
+# its entry marker and its exit marker land on the same bar -- correct, and the only overlay
+# where that happens.
 #
 #   python export_charter_trades.py
 #
@@ -53,11 +53,18 @@ import strategies
 # comparison the tight caps are worth reading against.
 CHARTER_CAPS = [1.9, 2.0, 2.25, 2.5, 5.0]
 
-# Strategies outside the cap family, exported whole (2026-07-28). Unlike the caps these are
-# worth drawing TOGETHER: they do not share a Rule 4 shape, so their exits land on genuinely
-# different bars and prices instead of fanning off one point. Read against a cap overlay they
-# show the whole spread of what "take the profit" can mean on one setup.
-CHARTER_STRATEGIES = ["quickfixwick", "quickfixclose", "quickfixopen"]
+# Strategies outside the cap family, exported whole (2026-07-28; the three later bar exits
+# added 2026-07-31). Unlike the caps these are worth drawing TOGETHER: their exits land on
+# genuinely different BARS, not just different prices on one bar, so on a price chart they
+# fan out across the days after the entry instead of off a single point. Read against a cap
+# overlay they show the whole spread of what "take the profit" can mean on one setup.
+#
+# Listed in hold order, which is also how they read on the chart, left to right from the
+# entry bar. Charter lists the boxes in FILENAME order, so it will sort them alphabetically
+# (quickfixclose, quickfixclose1, quickfixclose2, quickfixopen1, quickfixopen2, quickfixwick)
+# rather than in this one; nothing depends on the order here.
+CHARTER_STRATEGIES = ["quickfixwick", "quickfixclose", "quickfixopen1", "quickfixclose1",
+                      "quickfixopen2", "quickfixclose2"]
 
 
 def charter_key(cap):

@@ -17,7 +17,7 @@ is taken**.
 |---|---|---|---|
 | **quickfix** | the **cap family** at **1.9R**: the first opposite reversal beyond entry, never past 1.9R | **1.39%**, solved | yes |
 | **quickfixwick** | one tick past the **entry bar's own wick**, fixed at entry | 1.0%, chosen | no |
-| **quickfixclose** | the close of **bar 0**, the entry bar itself: flat the same day | 1.0%, chosen | no |
+| **quickfixclose0** | the close of **bar 0**, the entry bar itself: flat the same day | 1.0%, chosen | no |
 | **quickfixopen1** | the open of **bar 1**, held through one night | 1.0%, chosen | no |
 | **quickfixclose1** | the close of **bar 1**, one night and the next full day | 1.0%, chosen | no |
 | **quickfixopen2** | the open of **bar 2**, two nights and the day between | 1.0%, chosen | no |
@@ -26,7 +26,7 @@ is taken**.
 **Bars are numbered from the entry bar, which is bar 0** (user, 2026-07-31). The last five are
 one family — a **bar exit** — parameterised by which bar the trade is marked out on, and their
 keys say which. `quickfixopen1` was plain `quickfixopen` until bar 2's open was registered
-beside it; `quickfixclose` keeps its bare name, by the user's choice, and is bar 0.
+beside it; `quickfixclose0` keeps its bare name, by the user's choice, and is bar 0.
 
 quickfix's settings are the levered-optimal point of its family, not a guess: 1.9R tops the
 constant-6%-drawdown chart and 1.39% is the risk that puts it there. Its cap is a **dial on
@@ -98,7 +98,7 @@ below the entry bar's low. Rule 3: nearest bullish reversal above entry ≥ 3.5R
 |---|---|---|
 | **quickfix** | The cap family at **cap = 1.9R**: take profit at 1.9R, or at an opposite reversal that sits **closer** than 1.9R (then that reversal is the target). | Takes profit fast. 1.9R is a hard ceiling on every winner. |
 | **quickfixwick** | One tick **below the entry bar's own low** (a short; the long is the mirror), fixed at entry and never moving. | Stop and target are the two sides of the entry bar. A bet on the initial energy of the move. |
-| **quickfixclose** | The close of **bar 0** — the entry bar itself. Opened and shut on the same day. | Never carries overnight. Cannot lose on gross terms. |
+| **quickfixclose0** | The close of **bar 0** — the entry bar itself. Opened and shut on the same day. | Never carries overnight. Cannot lose on gross terms. |
 | **quickfixopen1** | The open of **bar 1**, the bar that follows the entry bar, unconditionally. | Holds through one nightly session and no further. What it earns is what the night did. |
 | **quickfixclose1** | The close of **bar 1**. | Gives the move one whole session to work, with a live stop under it for that session. |
 | **quickfixopen2** | The open of **bar 2**. | quickfixopen1 with one more day of room, and a real floor under that day. |
@@ -115,7 +115,7 @@ levels: there is no target the market could have filled and nothing to be ambigu
 there is nothing for that half of the machinery to resolve. Their Rule 4 is a **bar exit**,
 `bar_exit(pos, bar, k) -> (price, reason) | None`, where `k` is bars since entry and is the
 family's only parameter. `k = 0` is the entry bar, and a bar exit is **the only thing in this
-engine allowed to close a trade there** — which is what makes quickfixclose expressible at
+engine allowed to close a trade there** — which is what makes quickfixclose0 expressible at
 all. `engine.backtest` calls it once at `k = 0` immediately after booking the entry; a target
 policy is never called there, and management for it starts the next bar as it always has.
 
@@ -140,8 +140,8 @@ On the **exit bar** the order between the two is not a guess:
 
 `Rule4.bar_exit_at` is which of the two, and the class refuses a bar exit without it.
 
-**The stop never trades on quickfixclose or quickfixopen1** — but that is a *consequence*,
-not a rule, and it does not survive a longer hold. quickfixclose is shut on the bar that
+**The stop never trades on quickfixclose0 or quickfixopen1** — but that is a *consequence*,
+not a rule, and it does not survive a longer hold. quickfixclose0 is shut on the bar that
 opened it, and the stop sits one tick beyond that bar's own already-spent extreme;
 quickfixopen1 is shut at the *first price* of the next bar, so nothing can trade ahead of it.
 On those two the stop still **sizes** the position — 1R is the stop distance, and Rule 3 still
@@ -150,12 +150,12 @@ quickfixopen1 out for well over 1R, which is the same arithmetic as a gapped sto
 else here, except that on quickfixopen1 *every* exit is at an open, so it is not a rare case.
 
 On **quickfixclose1, quickfixopen2 and quickfixclose2** the stop is a floor again, and the
-figures say so plainly: at a flat 1% quickfixclose1 wins 65% against quickfixclose's 97%, and
+figures say so plainly: at a flat 1% quickfixclose1 wins 65% against quickfixclose0's 97%, and
 holds 4.62% of drawdown against 0.06%. That is not the same strategy held longer, it is a
 different question — and it is why the two-bar holds book **fewer** trades (87 against 105),
 since a market held for three days is a market not available for the next signal.
 
-**quickfixclose cannot lose on gross terms**, and that follows from the entry rule rather
+**quickfixclose0 cannot lose on gross terms**, and that follows from the entry rule rather
 than from a flattering assumption: the trigger requires the bar to close **beyond** the entry
 price (a short only fires when the close is below the first reversal, which is where it
 filled), so marking out at that same close is always on the right side of entry. Its losers
@@ -167,7 +167,7 @@ way rather than as a free lunch.
 
 Two figures on its page look broken and are not: **max concurrent 0** and **time in market
 0%**. Entries and exits both land inside one day, so nothing is ever held when a day is
-counted. The KPI subtitles say so. Note that this is quickfixclose alone: quickfixclose1 is
+counted. The KPI subtitles say so. Note that this is quickfixclose0 alone: quickfixclose1 is
 held overnight like anything else and reports 4 and 42%.
 
 #### The cap family — one policy, one number
@@ -195,7 +195,7 @@ that market sooner, and one position per market at a time means a later signal c
 that a longer hold would have blocked. Changing the cap changes the trade list, which is why
 each setting is a real backtest rather than something the page could recompute. The same
 mechanism is why the seven strategies do not have identical trade counts either — on the
-current data quickfixclose books **105** where quickfix books 92 and the two-bar holds book
+current data quickfixclose0 books **105** where quickfix books 92 and the two-bar holds book
 87, purely because of how long each one keeps the market to itself.
 
 #### Adding another bar, or another shape
@@ -225,13 +225,13 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   the **day after** entry. The entry bar's high/low are already spent by the time its close
   confirms the trade, and by construction the stop sits one tick beyond that bar's own
   extreme, so it cannot trigger there either. The one exception is a **bar exit**, and only
-  because it watches no level: quickfixclose is marked out at that same bar's close, which is
+  because it watches no level: quickfixclose0 is marked out at that same bar's close, which is
   a price the bar has already printed rather than one whose path we would have to guess.
 - Everything below about **targets** governs quickfix and quickfixwick alone. A bar exit
   names a price, so there is no target gap test, no target in-range test and no ambiguity for
   it. Everything below about the **stop** governs the three longer bar exits too, since their
   stop is live on every bar they are carried through. What all of them inherit is the same
-  honesty problem in a different place — quickfixclose assumes one daily bar can give us both
+  honesty problem in a different place — quickfixclose0 assumes one daily bar can give us both
   a fill at the reversal intraday and a fill at that day's close, quickfixopen1 and
   quickfixopen2 assume an open is fillable, and quickfixclose1/quickfixclose2 assume a stop
   inside a bar's range was hit before that bar's close.
@@ -270,7 +270,7 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   market-on-close and a market-on-open are scheduled orders placed into the most liquid
   minutes of the session, not a stop fired into a move nobody chose the timing of. Same
   reasoning already applied to `data_end`. It matters more here than anywhere else — at two
-  ticks round trip it is the difference between a winner and a loser on quickfixclose's
+  ticks round trip it is the difference between a winner and a loser on quickfixclose0's
   smallest trades, and those trades are the *only* way it loses at all. A bar-exit trade that
   is **stopped out** is charged the stop rate like any other stop; only the scheduled exit
   gets the limit rate.
@@ -464,7 +464,7 @@ number came from:
 |---|---|---|---|
 | quickfix (1.9R) | **1.39%** | 1.39% of liquid capital | **solved**: the risk that puts it at a 6% max drawdown (`engine.TARGET_DD`) |
 | quickfixwick | 1.0% | 1.0% | **chosen** (user, 2026-07-28) |
-| quickfixclose | 1.0% | 1.0% | **chosen** |
+| quickfixclose0 | 1.0% | 1.0% | **chosen** |
 | quickfixopen1 | 1.0% | 1.0% | **chosen** |
 | quickfixclose1 | 1.0% | 1.0% | **chosen** |
 | quickfixopen2 | 1.0% | 1.0% | **chosen** |
@@ -473,7 +473,7 @@ number came from:
 Publishing at the *solved* risk is what makes two strategies comparable at equal **pain**
 rather than equal bet size, and it is still how quickfix is published. The six quick exits
 are deliberately not: their exits are fast enough that the R scale stops meaning much, and
-quickfixclose barely draws down at all, so a 6%-drawdown solve either does not converge or
+quickfixclose0 barely draws down at all, so a 6%-drawdown solve either does not converge or
 hands back a bet nobody would take. Comparing all seven at equal drawdown is the job of
 [the comparison page](#the-comparison-page), which solves the leverage *there* instead of
 baking it into the published defaults.
@@ -518,7 +518,7 @@ invariants below — none of which a new bar touches.
 
 Each at its own **published default** risk, which is why the drawdown row is not constant:
 
-| | quickfix (1.9R) | quickfixwick | quickfixclose | quickfixopen1 | quickfixclose1 | quickfixopen2 | quickfixclose2 |
+| | quickfix (1.9R) | quickfixwick | quickfixclose0 | quickfixopen1 | quickfixclose1 | quickfixopen2 | quickfixclose2 |
 |---|---|---|---|---|---|---|---|
 | Risk per trade | 1.39% | 1.0% | 1.0% | 1.0% | 1.0% | 1.0% | 1.0% |
 | Net return | +238.47% | +324.80% | +404.20% | +329.77% | **+431.97%** | +314.06% | +297.56% |
@@ -549,7 +549,11 @@ comparison page exists.
 | quickfixwick | 0.800% | $321,960 |
 | quickfixopen2 | 0.512% | $214,049 |
 | quickfixclose2 | 0.504% | $208,153 |
-| quickfixclose | — | never reaches 6% at any bet size |
+| quickfixclose0 † | 1.000% (its own) | $504,201, at a 0.06% drawdown |
+
+† **exempt**: it never reaches 6% at any bet size, so it keeps its published 1% and is not in
+this ranking. It is still shown, drawn hollow, because a blank column tells the reader
+nothing, but its capital is not comparable to the rows above it.
 
 The two **one-bar** holds are far ahead, and the mechanism is visible in the table above:
 they hold 4.2–4.6% of drawdown at a 1% bet where quickfixwick holds 7.5% and the two-bar
@@ -564,7 +568,7 @@ their drawdown roughly triples, their losing runs get longer (6 and 5), and they
 market for a third day, which costs them 5 trades outright (87 against 92). That is the
 clearest thing the three new strategies say.
 
-**Read the fill assumptions before reading any of this as a result.** quickfixclose's 97.1%
+**Read the fill assumptions before reading any of this as a result.** quickfixclose0's 97.1%
 and near-zero drawdown are the entry rule and the daily-proxy model showing through, not an
 edge to trade; quickfixopen1 has no stop that can trade, so its tail is an overnight gap; and
 the three longer holds rest on a stop inside a daily bar's range having been hit before that
@@ -628,7 +632,7 @@ specific peaks will not.
 
 ## Outputs (`output/`)
 
-Per strategy, `<strategy>` being one of `quickfix`, `quickfixwick`, `quickfixclose`,
+Per strategy, `<strategy>` being one of `quickfix`, `quickfixwick`, `quickfixclose0`,
 `quickfixopen1`, `quickfixclose1`, `quickfixopen2`, `quickfixclose2`.
 
 - **`<strategy>_gold_daily.json`** — single-market ledger: `meta`, `trades` (entry/exit,
@@ -671,7 +675,9 @@ one level up — across **strategies** instead of across caps.
    tallest capital bar is partly just the deepest hole.
 2. **Levered to a constant 6% drawdown** — the ranking. Panes: final capital, **the risk each
    strategy is allowed**, **win rate**. Solved per strategy by the same bisection
-   `solve_risk.py` uses, at the same `TARGET_DD`.
+   `solve_risk.py` uses, at the same `TARGET_DD`. A strategy that never reaches 6% at any bet
+   size is **exempt**: it keeps its own published risk and is drawn hollow with a **†** (see
+   [the exemption](#the-comparison-page) below).
 
 Return/drawdown is on the first chart only, for the same reason it is on only the first cap
 chart: on the levered one the drawdown is pinned by construction, so the pane would redraw
@@ -700,17 +706,23 @@ code in one place and its wording in none.
 
 Two cases the page had to handle honestly rather than hide:
 
-- **The outlier.** quickfixclose's return/drawdown is around 7000x, because its drawdown is a
+- **The outlier.** quickfixclose0's return/drawdown is around 7000x, because its drawdown is a
   rounding error. Scaled naively that one bar flattens the other three to stubs. So a value
   orders of magnitude above the rest is scaled to *the rest* and its bar is drawn **broken**
   at the top of the pane, with a break mark and its true value labelled and flagged `▲`. The
   label carries the number; the bar only says "off this scale". Written generally, not
   special-cased to that pane.
-- **The missing bar.** quickfixclose has no 6%-drawdown risk *at any bet size*, so the
-  levered chart draws **no bar and prints `n/a`**. A zero-height bar would say "it earns
-  nothing" instead of "the question does not apply", and the generated prose spells out that
-  this is a result rather than a gap — and points at the fill assumptions rather than letting
-  it read as a free lunch.
+- **The exemption.** quickfixclose0 has no 6%-drawdown risk *at any bet size*, so on the
+  levered chart it is priced at its **own published 1%** instead and marked **†** (user,
+  2026-07-31). Its bars are drawn **hollow and dashed** in every pane, so the chart has a bar
+  for every strategy while making it obvious that this one is not on the chart's own basis.
+  It is excluded from the ranking — it can never be labelled *Optimal point*, because
+  comparing $504k at a 0.06% drawdown with $846k at a 6% one compares two different
+  questions — and the chart note, the tooltip, the table cells and the generated prose all
+  say so. It used to draw no bar at all and print `n/a`, which was honest but left a blank
+  column for the reader to interpret. A **zero-height** bar is still never drawn: that would
+  say "it earns nothing" rather than "the question does not apply", and the `n/a` branch
+  survives for a pane with genuinely no value.
 
 It calls the **same** `simulate`, `statsAt` and `leveredAt` as the strategy pages: those were
 hoisted out of `mountReport` into a shared `CORE_JS` block for exactly this, so there is one
@@ -1125,14 +1137,14 @@ shapes:
   and MUST be here**, or the charts draw every cap except the one the strategy actually runs
   at; it was added on 2026-07-28 when the default moved there, and it has to move again if
   the default does. The rest bracket it: 2R–2.5R is the levered band, 5R a wider comparison.
-- `CHARTER_STRATEGIES` — all six non-cap strategies: **quickfixwick, quickfixclose,
+- `CHARTER_STRATEGIES` — all six non-cap strategies: **quickfixwick, quickfixclose0,
   quickfixopen1, quickfixclose1, quickfixopen2 and quickfixclose2**, exported by key because
   there is no cap number to name the file after. Unlike the caps, these are worth drawing
   *together*: their exits land on genuinely different **bars**, not just different prices on
   one bar, so on the price pane they fan out across the days after the entry instead of off a
   single point. Read against a cap overlay they show the whole spread of what "take the
   profit" can mean on one setup. (Charter lists the boxes in filename order, so they come out
-  alphabetically — quickfixclose, quickfixclose1, quickfixclose2, quickfixopen1,
+  alphabetically — quickfixclose0, quickfixclose1, quickfixclose2, quickfixopen1,
   quickfixopen2, quickfixwick — not in hold order.)
 
 `export_charter_trades.py` also **prunes** any `charter_trades_*.json` it no longer owns,
@@ -1176,13 +1188,13 @@ is what "colour is the outcome" actually asks for.
 They name the **order type**, not the bar (a market-on-close, a market-on-open), so all five
 bar-exit strategies share them and adding a sixth would need no change in charter at all. The
 three longer holds also produce ordinary **`stop`** exits, drawn red like any other stop,
-because their stop is live on every bar the trade is carried through; only quickfixclose and
+because their stop is live on every bar the trade is carried through; only quickfixclose0 and
 quickfixopen1 never show one.
 
 Trade geometry only — the entry plots at the first-reversal price on the entry bar, the exit
 at the fill level on the exit bar. `unknown_pl` exits at the stop; `data_end` exits at the
 last bar's close (drawn grey — it is not a rule exit); `open_at_end` has null exit. A
-**quickfixclose** trade exits on its *own* entry bar, so its line is vertical and both its
+**quickfixclose0** trade exits on its *own* entry bar, so its line is vertical and both its
 markers sit on one bar — correct, and the only overlay that does it. charter reads this at
 build time and overlays the trades on each market's **daily** price pane behind a toggle.
 
@@ -1205,7 +1217,7 @@ To refresh the overlay alone, end to end:
    (append a market substring, e.g. `... gold`, for a fast single-market rebuild).
 3. In `../charter`: `venv\Scripts\python.exe serve.py`, open the site, and click the **T**
    button (green/red triangles) on the right rail. It opens the **Strategy trades box** —
-   one checkbox per exported overlay (1.9R, 2R, 2.25R, 2.5R, 5R, then quickfixclose,
+   one checkbox per exported overlay (1.9R, 2R, 2.25R, 2.5R, 5R, then quickfixclose0,
    quickfixclose1, quickfixclose2, quickfixopen1, quickfixopen2 and quickfixwick), each
    labelled with
    its own Rule 4 and its trade count — so you can show any combination or none. Long entry =

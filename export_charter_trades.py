@@ -23,7 +23,7 @@
 # price on the entry bar, exit at the fill level (R cap / entry-bar wick / bar k's open or
 # close / stop / opposite reversal) on the exit bar. An 'unknown_pl' trade is booked at the
 # stop, so its exit price is the stop. An 'open_at_end' trade never exited, so exit_date/exit
-# are null (charter draws it as open). A quickfixclose trade exits on its OWN entry bar, so
+# are null (charter draws it as open). A quickfixclose0 trade exits on its OWN entry bar, so
 # its entry marker and its exit marker land on the same bar -- correct, and the only overlay
 # where that happens.
 #
@@ -61,9 +61,9 @@ CHARTER_CAPS = [1.9, 2.0, 2.25, 2.5, 5.0]
 #
 # Listed in hold order, which is also how they read on the chart, left to right from the
 # entry bar. Charter lists the boxes in FILENAME order, so it will sort them alphabetically
-# (quickfixclose, quickfixclose1, quickfixclose2, quickfixopen1, quickfixopen2, quickfixwick)
+# (quickfixclose0, quickfixclose1, quickfixclose2, quickfixopen1, quickfixopen2, quickfixwick)
 # rather than in this one; nothing depends on the order here.
-CHARTER_STRATEGIES = ["quickfixwick", "quickfixclose", "quickfixopen1", "quickfixclose1",
+CHARTER_STRATEGIES = ["quickfixwick", "quickfixclose0", "quickfixopen1", "quickfixclose1",
                       "quickfixopen2", "quickfixclose2"]
 
 

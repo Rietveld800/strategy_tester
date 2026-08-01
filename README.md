@@ -425,7 +425,7 @@ bar exits:
 Either way, **delete the retired key's old outputs by hand** if you rename one. The charter
 hand-off prunes itself; the workbooks, the JSON ledgers and `equity_<key>.html` do not, so a
 renamed strategy leaves a full set of files behind under its old name (that is what happened
-to `quickfixopen` on 2026-07-31).
+to both `quickfixopen` and `quickfixclose` on 2026-07-31).
 
 Everything else — the runners, the workbooks, the variant grid, the pages, the strategy
 switcher, the PDF picker — follows from the registry. The pages leave the cap dial and the

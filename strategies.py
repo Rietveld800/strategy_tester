@@ -38,7 +38,7 @@
 #      quickfixopen2   the open  of bar 2   through two nights and one full day
 #      quickfixclose2  the close of bar 2   through two nights and two full days
 #
-#    (quickfixopen and quickfixclose0 were renamed quickfixopen1 and quickfixclose0 on
+#    (the old `quickfixopen` and `quickfixclose` were renamed quickfixopen1 and quickfixclose0 on
 #    2026-07-31; the number now says which bar, on every one of them, and nothing is left for
 #    the reader to infer.)
 #

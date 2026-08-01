@@ -253,7 +253,7 @@ Rule 4 shape is a new policy factory OR bar-exit factory plus a `Rule4` with `in
 the reason can be a win OR a loss, as the two bar-exit reasons can).
 RENAMING a strategy leaves its OLD outputs on disk: only the charter hand-off prunes itself,
 so `<key>_*.xlsx`, `_equity_<key>.json`, `<key>_gold_daily.json` and `equity_<key>.html` have
-to be deleted by hand (done for `quickfixopen` on 2026-07-31).
+to be deleted by hand (done for `quickfixopen` and `quickfixclose` on 2026-07-31).
 `build_equity_html.py` needs `_variants.json`, so `run_portfolio.py` must run first. `venv\`
 has pandas + openpyxl (`requirements.txt`). Reference market: gold futures.
 

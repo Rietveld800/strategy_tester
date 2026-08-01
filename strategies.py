@@ -29,18 +29,28 @@
 #
 # 3. THE BAR EXITS (`close_exit(k)` / `open_exit(k)`) -- a second FAMILY, parameterised by
 #    WHICH BAR the trade is marked out on. Bars are numbered from the entry bar: the entry
-#    bar is BAR 0, the bar after it is bar 1, and so on (user, 2026-07-31). Five of them are
-#    registered today:
+#    bar is BAR 0, the bar after it is bar 1, and so on (user, 2026-07-31). Twenty-three of
+#    them are registered today:
 #
-#      quickfixclose0  the close of bar 0   flat the same day
-#      quickfixopen1   the open  of bar 1   through one night
-#      quickfixclose1  the close of bar 1   through one night and the next full day
-#      quickfixopen2   the open  of bar 2   through two nights and one full day
-#      quickfixclose2  the close of bar 2   through two nights and two full days
+#      quickfixclose0            the close of bar 0    flat the same day
+#      quickfixopen1             the open  of bar 1    through one night
+#      quickfixclose1            the close of bar 1    through one night and the next full day
+#      quickfixopen2             the open  of bar 2    through two nights and one full day
+#      quickfixclose2            the close of bar 2    through two nights and two full days
+#      quickfixclose3 .. close20 the close of bar k    a HOLD SWEEP, k = 3 to 20 (2026-08-01)
 #
 #    (the old `quickfixopen` and `quickfixclose` were renamed quickfixopen1 and quickfixclose0 on
 #    2026-07-31; the number now says which bar, on every one of them, and nothing is left for
 #    the reader to infer.)
+#
+#    From k=3 up the family is a SWEEP, not a set of hand-picked shapes, and its prose is
+#    GENERATED (`close_texts`) rather than written. That is the split: bars 0, 1 and 2 each
+#    say something qualitatively different (bar 0 cannot lose on gross terms and has no live
+#    stop, bar 1's open has no live stop either but is all overnight, the first close exits
+#    are where a live stop and a real losing side arrive), so they keep their written
+#    paragraphs. Every bar from 3 on says the SAME thing with a different number in it --
+#    k full sessions, a live stop across all of them, the exit at the last bell -- so a
+#    generator is the honest form and 18 near-identical paragraphs would only invite drift.
 #
 # Shape 3 is NOT a price target, it is a BAR EVENT: "get out at this bar's close", "get out
 # at bar 2's open". No level is being watched, so `check_exit` has no target to resolve, and
@@ -253,9 +263,13 @@ def close_exit(k_exit=0):
       - THE STOP NEVER TRADES: it sits one tick beyond this very bar's extreme, which is
         already spent by the time the close confirms the entry. It still sizes the position.
 
-    At k_exit=1 (Quickfixclose1) and k_exit=2 (Quickfixclose2) both of those go away. The
-    trade is held through whole bars it did not enter on, so its close can land either side
-    of entry, and the stop is a real floor again on every one of those bars.
+    At k_exit=1 (Quickfixclose1) and every k_exit above it both of those go away. The trade is
+    held through whole bars it did not enter on, so its close can land either side of entry,
+    and the stop is a real floor again on every one of those bars.
+
+    k_exit runs to 20 in the registry (2026-08-01). Nothing here has an upper bound: the rule
+    returns None until its bar arrives, and a trade that never reaches it exits the ordinary
+    way (a stop, the end of the data, or still open at the last bar).
     """
     def rule(pos, bar, k):
         return (bar.close, "exit_close") if k == k_exit else None
@@ -354,7 +368,7 @@ class Rule4:
                   family and Quickfixwick.
       `bar_exit`  a BAR EVENT -- "bar 1's close", "bar 2's open". No level is being watched,
                   so there is no target for that machinery to resolve, and the engine takes
-                  the price the rule names. The five bar exits. It is also the only thing
+                  the price the rule names. The 23 bar exits. It is also the only thing
                   that may close a trade on its ENTRY bar.
 
     A bar exit MUST come with `bar_exit_at`, "open" or "close", which is not decoration: it
@@ -400,21 +414,23 @@ def cap_rule4(cap):
                  texts=cap_texts(cap), cap=cap, in_grid=True)
 
 
-# --- the six Rule 4 settings that are NOT caps ---------------------------------------
-# The entry-bar wick, and the five BAR EXITS (bar 0's close through bar 2's close).
+# --- the Rule 4 settings that are NOT caps, part 1: the WRITTEN ones -------------------
+# The entry-bar wick, and the first five BAR EXITS (bar 0's close through bar 2's close).
+# Bars 3 to 20 follow further down and are GENERATED; the split is explained there and in the
+# module docstring.
 #
-# Their prose is WRITTEN rather than generated. The bar exits are a family with one number in
-# them, so generating it was considered and dropped: what has to be said changes qualitatively
-# with that number rather than quantitatively. Bar 0's close cannot lose on gross terms and
-# has no live stop; bar 1's open has no live stop either but is all overnight; the three
-# longer holds have a live stop and a real losing side. A generator would have been three
-# branches and one shared sentence, which is worse than five paragraphs that each say what is
-# true. Phrased for the short side like every other rule text, and free of em dashes like all
-# report prose (user, 2026-07-28).
+# These six have their prose WRITTEN because at the short end of the family what has to be
+# said changes qualitatively with the bar number rather than quantitatively. Bar 0's close
+# cannot lose on gross terms and has no live stop; bar 1's open has no live stop either but is
+# all overnight; bar 1's close is where a live stop and a real losing side arrive. A generator
+# over those would have been three branches and one shared sentence, which is worse than five
+# paragraphs that each say what is true. From bar 3 on there are no branches left, which is
+# exactly why the sweep generates. Phrased for the short side like every other rule text, and
+# free of em dashes like all report prose (user, 2026-07-28).
 #
-# All six carry in_grid=False, so their pages drop the cap dial and the "Choosing the profit
-# cap" section: neither has anything to say about a strategy that is not a point on the cap
-# axis. That machinery is exactly what it was built for.
+# Every one of them carries in_grid=False, so their pages drop the cap dial and the "Choosing
+# the profit cap" section: neither has anything to say about a strategy that is not a point on
+# the cap axis. That machinery is exactly what it was built for.
 
 WICK = Rule4(
     token="wick",
@@ -556,18 +572,76 @@ CLOSE_2 = Rule4(
         rule4_text=(
             "Close the position at <b>the close of bar 2</b>, two bars after the entry bar. "
             "The trade is given two full sessions to work and is then marked out at the "
-            "second one's closing price, so it is the longest fixed hold of these exits. "
-            "<b>The stop is live</b> across both of those bars and fires ahead of the close "
-            "on the exit bar. What this asks is whether the reaction to the entry keeps "
-            "paying past the first day, or whether the move is spent by then."),
+            "second one's closing price. <b>The stop is live</b> across both of those bars "
+            "and fires ahead of the close on the exit bar. What this asks is whether the "
+            "reaction to the entry keeps paying past the first day, or whether the move is "
+            "spent by then, and the same question is asked at every bar from here to bar 20."),
         lede=(
-            "The longest fixed hold: the position is carried through two full price bars "
-            "and closed at the close of bar 2. The stop is live for both of them, so a "
+            "Two full sessions: the position is carried through two whole price bars and "
+            "closed at the close of bar 2. The stop is live for both of them, so a "
             "trade that turns is cut rather than held to the second bell."),
         caveat=(
             "a stop inside either bar's range is assumed to have been hit before that bar's "
             "close, which is true of a stop order but cannot be checked on a daily bar"),
     ))
+
+
+# --- the HOLD SWEEP: bar 3's close through bar 20's close (2026-08-01, user) ----------
+# Eighteen more settings of the SAME bar exit, and the first Rule 4 group in this project
+# whose prose is GENERATED. That is not a shortcut, it is what the shape is: from bar 3 on
+# there is one sentence to say and one number in it. Bars 0, 1 and 2 keep their written
+# paragraphs because each of them says something the others do not (see the module docstring);
+# every bar from 3 up says "held for k full sessions, stop live throughout, out at the bell",
+# and eighteen hand-typed variations on that would drift apart within a week.
+#
+# What the sweep is FOR: bars 0 to 2 showed that one bar is where the exit pays and the second
+# bar buys bigger winners at roughly triple the drawdown. That is two points and a direction,
+# not a curve. Running the same exit out to bar 20 turns "how long should the trade be held"
+# into a measured axis on the comparison page instead of an opinion.
+#
+# NOTE what a long hold does to the trade COUNT, because it is the mechanism to watch on those
+# charts and not a bug: one position per market at a time, so a trade still open on bar 19
+# blocks every signal that market gives in the meantime. A longer hold therefore takes FEWER
+# trades, and part of any difference between bar 3 and bar 20 is which setups each one was
+# free to take rather than what it made of them. Rules 1-3 are still identical.
+#
+# There is no cap and no target here: `in_grid=False` like every other non-cap Rule 4, so
+# these pages carry no cap dial and no "Choosing the profit cap" section.
+CLOSE_SWEEP_KS = list(range(3, 21))
+
+
+def close_texts(k):
+    """Every line of prose for a bar-k close exit, k >= 3. Generated, see above.
+
+    Phrased for the short side and free of em dashes, like all report prose. `k` is both the
+    bar number and the number of full sessions the trade is carried through, since the entry
+    bar is bar 0 and the exit bar is the k-th one after it.
+    """
+    if k < 3:
+        raise ValueError(f"close_texts: bars 0 to 2 have written prose, not generated (k={k})")
+    return dict(
+        label=f"bar {k} close",
+        rule4=f"exit = the close of price bar {k}",
+        rule4_text=(
+            f"Close the position at <b>the close of bar {k}</b>, {k} bars after the entry "
+            f"bar. The trade is carried through <b>{k} full sessions</b> and is then marked "
+            f"out at the last one's closing price, whatever the price has done in between. "
+            f"<b>The stop is live</b> on every one of those bars and fires ahead of the "
+            f"close on the exit bar, a stop triggers the moment price touches it while a "
+            f"market-on-close waits for the bell. Held this long the exit stops being a "
+            f"reaction to the entry and becomes a fixed holding period: what it asks is "
+            f"whether the edge in the setup is still paying {k} days later, or whether the "
+            f"move was over long before then and the position is only collecting noise."),
+        lede=(
+            f"A fixed {k}-bar hold: the position is carried through {k} full price bars and "
+            f"closed at the close of bar {k}, with the stop live the whole way. Nothing "
+            f"about the exit reads the market, it is the calendar that closes the trade, so "
+            f"what this measures is how long the move behind the entry keeps paying."),
+        caveat=(
+            f"a stop inside any of those {k} bars' ranges is assumed to have been hit before "
+            f"that bar's close, which is true of a stop order but cannot be checked on a "
+            f"daily bar"),
+    )
 
 
 # --- rules 1-3: identical in every strategy, written once --------------------------
@@ -632,7 +706,7 @@ class Strategy:
              its own 6% risk makes them comparable at equal PAIN rather than equal bet size.
              Re-solve it whenever the rules, the fill model or the data change and paste the
              number back here -- stale is the failure mode to watch for.
-      False  it is CHOSEN: a plain 1% (user, 2026-07-28). The six quick-exit strategies are
+      False  it is CHOSEN: a plain 1% (user, 2026-07-28). Every quick-exit strategy is
              published this way. Their exits are so fast that the R scale stops meaning much,
              and quickfixclose0 barely draws down at all, so a 6%-drawdown solve would either
              not converge or hand back a bet size nobody would take. `solve_risk.py` still
@@ -688,9 +762,14 @@ class Strategy:
 
 
 # --- the registry -------------------------------------------------------------------
-# SEVEN strategies. They share Rules 1-3 exactly, so they take exactly the same setups, and
-# comparing them compares nothing but where the profit is taken. That comparison is what
+# TWENTY-FIVE strategies (seven until 2026-08-01, when the close exit was swept out to bar
+# 20). They share Rules 1-3 exactly, so they take exactly the same setups, and comparing them
+# compares nothing but where the profit is taken. That comparison is what
 # `output/comparison.html` exists for.
+#
+# Twenty-one of the twenty-five are one bar-exit family swept across k, so read the registry
+# as three things and not as twenty-five: the cap family's default, the entry-bar wick, and a
+# HOLDING PERIOD AXIS from bar 0 to bar 20 with two market-on-open settings sitting inside it.
 #
 # quickfix's `risk_pct` is MEASURED: the risk that puts it at engine.TARGET_DD (6%) maximum
 # drawdown on the current data, printed by `solve_risk.py`. Re-run that script and paste the
@@ -708,8 +787,8 @@ class Strategy:
 QUICKFIX = Strategy(key="quickfix", title="Quickfix", rule4=cap_rule4(1.9),
                     risk_pct=1.39)
 
-# The six quick exits. Not caps, so none of them carries a cap dial or the "Choosing the
-# profit cap" charts (in_grid=False on their Rule 4 objects).
+# The quick exits, twenty-four of them. Not caps, so none of them carries a cap dial or the
+# "Choosing the profit cap" charts (in_grid=False on their Rule 4 objects).
 #
 # Quickfixwick carried a different key from 2026-07-27 to 2026-07-28, was retired, and came
 # back under its present name on 2026-07-28 (user) because the name says what it does: it
@@ -736,14 +815,45 @@ QUICKFIXOPEN2 = Strategy(key="quickfixopen2", title="Quickfixopen2", rule4=OPEN_
 QUICKFIXCLOSE2 = Strategy(key="quickfixclose2", title="Quickfixclose2", rule4=CLOSE_2,
                           risk_pct=1.0, risk_solved=False)
 
+
+def close_rule4(k):
+    """A bar-k close exit as a Rule 4 object, for the generated part of the family (k >= 3).
+
+    The mirror of `cap_rule4` one family over: one number in, one complete setting out, prose
+    included. `in_grid=False`, because this family is not the cap axis and has no dial.
+    """
+    return Rule4(token=f"close{k}", label=f"bar {k} close", bar_exit=close_exit(k),
+                 bar_exit_at="close", texts=close_texts(k))
+
+
+def close_strategy(k):
+    """`quickfixclose<k>` at the chosen 1% risk, for k >= 3."""
+    return Strategy(key=f"quickfixclose{k}", title=f"Quickfixclose{k}", rule4=close_rule4(k),
+                    risk_pct=1.0, risk_solved=False)
+
+
+# The HOLD SWEEP, bar 3's close through bar 20's close (user, 2026-08-01). Eighteen strategies
+# from one line, because they are one shape swept across its only parameter. Each is a real
+# backtest and gets its own page, its own charter overlay and its own bar on the comparison
+# charts, exactly like a hand-written one; nothing about being generated makes them second
+# class. Their risk is the same CHOSEN 1% the rest of the quick exits carry (risk_solved=False),
+# so solve_risk.py prints their solve without ever calling them stale.
+CLOSE_SWEEP = [close_strategy(k) for k in CLOSE_SWEEP_KS]
+
 # SLOWFIX -- the cap family at no cap -- was retired from the registry on 2026-07-28 (user):
 # once every cap became reachable on one dial, a whole registered strategy for the uncapped
 # end stopped earning its page. It was never a separate method, and nothing about it is lost:
 # "no cap" is still a setting of the dial, still the dashed reference line on both charts,
 # and still the worst point of the family at equal drawdown, which is the finding that made
 # showing it in full redundant. Its outputs were deleted with it.
+#
+# Order is meaningful: it is the order the strategies are listed in the navigation, on the
+# comparison page's x axis and in its table. Quickfix first (the reference, and the only
+# cap-family member), then the wick, then the bar exits in HOLD ORDER, bar 0 through bar 20 --
+# which on the comparison charts makes the x axis read as an increasing holding period even
+# though it is still a list of names and not a number line.
 REGISTRY = [QUICKFIX, QUICKFIXWICK, QUICKFIXCLOSE0, QUICKFIXOPEN1, QUICKFIXCLOSE1,
-            QUICKFIXOPEN2, QUICKFIXCLOSE2]
+            QUICKFIXOPEN2, QUICKFIXCLOSE2] + CLOSE_SWEEP
 BY_KEY = {s.key: s for s in REGISTRY}
 
 

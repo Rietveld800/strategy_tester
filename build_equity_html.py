@@ -1,4 +1,4 @@
-# build_equity_html.py
+﻿# build_equity_html.py
 #
 # Generate the standalone interactive reports:
 #
@@ -499,7 +499,7 @@ const REF_RISK = __REFRISK__;
 // Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
 // strategy on the page: two strategies sitting on the same cap are one run, stored once.
 // `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra` holds
-// the settings that are NOT caps (the entry-bar wick and the five bar exits): same packed
+// the settings that are NOT caps (the entry-bar wick and the 23 bar exits): same packed
 // rows, same replay, but not points on that axis, so a strategy sitting on one carries
 // neither the dial nor the sweep.
 //
@@ -544,14 +544,14 @@ function readConclusions(){
   catch(e){ return null; }
 }
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const fmtUSD = v => (v<0?"−$":"$") + Math.abs(Math.round(v)).toLocaleString("en-US");
-const fmtK = v => (v<0?"−$":"$") + Math.abs(v/1000).toFixed(0) + "k";
+const fmtUSD = v => (v<0?"âˆ’$":"$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const fmtK = v => (v<0?"âˆ’$":"$") + Math.abs(v/1000).toFixed(0) + "k";
 const pct = v => (v>=0?"+":"") + v.toFixed(1) + "%";
-const fmtPrice = v => { if(v==null) return "—"; const a=Math.abs(v);
+const fmtPrice = v => { if(v==null) return "â€”"; const a=Math.abs(v);
   const dp = a>=100?1:a>=1?2:a>=0.01?4:6;
   return v.toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp}); };
-const signFix = (v,d) => v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
-const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
+const signFix = (v,d) => v==null?"â€”":(v>=0?"+":"âˆ’")+Math.abs(v).toFixed(d);
+const signUSD = v => v==null?"â€”":(v>=0?"+$":"âˆ’$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
 // 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
 // a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
 // 'target_bar' = Quickfixwick's target, one tick past the entry bar's own wick.
@@ -644,7 +644,7 @@ function simulate(risk, rows, lite, start){
       gcash += tr[i].gr * griskD;
       if (!lite) xnotes.push(R[i].market + " " + R[i].reason + " (" +
         (R[i].reason === "open_at_end" ? "open->closed 0"
-          : (pnl >= 0 ? "+" : "−") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
+          : (pnl >= 0 ? "+" : "âˆ’") + Math.abs(Math.round(pnl)).toLocaleString("en-US")) + ")");
     }
     const nOpen = Object.keys(open).length;
     if (cash > peak) peak = cash;
@@ -802,7 +802,7 @@ function mountReport(root, DATA){
       ["Final capital", fmtUSD(ST.final), "", "net, from "+fmtK(START)],
       ["Total return", pct(ST.ret), ST.ret>=0?"pos":"neg", "gross "+pct(ST.gross_ret)],
       ["Max drawdown", ST.maxdd.toFixed(2)+"%", "neg", "peak to trough"],
-      ["Return / DD", ST.rdd==null?"—":ST.rdd.toFixed(1)+"x", (ST.rdd!=null&&ST.rdd>=0)?"pos":"",
+      ["Return / DD", ST.rdd==null?"â€”":ST.rdd.toFixed(1)+"x", (ST.rdd!=null&&ST.rdd>=0)?"pos":"",
        "return per point of drawdown"],
       ["Time in market", ST.time_in_market.toFixed(0)+"%", "",
        intraday ? "never held to a day's end" : "of trading days"],
@@ -871,7 +871,7 @@ function mountReport(root, DATA){
   // 2026-07-28). Same for mHead below.
   function renderHead(){
     $("thead").innerHTML = "<tr>"+COLS.map(c=>{
-      const on=c.k===sortKey, ar=on?`<span class="ar">${sortDir>0?"▲":"▼"}</span>`:"";
+      const on=c.k===sortKey, ar=on?`<span class="ar">${sortDir>0?"â–²":"â–¼"}</span>`:"";
       return `<th data-k="${c.k}" style="width:${c.w}%" class="${c.t!=='n'?'l':''}${on?' sorted':''}">${c.l}${ar}</th>`;
     }).join("")+"</tr>";
     root.querySelectorAll('[data-el="thead"] th').forEach(th => th.onclick = () => {
@@ -888,7 +888,7 @@ function mountReport(root, DATA){
       return (col.t==="n" ? (x-y) : String(x).localeCompare(String(y)))*sortDir;
     });
     $("ttbody").innerHTML = rows.map(t=>"<tr>"+COLS.map(c=>{
-      const v=t[c.k], disp=c.f?c.f(v):(v==null?"—":v);
+      const v=t[c.k], disp=c.f?c.f(v):(v==null?"â€”":v);
       let cls=(c.t==="n")?"mono":"l";
       if(c.color&&v!=null) cls+=v>0?" pos":v<0?" neg":"";
       return `<td class="${cls}">${disp}</td>`;
@@ -919,7 +919,7 @@ function mountReport(root, DATA){
       avgr: m.n ? m.totalr/m.n : null}));
     maxAbsPnl=Math.max(1,...MK.map(m=>Math.abs(m.pnl)));
     const traded = MK.filter(m => m.n > 0).length;
-    $("mcount").textContent = MK.length+" markets · "+traded+" with trades";
+    $("mcount").textContent = MK.length+" markets Â· "+traded+" with trades";
     // The lede and the footer quote this number too, and it moves with the cap: a shorter
     // hold frees markets for signals a longer one blocked, so a different set of markets
     // ends up trading. Keep all three in step from the one place that counts them.
@@ -931,7 +931,7 @@ function mountReport(root, DATA){
     {k:"market",l:"Market",t:"s",w:22,
      rowf:m => m.market + (m.obs ? '<span class="tag">obsolete</span>' : '')},
     {k:"n",l:"Trades",t:"n",w:9},
-    {k:"winrate",l:"Win %",t:"n",f:v=>v==null?"—":v.toFixed(0)+"%",w:10},
+    {k:"winrate",l:"Win %",t:"n",f:v=>v==null?"â€”":v.toFixed(0)+"%",w:10},
     {k:"pnl",l:"P&L $",t:"n",f:signUSD,bar:1,w:22},
     {k:"totalr",l:"Total R",t:"n",f:v=>signFix(v,2),color:1,w:11},
     {k:"avgr",l:"Avg R",t:"n",f:v=>signFix(v,2),color:1,w:10},
@@ -946,7 +946,7 @@ function mountReport(root, DATA){
   let mKey="pnl", mDir=-1;
   function mHead(){
     $("mhead").innerHTML = "<tr>"+MCOLS.map(c=>{
-      const on=c.k===mKey, ar=on?`<span class="ar">${mDir>0?"▲":"▼"}</span>`:"";
+      const on=c.k===mKey, ar=on?`<span class="ar">${mDir>0?"â–²":"â–¼"}</span>`:"";
       return `<th data-k="${c.k}" style="width:${c.w}%" class="${c.t!=='n'?'l':''}${on?' sorted':''}">${c.l}${ar}</th>`;
     }).join("")+"</tr>";
     root.querySelectorAll('[data-el="mhead"] th').forEach(th => th.onclick = () => {
@@ -1194,7 +1194,7 @@ function mountReport(root, DATA){
         svgEl.appendChild(cl);
       } else if(markTok==="none"){
         svgEl.appendChild(txt(mL+4,padT+12,
-          "this page is uncapped — the dashed line is where it sits","start",11,"var(--ink3)"));
+          "this page is uncapped â€” the dashed line is where it sits","start",11,"var(--ink3)"));
       } else {
         // The dial is on a cap this axis does not cover -- true on the zoomed chart whenever
         // the page is set above 3R. Say so; a chart with no marker and no explanation reads
@@ -1235,8 +1235,8 @@ function mountReport(root, DATA){
   }
 
   const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
-  const ddTxt = v => v==null?"—":v.toFixed(2)+"%";
-  const rddTxt = v => v==null?"—":v.toFixed(1)+"x";
+  const ddTxt = v => v==null?"â€”":v.toFixed(2)+"%";
+  const rddTxt = v => v==null?"â€”":v.toFixed(1)+"x";
 
   // ---- the cap chart: levered to a constant drawdown ---------------------------------
   // Risk per trade is a free variable, so comparing caps at ONE risk compares them at
@@ -1845,7 +1845,7 @@ def section_html(strategy, data, riskbar, daily):
             f"<span class=\"riskecho\">{strategy.risk_pct:g}%</span> of liquid "
             # Only a SOLVED risk is the 6%-drawdown one. Saying so on a page published at a
             # chosen 1% was a claim about work that was never done, and it was on six of the
-            # seven pages by 2026-07-31. Same test as page_title's "optimized".
+            # twenty-four of the twenty-five pages. Same test as page_title's "optimized".
             + (f"capital, the risk that holds this strategy to a {eng.TARGET_DD:g}% "
                f"maximum drawdown. " if strategy.risk_solved else
                f"capital, a chosen figure rather than one solved for a drawdown budget. ")
@@ -2000,12 +2000,14 @@ def build_report(picked):
 # the drawdown is free to move; then the same set levered to a constant 6% drawdown, which
 # is the ranking. BARS rather than lines, because the x axis here is a list of names, not a
 # continuous number line -- joining them with a line would imply an ordering and a rate of
-# change between neighbours that do not exist. (Even the five bar exits, which DO have a
+# change between neighbours that do not exist. (Even the bar exits, which DO have a
 # natural order, are drawn as bars: they are a sequence of settings, not a measured axis.)
 #
 # Everything that would have to be recounted is generated from len(REGISTRY): the page went
-# from four strategies to seven on 2026-07-31 and the only thing that had to change was the
-# text that had "four" typed into it, which is exactly the thing this replaces.
+# from four strategies to seven on 2026-07-31 and to twenty-five on 2026-08-01, and the only
+# thing that ever had to change was the text that had "four" typed into it, which is exactly
+# the thing this replaces. At twenty-five the LAYOUT had to give, not the wording: every label
+# stands up when the names stop fitting their slots (see barPlotter).
 COMPARISON_PATH = eng.OUT_DIR / "comparison.html"
 
 COMPARISON_HTML = r"""
@@ -2107,9 +2109,9 @@ const NORM_PTS = STRATS.map(s => {
 const EXEMPT = NORM_PTS.filter(p => p.exempt);
 
 const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
-const ddTxt = v => v==null?"—":Math.abs(v).toFixed(2)+"%";
-const rddTxt = v => v==null?"—":v.toFixed(1)+"x";
-const riskTxt = v => v==null?"—":v.toFixed(2)+"%";
+const ddTxt = v => v==null?"â€”":Math.abs(v).toFixed(2)+"%";
+const rddTxt = v => v==null?"â€”":v.toFixed(1)+"x";
+const riskTxt = v => v==null?"â€”":v.toFixed(2)+"%";
 
 // ---- the bar plotter ---------------------------------------------------------------
 // One plotter for both charts, the same way the cap section has one line plotter: two
@@ -2122,32 +2124,57 @@ const riskTxt = v => v==null?"—":v.toFixed(2)+"%";
 // (250px main, 90px readouts) for the same reason they were raised there.
 //
 // Bar width, label size and the x-axis type all scale with HOW MANY strategies there are, so
-// the chart survives the registry growing (four to seven on 2026-07-31) instead of running
-// the names into each other.
+// the chart survives the registry growing (four to seven on 2026-07-31, seven to twenty-five
+// on 2026-08-01) instead of running the names into each other.
+//
+// Past a certain density every LABEL IS TURNED ON ITS SIDE, names and values alike, and the
+// x-axis band grows to fit them. That is the whole adaptation and it is deliberate: the
+// alternative was to drop labels, or to let the chart scroll sideways, and both cost more
+// than a quarter turn does. A direct label on every bar is what makes these charts readable
+// in the printed PDF, where nothing can be hovered, so it is the last thing to give up. The
+// switch is measured, not a count: it fires when the longest name would not fit its slot.
 function barPlotter(plotEl, svgEl, tipEl, tipRows){
   let g=null;
+  // Rotated text reads bottom to top. With text-anchor="end" the string hangs DOWNWARD from
+  // its anchor (used under the axis); with "start" it climbs UPWARD from it (used above a
+  // bar). Both are the same quarter turn, so the two never disagree about which way is up.
+  const CHW=0.58;                                  // width of a character, in font sizes
+  const spin=(el,x,y)=>{ el.setAttribute("transform",`rotate(-90 ${x.toFixed(1)} ${y.toFixed(1)})`);
+                         return el; };
   function draw(items, panels){
     if(!items.length) return;
     const W=plotEl.clientWidth||880, mL=64, mR=16, plotW=W-mL-mR;
-    const padT=18, xAxisH=30, gap=28;
+    const n=items.length, slot=plotW/n;
+    // Value and name label sizes, stepped down as the axis fills up. The names are the long
+    // ones ("Quickfixclose20" is 15 characters), so they get the earlier step.
+    const vSize=n>6?11.5:12.5, nSize=n>12?9.5:n>6?10:n>4?11:12;
+    const names=items.map(q=>q.s.title+(q.exempt?" â€ ":""));
+    const nameW=Math.max.apply(null,names.map(s=>s.length))*nSize*CHW;
+    // Turn the labels only when they genuinely will not fit lying down. At seven strategies
+    // they still do and the chart is unchanged; at twenty-five they do not.
+    const rot=nameW > slot-4;
+    const padT=18, xAxisH=rot?Math.ceil(nameW)+16:30, gap=28;
+    // A standing value label needs its own WIDTH as vertical headroom, and on a 90px readout
+    // pane there is not that much above the tallest bar. So when the labels stand up the
+    // readout panes get taller AND reserve more of themselves as headroom (`head`), which is
+    // what keeps a value off the pane caption sitting just above it. The main pane is left
+    // alone: it is 250px, it carries no caption, and nothing sits above it to collide with.
+    const hs=panels.map((p,i)=> rot && i>0 ? p.h+30 : p.h);
+    const head=pi=> rot && pi>0 ? 1.5 : 1.20;
     const tops=[]; let H=padT;
-    panels.forEach(p=>{ tops.push(H); H+=p.h+gap; });
+    hs.forEach(h=>{ tops.push(H); H+=h+gap; });
     H=H-gap+xAxisH;
     svgEl.setAttribute("viewBox",`0 0 ${W} ${H}`); svgEl.setAttribute("height",H);
     while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
 
-    const n=items.length, slot=plotW/n;
     // A gap between neighbours: a handful of bars should not read as one block, and the
     // value labels above them need room not to collide. It narrows as the count grows, but
     // never below a third of the slot, so the bars stay bars.
     const bw=Math.min(Math.max(slot-30, slot*0.66), 104), cx=i=> mL+slot*i+slot/2;
-    // Value and name label sizes, stepped down as the axis fills up. The names are the long
-    // ones ("Quickfixclose2" is 14 characters), so they get the earlier step.
-    const vSize=n>6?11.5:12.5, nSize=n>6?10:n>4?11:12;
     const ys=[];
 
     panels.forEach((p,pi)=>{
-      const top=tops[pi], bot=top+p.h;
+      const top=tops[pi], ph=hs[pi], bot=top+ph;
       const val=q=> { const v=q[p.k]; return v==null?null:(p.abs?Math.abs(v):v); };
       const finite=items.map(val).filter(v=>v!=null);
       // ONE value orders of magnitude above the rest flattens every other bar to a stub, and
@@ -2163,8 +2190,8 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
       const scaleOn=(desc.length>1 && desc[0] > 10*Math.max(desc[1],1e-9))
         ? desc.slice(1) : desc;
       const ceiling=Math.max.apply(null, scaleOn.concat(p.ref!=null?[p.ref]:[], [0]));
-      const yHi=(ceiling*1.20)||1;                 // headroom for the label above the tallest
-      const y=v=> bot-(v/yHi)*p.h;
+      const yHi=(ceiling*head(pi))||1;             // headroom for the label above the tallest
+      const y=v=> bot-(v/yHi)*ph;
       ys.push(y);
 
       (pi===0?niceTicks(0,yHi,3):[ceiling]).forEach(v=>{
@@ -2210,11 +2237,26 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
             y1:(ty+8+d).toFixed(1), y2:(ty+3+d).toFixed(1),
             stroke:"var(--surface)","stroke-width":2.5})));
         }
-        // Direct label on every bar. A handful of bars is few enough that labelling all of
-        // them is clearer than a hover-only readout, and it means the chart is still readable
-        // in the printed PDF, where nothing can be hovered.
-        const lab=txt(cx(i),ty-7,(p.mfmt||p.fmt)(v)+(off?" ▲":""),"middle",
-                      pi===0?vSize:11,"var(--ink)");
+        // Direct label on every bar, however many bars there are. Labelling all of them is
+        // clearer than a hover-only readout, and it is the only thing that makes the chart
+        // readable in the printed PDF, where nothing can be hovered. Once the slots are too
+        // narrow the label stands up above its bar instead of lying across its neighbours;
+        // it climbs into the headroom the pane already reserves and, at worst, into the gap
+        // above the pane, which is empty.
+        const vs=pi===0?vSize:11, str=(p.mfmt||p.fmt)(v)+(off?" â–²":"");
+        // A BROKEN bar's label has no headroom to climb into: the bar already fills its pane,
+        // so standing the label up above it would put it in the pane overhead (that is exactly
+        // what quickfixclose0's 7281x did to the drawdown pane's own labels). A broken bar is
+        // full height by definition, so when the labels stand up this one hangs DOWN into the
+        // bar instead, under the break mark and in the surface colour, which is legible on the
+        // fill and stays inside the pane it belongs to.
+        const lx=cx(i)+vs*0.36;
+        const lab=rot
+          // "end" hangs the string downward from its anchor, "start" climbs upward from it;
+          // both read bottom to top, so only the direction of travel differs.
+          ? (off ? spin(txt(lx,ty+18,str,"end",vs,"var(--surface)"),lx,ty+18)
+                 : spin(txt(lx,ty-6,str,"start",vs,"var(--ink)"),lx,ty-6))
+          : txt(cx(i),ty-7,str,"middle",vs,"var(--ink)");
         if(pi===0) lab.setAttribute("font-weight",600);
         svgEl.appendChild(lab);
       });
@@ -2223,9 +2265,12 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
     // x axis: the strategy names, written once under the last pane. A dagger marks a column
     // whose bars are on a different basis, once for the whole column rather than on each of
     // its value labels.
+    const axY=H-xAxisH;
     items.forEach((q,i)=>{
-      svgEl.appendChild(txt(cx(i),H-10,q.s.title+(q.exempt?" †":""),"middle",nSize,
-                            "var(--ink2)"));
+      svgEl.appendChild(rot
+        ? spin(txt(cx(i)+nSize*0.36,axY+8,names[i],"end",nSize,"var(--ink2)"),
+               cx(i)+nSize*0.36, axY+8)
+        : txt(cx(i),H-10,names[i],"middle",nSize,"var(--ink2)"));
     });
 
     // Hover: a full-height hit slot per strategy, so the target is the column and not the
@@ -2266,7 +2311,7 @@ function barPlotter(plotEl, svgEl, tipEl, tipRows){
 // risk red, return/DD slate, win rate ink. Colour here says WHICH MEASURE, not which
 // strategy -- the strategies are already named on the axis and every bar is labelled with
 // its own value, so spending the colour channel on identity would buy nothing and would put
-// seven hues in a place that needs none.
+// twenty-five hues in a place that needs none.
 const FIXED_PANELS = () => [
   {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
   {k:"dd", h:90, abs:1, color:"var(--neg)", label:"MAX DRAWDOWN", fmt:v=>v.toFixed(1)+"%"},
@@ -2290,7 +2335,7 @@ const drawFixed = barPlotter($("fxplot"), $("fxsvg"), $("fxtip"), p =>
   row("Trades", p.n));
 
 const drawNorm = barPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
-  `<div class="d">${p.s.title}${p.exempt?" †":""}</div>`+
+  `<div class="d">${p.s.title}${p.exempt?" â€ ":""}</div>`+
   (p.exempt ? row("Basis","exempt, at its own risk") : "")+
   row("Risk per trade", riskTxt(p.risk)) + row("Final capital", fmtUSD(p.final)) +
   row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
@@ -2342,7 +2387,7 @@ function renderFindings(){
   if(unreach.length){
     const many=unreach.length>1;
     body += ` <b>${unreach.map(p=>p.s.title).join(" and ")}</b> `+
-      `${many?"are":"is"} marked <b>†</b> and ${many?"are":"is"} not in that ranking: on `+
+      `${many?"are":"is"} marked <b>â€ </b> and ${many?"are":"is"} not in that ranking: on `+
       `this sample ${many?"they":"it"} cannot be made to lose ${TARGET_DD}% at ANY bet size, `+
       `so there is no leverage that puts ${many?"them":"it"} on the same footing as the rest. `+
       `${many?"Those bars are":"That bar is"} drawn hollow at `+
@@ -2366,7 +2411,7 @@ function renderCards(){
     `<div class="rt">${s.rule4_text}</div></div>`).join("");
 }
 function renderTable(){
-  $("tblcount").textContent = STRATS.length + " strategies · rules 1 to 3 identical";
+  $("tblcount").textContent = STRATS.length + " strategies Â· rules 1 to 3 identical";
   const cell=(v,cls)=>`<td class="${cls||"mono"}">${v}</td>`;
   $("cmpbody").innerHTML = STRATS.map((s,i) => {
     const f=FIXED_PTS[i], n=NORM_PTS[i];
@@ -2375,8 +2420,8 @@ function renderTable(){
       `<td class="l wrap">${s.rule4}</td>`+
       cell(f.n) + cell(f.wr.toFixed(1)+"%") + cell(fmtUSD(f.final)) +
       cell(ddTxt(f.dd)) + cell(rddTxt(f.rdd)) +
-      cell(riskTxt(n.risk)+(n.exempt?" †":"")) +
-      cell(fmtUSD(n.final)+(n.exempt?" †":"")) + "</tr>";
+      cell(riskTxt(n.risk)+(n.exempt?" â€ ":"")) +
+      cell(fmtUSD(n.final)+(n.exempt?" â€ ":"")) + "</tr>";
   }).join("");
 }
 
@@ -2418,10 +2463,17 @@ def build_comparison():
     n_strat = len(strategies.REGISTRY)
     eyebrow = (f"Strategy comparison &middot; daily &middot; "
                f"${eng.STARTING_CAPITAL / 1000:.0f}k starting capital")
+    # The bar-exit family is most of the registry now, so the lede names it: a reader looking
+    # at twenty-five bars should know that most of them are one shape swept across a holding
+    # period, not twenty-five separate ideas.
+    n_sweep = len(strategies.CLOSE_SWEEP_KS)
     lede = (f"All {n_strat} strategies share <b>rules 1 to 3</b> exactly, so "
             f"they take the <b>same setups on the same bars</b>, and the only thing that "
             f"differs is Rule 4, where the profit is taken. Everything below is therefore a "
-            f"comparison of <b>exits and nothing else</b>. One shared account per strategy, "
+            f"comparison of <b>exits and nothing else</b>. Most of them are one family: the "
+            f"<b>bar exit</b> runs from the entry bar's own close out to bar "
+            f"{strategies.CLOSE_SWEEP_KS[-1]}'s, so the axis reads as a <b>holding period</b> "
+            f"rather than as a list of unrelated ideas. One shared account per strategy, "
             f"the same days, net of the same slippage. Read the two charts in order: the "
             f"first is what happened, the second is the ranking.")
     # The honesty note. It is longer than the strategy pages' because the two quickest exits
@@ -2436,11 +2488,18 @@ def build_comparison():
             f"trigger requires the close to be beyond the entry price it can only lose when "
             f"slippage exceeds the move, which is why its drawdown is near zero. "
             f"<b>Quickfixopen1</b> assumes the next open is fillable and its stop cannot "
-            f"trade ahead of that open, so an adverse gap costs more than 1R. The three "
-            f"longer holds do carry a live stop on every bar in between, which is what makes "
-            f"them a different question rather than more of the same one, but they inherit "
-            f"the same daily-bar assumption: a stop inside a bar's range is taken as hit "
-            f"before that bar's close. None of this is a free lunch, all of it is the "
+            f"trade ahead of that open, so an adverse gap costs more than 1R. Every longer "
+            f"hold does carry a live stop on every bar in between, which is what makes them "
+            f"a different question rather than more of the same one, but they inherit the "
+            f"same daily-bar assumption: a stop inside a bar's range is taken as hit before "
+            f"that bar's close, and a {n_sweep}-bar sweep out to bar "
+            f"{strategies.CLOSE_SWEEP_KS[-1]} makes that assumption {strategies.CLOSE_SWEEP_KS[-1]} "
+            f"times on a single trade rather than once. One more thing the long holds change "
+            f"on their own: one position per market at a time, so a trade still running on "
+            f"bar {strategies.CLOSE_SWEEP_KS[-1]} blocks every signal that market gives in "
+            f"the meantime, and part of the difference between a short hold and a long one is "
+            f"which setups each was free to take rather than what it made of them. Read the "
+            f"trade counts beside the capital. None of this is a free lunch, all of it is the "
             f"daily-proxy assumption showing through, and intraday prices are what would "
             f"settle it.")
     footer = (f"source: &lt;strategy&gt;_portfolio_daily.xlsx and _variants.json &middot; "

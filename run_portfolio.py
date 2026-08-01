@@ -1,4 +1,4 @@
-# run_portfolio.py
+﻿# run_portfolio.py
 #
 # Combine every market's trades into ONE shared account and build a chronological equity
 # curve of the capital, per strategy. The per-market trades themselves are unchanged
@@ -102,7 +102,7 @@ def cost_in_r(trade):
         # market-on-close and 'exit_open' a market-on-open: both are scheduled orders placed
         # into the most liquid minutes of the session, so they belong with the limit rate
         # rather than with a stop that fires into a move nobody chose the timing of. They
-        # are the whole strategy for the six quick exits, so the choice matters more there
+        # are the whole strategy for the 24 quick exits, so the choice matters more there
         # than anywhere else -- at 2 ticks round trip it is already the difference between a
         # winner and a loser on quickfixclose0's smallest trades. (A bar-exit strategy that is
         # STOPPED out is charged the stop rate like anything else; only the scheduled exit
@@ -265,7 +265,7 @@ def run(strategy, results):
 # One packed table of EVERY cap in strategies.CAP_CHOICES, written once and shared by every
 # strategy's page -- the cap family is a single family, so two strategies sitting on the
 # same cap are one run and must not be stored twice. Every registered Rule 4 that is NOT a cap
-# (the wick target and the five bar exits) is filed in the same table under its own
+# (the wick target and the 23 bar exits) is filed in the same table under its own
 # token; they are listed separately from `caps` in the document, because the caps are the
 # dial's axis and a different Rule 4 shape is not a point on it.
 #

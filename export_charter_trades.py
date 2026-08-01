@@ -12,9 +12,9 @@
 #                       cap-family strategy is just a dial position, so the useful comparison
 #                       on a price chart is a handful of caps (2026-07-27).
 #   CHARTER_STRATEGIES  strategies whose Rule 4 is NOT a cap, exported by KEY because there
-#                       is no cap number to name the file after. All six of them: they are
-#                       genuinely different exits, so seeing them against each other on the
-#                       price bars is the point.
+#                       is no cap number to name the file after. ALL of them, derived from
+#                       the registry: they are genuinely different exits, so seeing them
+#                       against each other on the price bars is the point.
 #
 # This list is INDEPENDENT of the reports' cap grid and need not sit on it -- 2.25R is
 # exported and is on no grid the reports draw. run_pipeline backtests whatever it names.
@@ -54,17 +54,27 @@ import strategies
 CHARTER_CAPS = [1.9, 2.0, 2.25, 2.5, 5.0]
 
 # Strategies outside the cap family, exported whole (2026-07-28; the three later bar exits
-# added 2026-07-31). Unlike the caps these are worth drawing TOGETHER: their exits land on
-# genuinely different BARS, not just different prices on one bar, so on a price chart they
-# fan out across the days after the entry instead of off a single point. Read against a cap
-# overlay they show the whole spread of what "take the profit" can mean on one setup.
+# added 2026-07-31; the bar 3 to bar 20 sweep added 2026-08-01). Unlike the caps these are
+# worth drawing TOGETHER: their exits land on genuinely different BARS, not just different
+# prices on one bar, so on a price chart they fan out across the days after the entry instead
+# of off a single point. Read against a cap overlay they show the whole spread of what "take
+# the profit" can mean on one setup.
 #
-# Listed in hold order, which is also how they read on the chart, left to right from the
-# entry bar. Charter lists the boxes in FILENAME order, so it will sort them alphabetically
-# (quickfixclose0, quickfixclose1, quickfixclose2, quickfixopen1, quickfixopen2, quickfixwick)
-# rather than in this one; nothing depends on the order here.
-CHARTER_STRATEGIES = ["quickfixwick", "quickfixclose0", "quickfixopen1", "quickfixclose1",
-                      "quickfixopen2", "quickfixclose2"]
+# DERIVED from the registry rather than typed, since the sweep took it from six names to
+# twenty-four (2026-08-01). It is exactly "every registered strategy that is not a point on
+# the cap axis", which is what the hand-typed list always was; deriving it means a new bar
+# exit reaches charter with no second edit, and a retired one cannot linger here. The caps
+# above stay a CHOSEN handful, because there the registry is not the right source: the cap
+# grid has 75 points and charter wants five.
+#
+# The count is worth being honest about: 24 of these plus 5 caps is 29 overlay boxes on
+# charter's T rail, up from 11. That is a lot of checkboxes, but unlike 75 identical caps they
+# are not redundant, each one exits on a different BAR. Read a few at a time.
+#
+# Charter lists the boxes in FILENAME order, so it sorts them alphabetically (quickfixclose0,
+# quickfixclose1, quickfixclose10, quickfixclose11, ...) rather than in hold order; nothing
+# depends on the order here, and note that alphabetical puts bar 10 next to bar 1.
+CHARTER_STRATEGIES = [s.key for s in strategies.REGISTRY if not s.r4.in_grid]
 
 
 def charter_key(cap):

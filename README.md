@@ -759,9 +759,28 @@ the twenty-five strategies have no such parameter. It is the same two-chart argu
 [Choosing the profit cap](#choosing-the-profit-cap--the-section-at-the-bottom-of-the-page),
 one level up — across **strategies** instead of across caps.
 
+**It shows 22 of the 25** (user, 2026-08-02). `COMPARISON_SKIP` in `build_equity_html.py`
+names the three that come off it, and `comparison_strategies()` is what every part of the page
+is built from — the charts, the cards, the table, the counts and the generated prose. The list
+is not a grab bag: this page compares **holding periods**, and none of the three is a point on
+that axis.
+
+| left off | why |
+|---|---|
+| **quickfix** | the cap family, a price target rather than a bar. Its own page carries the cap dial and the cap charts, which is the sweep that fits it. |
+| **quickfixwick** | a price target too, fixed off the entry bar, so it has no bar number. |
+| **quickfixclose0** | a bar, but the only one that cannot be levered to `TARGET_DD` at any bet size. It was the page's **exempt** bar, and an exempt bar answers a different question from every bar beside it. |
+
+Each still has its own page, its own charter overlay and its own row in every other output, and
+the page's **strategy switcher stays complete** — it is how you leave this page, and dropping
+them from the nav would strand them behind the report's PDF picker. The exemption and outlier
+machinery in `COMPARISON_JS` also stays: neither fires today, both are general, and the note
+that explains the **†** is now written by `renderExemptNote()` only when there *is* one, so the
+page no longer describes a marker nobody can see.
+
 1. **At a constant 1% risk per trade** — the real result, and it cannot rank anything. Panes:
    final capital, **max drawdown**, **return/drawdown**, **win rate**. With the bet fixed the
-   drawdown is free to move, and on the current data it moves from 0.06% to 22.91%, so the
+   drawdown is free to move, and on the current data it moves from 4.21% to 22.91%, so the
    tallest capital bar is partly just the deepest hole.
 2. **Levered to a constant 6% drawdown** — the ranking. Panes: final capital, **the risk each
    strategy is allowed**, **win rate**. Solved per strategy by the same bisection
@@ -796,13 +815,21 @@ headline, the two chart titles, the findings prose — and the bar width and lab
 with the count. Growing from four strategies to seven on 2026-07-31 changed the page's layout
 code in one place and its wording in none.
 
-**At twenty-five bars every label is turned on its side** (2026-08-01). Names and values alike
+**At twenty-two bars every label is turned on its side** (2026-08-01). Names and values alike
 are rotated a quarter turn and the x-axis band grows to fit them; the switch is measured, not a
 count, and fires when the longest name would no longer fit its slot, so at seven strategies the
 chart is unchanged. The two rejected alternatives were dropping labels and letting the chart
 scroll sideways: a direct label on **every** bar is what makes these charts work in the printed
 PDF, so it is the last thing to give up, and a chart that scrolls is a chart that prints
 clipped.
+
+A standing label needs its own **width** as vertical headroom, which a 90px readout pane does
+not have above its tallest bar. So when the labels stand up the readout panes get 30px taller
+and reserve more of themselves as headroom, and a **broken** outlier bar (which fills its pane
+by definition, so it has no headroom at all) hangs its label *downward inside itself* in the
+surface colour instead of climbing into the pane above. Without those two the drawdown pane's
+own labels were being overprinted, which is exactly the kind of thing that only shows up once
+the axis is full.
 
 Two cases the page had to handle honestly rather than hide:
 
@@ -827,8 +854,10 @@ Two cases the page had to handle honestly rather than hide:
 It calls the **same** `simulate`, `statsAt` and `leveredAt` as the strategy pages: those were
 hoisted out of `mountReport` into a shared `CORE_JS` block for exactly this, so there is one
 port of `run_portfolio.py`'s loop in the browser and the two page types cannot disagree about
-a figure. It ships a **trimmed** variant grid — the 25 tokens it prices, not all 99 — so it
-is ~235 KB against a strategy page's ~685 KB; it has no dial to reach the rest with.
+a figure. It ships a **trimmed** variant grid — the 22 tokens it prices, not all 99 — so it
+is ~215 KB against a strategy page's ~685 KB; it has no dial to reach the rest with. (`STRATS`
+is trimmed with it, so the page has nothing to filter client-side and no way to disagree with
+its own variant table.)
 
 Reached from a **Compare** button, first in the nav's button row on every strategy page and
 on the conclusions page. It is deliberately **not** folded into `report.html`.

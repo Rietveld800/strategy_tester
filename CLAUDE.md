@@ -320,7 +320,19 @@ capital, max drawdown, return/drawdown, win rate), then the same set levered to 
 6% drawdown (panes: capital, risk per trade allowed, win rate). Plus one Rule 4 card per
 strategy, a numbers table and a generated `Where it pays` with the yellow **Optimal point**
 highlight.
-- **EVERY COUNT IS GENERATED** from `len(REGISTRY)` — the h1, both chart titles, the findings
+- **IT SHOWS 22 OF THE 25** (user, 2026-08-02). `COMPARISON_SKIP` names the three that come
+  off it and `comparison_strategies()` is what the whole page is built from, `STRATS` included
+  (the page ships the trimmed list, so it has nothing to filter client-side). NOT a grab bag:
+  the page compares HOLDING PERIODS and none of the three is a point on that axis — **quickfix**
+  and **quickfixwick** are price targets with no bar number (quickfix has the cap dial and the
+  cap charts instead, which is the sweep that fits it), and **quickfixclose0** is the one bar
+  that cannot be levered to TARGET_DD at any bet size, i.e. the page's only EXEMPT bar, which
+  answers a different question from every bar beside it. All three keep their own page, their
+  charter overlay and their row everywhere else. The strategy SWITCHER stays complete — it is
+  how you leave this page. The exemption and outlier machinery STAYS (general, and neither
+  fires today); the note explaining the dagger is written by `renderExemptNote()` only when
+  there IS one, so the page does not describe a marker nobody can see.
+- **EVERY COUNT IS GENERATED** from the SHOWN list — the h1, both chart titles, the findings
   prose — and the bar widths and label sizes scale with it. Going from four strategies to
   seven on 2026-07-31 and to twenty-five on 2026-08-01 needed no wording change. Do not type a
   number into this page.
@@ -333,11 +345,15 @@ highlight.
   red, risk red, ret/DD slate, win rate ink, exactly the cap charts' pane colours), never
   which strategy — the strategies are named on the axis and every bar is direct-labelled, so
   twenty-five hues would buy nothing.
-- **AT TWENTY-FIVE BARS EVERY LABEL IS TURNED ON ITS SIDE** (2026-08-01), names and values
+- **AT TWENTY-TWO BARS EVERY LABEL IS TURNED ON ITS SIDE** (2026-08-01), names and values
   alike, and the x-axis band grows to fit them. The switch is MEASURED, not a count: it fires
   when the longest name would not fit its slot, so at seven the chart is unchanged. Dropping
   labels and scrolling the chart sideways were both rejected — a direct label on EVERY bar is
   what makes these charts work in the printed PDF, and a chart that scrolls prints clipped.
+  A standing label needs its own WIDTH as vertical headroom, so when they stand up the readout
+  panes grow 30px and reserve more of themselves (`head`), and a BROKEN outlier bar (already
+  full height, so no headroom at all) hangs its label DOWNWARD INSIDE itself in the surface
+  colour. Without both, the drawdown pane's labels were overprinted.
 - **The outlier rule.** One value orders of magnitude above the rest (quickfixclose0's
   return/drawdown is ~7000x, because its drawdown is a rounding error) would flatten every
   other bar to a stub. Such a bar is scaled to the REST and drawn BROKEN at the top with its
@@ -353,8 +369,8 @@ highlight.
 - The Rule 4 column in the numbers table carries **`class="l wrap"`**: `td` is `nowrap` by
   default and `table.trades` is `table-layout:fixed`, so a long middle column OVERFLOWS
   rather than wrapping. It was printing over the Trades figures until 2026-07-31.
-- It carries a **TRIMMED** variant grid (the 25 tokens it prices, not all 99), so it is
-  ~235 KB against the strategy pages' ~685 KB. It has no dial to reach the rest with.
+- It carries a **TRIMMED** variant grid (the 22 tokens it prices, not all 99), so it is
+  ~215 KB against the strategy pages' ~685 KB. It has no dial to reach the rest with.
 - Reached from a **Compare** button, first in the nav's button row on every strategy page and
   on `conclusions.html`. It is NOT folded into `report.html`; keep it a page of its own.
 

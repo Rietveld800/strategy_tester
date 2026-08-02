@@ -1,4 +1,4 @@
-﻿# run_portfolio.py
+# run_portfolio.py
 #
 # Combine every market's trades into ONE shared account and build a chronological equity
 # curve of the capital, per strategy. The per-market trades themselves are unchanged

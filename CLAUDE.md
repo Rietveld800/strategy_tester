@@ -539,6 +539,23 @@ illegible, since 75 overlays stack 75 identical entry markers on one point.
 
 Not yet done: intraday price data (IBKR) to replace the daily-proxy fill assumptions.
 
+## 1-minute workstream (2026-08-03, standalone — NOT in the registry)
+
+`engine_1m.py` + `run_1m.py` + `tests/test_engine_1m.py` implement
+**quickfix1m1dc**: quickfix rules 1-3 evaluated INTRADAY on 1-minute bars,
+stop = 3x the entry-to-running-extreme distance, exit at next-day
+settlement. The full rule set, every decision and the first results live
+in `../data_center/docs/backtest_1m_design.md` — READ THAT before touching
+any of it. The 2026-08-05 trade-review audit (fill-model phantoms, stop
+variants, overnight-window dial, verified timing model) is
+`docs/quickfix1m1dc_audit.md` — the agreed improvement plan, staged and
+awaiting Lode's decisions; no engine change before that discussion. Data comes from `../data_center` (GC pilot: bars parquet, roll
+calendar, settlements); levels via charter's parse_array as everywhere
+else. Deliberately NOT integrated into the 25-strategy registry, pages,
+variant grid or charter hand-off until the results earn it. venv gained
+pyarrow and pytest for this (requirements.txt updated). Run the tests
+with `venv\Scripts\python.exe -m pytest tests -q`.
+
 ## Working agreements (carried over from charter)
 
 - Commit straight to main.

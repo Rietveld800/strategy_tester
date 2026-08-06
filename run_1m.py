@@ -46,6 +46,10 @@ LIB_PATH = DC / "scripts" / "lightweight-charts.4.2.3.standalone.js"
 
 PX_SCALE = 1e-9
 ACTIVATION_UTC = "07:35"
+# The published baseline (Lode, 2026-08-06): the matrix winner on every
+# priority metric - no settlement tightening, no entries before the
+# day's own update is active. run_1m_matrix.py still runs all four.
+BASELINE = dict(tighten=False, allow_pre_activation=False)
 STAT_SETTLEMENT = 3
 FILES_FROM = date(2025, 12, 20)
 ETF_MATCH_MIN = 0.90
@@ -359,7 +363,15 @@ def portfolio_replay(all_trades, start_capital=100_000.0, risk_pct=1.0):
             equity += t["net_r"] * risk
             peak = max(peak, equity)
             max_dd = max(max_dd, (peak - equity) / peak * 100.0)
-            curve.append((int(ts.timestamp()), round(equity, 2)))
+            # One point per SECOND, keeping the last equity: several exits
+            # can share a timestamp and lightweight-charts rejects
+            # duplicate times in setData (matrix page showed one dot,
+            # Lode 2026-08-06).
+            pt = (int(ts.timestamp()), round(equity, 2))
+            if curve and curve[-1][0] == pt[0]:
+                curve[-1] = pt
+            else:
+                curve.append(pt)
     return equity, max_dd, curve
 
 
@@ -404,7 +416,7 @@ def main():
     all_trades, rows, skipped = [], [], []
     for key in keys:
         try:
-            trades, summary = run_market(key)
+            trades, summary = run_market(key, **BASELINE)
         except Exception as exc:
             skipped.append({"market": key,
                             "reason": f"{type(exc).__name__}: {exc}"})
@@ -439,7 +451,7 @@ def main():
                     min_ladder=engine_1m.MIN_LADDER,
                     min_tested=engine_1m.MIN_REVERSALS,
                     stop="ladder (5th else 4th reversal +- 1 tick)",
-                    tighten=True, allow_pre_activation=True,
+                    **BASELINE,
                     activation_utc=ACTIVATION_UTC),
         portfolio=dict(final=round(final, 2), max_dd_pct=round(max_dd, 2),
                        trades=len(all_trades), win_rate=wr,

@@ -229,3 +229,39 @@ the new costs:
 The two ticks of slippage were worth ~12R across 130 trades - the
 strategy is highly slippage-sensitive, which is exactly why the IB
 streaming entry path matters on the roadmap.
+
+## 8. Where this stands (Lode's assessment, 2026-08-06)
+
+The strategy is PROBABLY WINNING, and the slippage experiment proved that
+PROFESSIONAL EXECUTION of entries and exits is a first-order component of
+the edge, not a detail: two ticks per side moved net R by ~12R, final
+cash by ~$15k and max drawdown by 5+ points on identical trades. The
+equity curve shows signs of hope, but the drawdown (~18%) is still too
+explicit for practical use, and the win rate (~31%) must improve for
+this to become a valuable strategy.
+
+What the baseline's anatomy says about WHERE the win rate lives:
+
+| exit class | trades | wins | net R | avg R |
+|---|---|---|---|---|
+| stop | 63 | 0 | -75.06 | -1.19 |
+| no_confirm | 17 | 0 | -8.71 | -0.51 |
+| close1 (survived to day-2 settlement) | 50 | 40 | +115.31 | +2.31 |
+
+A trade that SURVIVES to the next-day settlement wins 80% of the time at
++2.31R average. The whole win-rate problem is the 63 stop-outs (48% of
+all trades) bleeding -1.19R each - slippage makes a full ladder-stop
+loss cost MORE than 1R. The no_confirm class already works as a cheap
+abort (half-R average). So "better win rate" concretely means: fewer
+entries that reach the ladder stop - entry-quality filters, invalidation
+research (the parked cluster/gap study), or exit-before-stop logic -
+NOT squeezing more out of the winners.
+
+Candidate directions for the next research round (open, no decisions):
+- Entry-quality filters that predict the stop class (e.g. room between
+  first reversal and the ladder top relative to recent range).
+- The parked cluster/gap invalidation, aimed specifically at cutting the
+  -1.19R average of the stop class.
+- Execution: every tick of real-world slippage saved goes straight into
+  the stop class's worst losses - the IB streaming entry path
+  (ib_live_session_notes.md) is part of the strategy, not plumbing.

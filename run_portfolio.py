@@ -99,9 +99,13 @@ def cost_in_r(trade):
         # the limit/target rate rather than the stop rate.
         #
         # And it includes the BAR EXITS, for the same reason. 'exit_close' is a
-        # market-on-close and 'exit_open' a market-on-open: both are scheduled orders placed
-        # into the most liquid minutes of the session, so they belong with the limit rate
-        # rather than with a stop that fires into a move nobody chose the timing of. They
+        # market-on-close and 'exit_open' a market-on-open: both are ORDERS WHOSE TIME IS
+        # KNOWN IN ADVANCE, so they can be worked, which is why they belong with the limit
+        # rate rather than with a stop that fires into a move nobody chose the timing of.
+        # NOT a liquidity claim (Lode, 2026-08-06): the day's volume peaks are the OPEN and
+        # the session CLOSE, and the "close" these strategies exit on is the SETTLEMENT,
+        # which is neither -- so on that side the 1 tick rests on the order type alone and
+        # is, if anything, optimistic. The open exits do land on a genuine volume peak. They
         # are the whole strategy for the 24 quick exits, so the choice matters more there
         # than anywhere else -- at 2 ticks round trip it is already the difference between a
         # winner and a loser on quickfixclose0's smallest trades. (A bar-exit strategy that is

@@ -482,8 +482,13 @@ and **`exit_open`**. They name the ORDER TYPE, not the bar, so ALL 23 bar-exit s
 share them and a 24th would need no new reason -- that is deliberate, the reason is what the
 ledger says HAPPENED and "sold at the close" is the same event on bar 0 or bar 2. Both are
 charged the LIMIT slippage rate in `cost_in_r`, not the stop rate, because a
-market-on-close and a market-on-open are scheduled orders in the most liquid minutes of the
-session; at 2 ticks round trip that choice is the difference between a winner and a loser on
+market-on-close and a market-on-open are orders whose TIME IS KNOWN IN ADVANCE and can be
+worked, unlike a stop fired into a move nobody chose the timing of. **THAT IS AN ORDER-TYPE
+ARGUMENT, NOT A LIQUIDITY ONE** (corrected 2026-08-06, Lode: the day's volume peaks are the
+OPEN and the SESSION CLOSE, and the "close" these strategies exit on is the SETTLEMENT, which
+is neither -- so on that side the 1 tick is if anything optimistic; the open exits do land on
+a genuine volume peak). The RATE did not change, only the reason for it. At 2 ticks round
+trip that choice is the difference between a winner and a loser on
 quickfixclose0's smallest trades, so it is a real assumption, not a detail. A bar-exit trade
 that is STOPPED out is charged the stop rate like any other stop.
 

@@ -209,15 +209,39 @@ stops, 50 close1, 17 no_confirm. Stars: ZW +18.97R, DX +16.55R;
 worst: ZB -7.02R, ZC -5.85R, FGBL -4.98R, ES -4.72R. Full details:
 output/quickfix1m1dc_matrix.{json,html} (run_1m_matrix.py).
 
-NOT yet done: the trade study still feeds off the v1 blotter - the new
-baseline is regenerated (run_1m.py with the chosen dials) once Lode
-picks a variant, then the full manual re-inspection starts.
+Superseded: the trade study fed off the v1 blotter when this was written.
+It now carries the current baseline - charter's `site/1m/*__trades.json`
+and `output/quickfix1m1dc_all.json` agree at 153 trades (post-rule-3,
+section 9), so the full manual re-inspection can start on it.
 
 ## 7. Slippage revision (Lode, 2026-08-06): 2 ticks entry, 2 ticks stop
 
 Entry slippage 4 -> 2 ticks, stop-exit slippage 3 -> 2 ticks (settlement
-exits stay 1 tick). Same trades, same dials; only costs moved. The 2x2 at
-the new costs:
+exits stay 1 tick). Same trades, same dials; only costs moved. The full
+model, per exit class:
+
+| class | entry | exit | round trip |
+|---|---|---|---|
+| stop | 2 ticks | 2 (`SLIP_STOP_TICKS`) | 4 |
+| close1 (day-2 settlement) | 2 ticks | 1 (`SLIP_SCHEDULED_TICKS`) | 3 |
+| no_confirm (entry-day settlement) | 2 ticks | 1 | 3 |
+
+Entry slippage is charged in the PRICE (the fill is moved 2 ticks adverse);
+the exits are charged in R as a cost. R stays denominated on the
+first-reversal-to-stop distance, never on the slipped entry.
+
+WHY 1 TICK ON A SETTLEMENT EXIT, stated correctly (Lode, 2026-08-06): it is
+an ORDER-TYPE argument. The time is known in advance, so the order can be
+worked, unlike a stop fired into a move nobody chose the timing of. It is
+NOT the liquidity claim the daily engine's docs used to make - the day's
+volume peaks are the OPEN and the SESSION CLOSE, and settlement (~13:30 ET
+on GC) is neither. So the 1 tick is if anything optimistic here, which puts
+it on the same list as everything else in section 8: execution is a
+first-order part of this edge, and the settlement exit is the side of it we
+have not yet measured against real fills. Rate unchanged, reason fixed;
+same correction applied to `run_portfolio.py`, README and CLAUDE.
+
+The 2x2 at the new costs:
 
 | variant | trades | wr% | netR | longest losing streak | max DD | final |
 |---|---|---|---|---|---|---|

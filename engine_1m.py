@@ -6,7 +6,7 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
 
 - ENTRY IS A MARKET ORDER AT THE LEVEL TOUCH, not a limit resolved on
   1-minute closes. The 1m chart is a visual validator; we model acting
-  in real time and charge a flat ENTRY_SLIP_TICKS (4) of adverse
+  in real time and charge a flat ENTRY_SLIP_TICKS (2) of adverse
   slippage on every entry. No fill uncertainty, no phantom trades, no
   missed winners.
 - R IS DENOMINATED FROM THE FIRST-REVERSAL PRICE to the stop, never
@@ -58,10 +58,11 @@ from dataclasses import dataclass
 MIN_REVERSALS = 3         # tested reversals required (rule 1)
 MIN_LADDER = 4            # levels the ladder must carry (stop anchor)
 MIN_RR = 3.5
-ENTRY_SLIP_TICKS = 4      # market-order entry slippage, in the PRICE
+ENTRY_SLIP_TICKS = 2      # market-order entry slippage, in the PRICE
+                          # (4 -> 2, Lode 2026-08-06)
 RISK_PCT = 1.0            # percent of cash balance risked per trade
 STARTING_CAPITAL = 100_000.0
-SLIP_STOP_TICKS = 3       # exit cost model unchanged from the daily engine
+SLIP_STOP_TICKS = 2       # stop exits (3 -> 2, Lode 2026-08-06)
 SLIP_SCHEDULED_TICKS = 1  # settlement exits are scheduled orders
 
 

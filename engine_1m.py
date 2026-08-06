@@ -30,6 +30,31 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
   update (publish/data date >= previous trading date). Monday's update
   lands Saturday (its second-column date is Monday), so Mondays trade
   from the open in both modes.
+- THE CONFIRMATION CLAUSE IS A DIAL (`confirm`, 2026-08-06). On (the
+  model as designed): the entry day must settle at least a tick beyond
+  the first reversal or the trade is flattened there. Off: every trade
+  is carried to the next day's settlement with the stop live, and
+  `no_confirm` never appears. The clause is the intraday stand-in for
+  the daily engine's own entry trigger (there a trade only exists once
+  a bar CLOSES beyond the level), which is why it is a dial and not a
+  candidate for removal on sight, unlike rule 3. Never measured until
+  now: it had two behaviour tests and no experiment.
+- THE STOP ANCHOR IS A DIAL (`stop_mode`, 2026-08-06):
+  * "ladder" - one tick beyond the 5th (else 4th) reversal. The model
+    as designed.
+  * "ladder_or_extreme" - one tick beyond whichever of that anchor and
+    the session's RUNNING EXTREME AT ENTRY is further away. Motivated
+    by USO 2026-03-13: the session printed 121.15 at 18:19 and the
+    trade entered at 18:48 with its stop at 120.51, so the day had
+    already traded through its own invalidation. Only ever widens.
+  * "extreme" - one tick beyond the running extreme alone, which on a
+    quiet day is TIGHTER than the ladder. It is in the grid to tell
+    "wider is worse" apart from "moving the stop at all is worse".
+  R is denominated level-to-stop in every mode, so a wider stop is a
+  smaller position and fewer R on the same move; a stop that is hit
+  still costs the same 1% either way. After a same-day re-entry the
+  two extreme modes price the new stop off the now-further extreme,
+  which is v1's anti-whipsaw property returning.
 
 Rules recap (short side; long is the mirror):
 - Every minute, rules 1 and 3 evaluate fresh against the ACTIVE levels
@@ -48,7 +73,8 @@ Rules recap (short side; long is the mirror):
   trigger - the level itself must trade or be jumped. If the arming
   minute itself prints the level, its CLOSE must be back beyond the
   level (OHLC cannot order events inside one bar).
-- Confirmation at entry-day settlement: settle must be >= 1 tick beyond
+- Confirmation at entry-day settlement (`confirm`, OFF at the published
+  baseline since 2026-08-06): settle must be >= 1 tick beyond
   min(entry-time first, active-ladder first at settlement); else exit at
   the settlement price (reason no_confirm).
 - Exit: next trading day's settlement (reason close1). Stop live
@@ -145,14 +171,20 @@ def _long_setup(f, run_low):
     return tested[0], tested[1], anchor
 
 
+STOP_MODES = ("ladder", "ladder_or_extreme", "extreme")
+
+
 def run_market(days, files, tick, risk_pct=RISK_PCT,
                start_capital=STARTING_CAPITAL, tighten=True,
-               allow_pre_activation=True):
+               allow_pre_activation=True, confirm=True, stop_mode="ladder"):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
-    `tighten` / `allow_pre_activation` are the two audit dials.
+    `tighten`, `allow_pre_activation`, `confirm` and `stop_mode` are the
+    dials; see the module docstring for what each one means.
     """
+    if stop_mode not in STOP_MODES:
+        raise ValueError(f"stop_mode must be one of {STOP_MODES}")
     trades = []
     cash = start_capital
     pos = None
@@ -200,24 +232,25 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             if pos_.entry_date != day.date:
                 book(pos_, day.settle_ts, day.settle_price, "close1")
                 return None
-            f = _active_file(files, day.settle_ts)
-            threshold = pos_.entry_first
-            setup = None
-            if f is not None:
-                setup = (_short_setup(f, run_high)
-                         if pos_.side == "short"
-                         else _long_setup(f, run_low))
-            if setup is not None:
-                new_first = setup[0]
-                threshold = (min(threshold, new_first)
+            if confirm:
+                f = _active_file(files, day.settle_ts)
+                threshold = pos_.entry_first
+                setup = None
+                if f is not None:
+                    setup = (_short_setup(f, run_high)
                              if pos_.side == "short"
-                             else max(threshold, new_first))
-            ok = (day.settle_price <= threshold - tick
-                  if pos_.side == "short"
-                  else day.settle_price >= threshold + tick)
-            if not ok:
-                book(pos_, day.settle_ts, day.settle_price, "no_confirm")
-                return None
+                             else _long_setup(f, run_low))
+                if setup is not None:
+                    new_first = setup[0]
+                    threshold = (min(threshold, new_first)
+                                 if pos_.side == "short"
+                                 else max(threshold, new_first))
+                ok = (day.settle_price <= threshold - tick
+                      if pos_.side == "short"
+                      else day.settle_price >= threshold + tick)
+                if not ok:
+                    book(pos_, day.settle_ts, day.settle_price, "no_confirm")
+                    return None
             pos_.confirmed = True
             if tighten:
                 # The entry day's extreme is now known: the stop moves to
@@ -299,12 +332,24 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 dist = (run_high - first) if side == "short" else (first - run_low)
                 if dist <= 0:
                     zero_dist_entries += 1
+                # The stop anchor: structure, the session's running extreme
+                # at this minute, or the further of the two. run_high /
+                # run_low already include THIS bar, so the extreme modes
+                # cover the trigger bar's own spike.
                 if side == "short":
                     stop = anchor + tick
+                    if stop_mode != "ladder":
+                        ext = run_high + tick
+                        stop = max(stop, ext) if stop_mode == \
+                            "ladder_or_extreme" else ext
                     rpu = stop - first
                     entry_price = entry_base - ENTRY_SLIP_TICKS * tick
                 else:
                     stop = anchor - tick
+                    if stop_mode != "ladder":
+                        ext = run_low - tick
+                        stop = min(stop, ext) if stop_mode == \
+                            "ladder_or_extreme" else ext
                     rpu = first - stop
                     entry_price = entry_base + ENTRY_SLIP_TICKS * tick
                 risk_usd = cash * risk_pct / 100.0

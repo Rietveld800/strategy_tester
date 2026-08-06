@@ -48,10 +48,14 @@ LIB_PATH = DC / "scripts" / "lightweight-charts.4.2.3.standalone.js"
 
 PX_SCALE = 1e-9
 ACTIVATION_UTC = "07:35"
-# The published baseline (Lode, 2026-08-06): the matrix winner on every
-# priority metric - no settlement tightening, no entries before the
-# day's own update is active. run_1m_matrix.py still runs all four.
-BASELINE = dict(tighten=False, allow_pre_activation=False)
+# The published baseline (Lode): the matrix winner on every priority
+# metric. No settlement tightening, no entries before the day's own
+# update is active (2026-08-06), and NO CONFIRMATION CLAUSE (2026-08-06,
+# second matrix: dropping it improved net R, win rate AND drawdown on an
+# identical set of 153 entries). The stop stays ladder-anchored; the
+# hybrid is a live dial, not retired. run_1m_matrix.py runs the grid.
+BASELINE = dict(tighten=False, allow_pre_activation=False,
+                confirm=False, stop_mode="ladder")
 STAT_SETTLEMENT = 3
 FILES_FROM = date(2025, 12, 20)
 ETF_MATCH_MIN = 0.90
@@ -330,14 +334,13 @@ def market_inputs(key):
     return (days, files, tick, note), None
 
 
-def run_market(key, tighten=True, allow_pre_activation=True):
+def run_market(key, **dials):
+    """One market at the given engine dials (see engine_1m.run_market)."""
     inputs, excluded = market_inputs(key)
     if inputs is None:
         return None, excluded
     days, files, tick, note = inputs
-    trades, summary = engine_1m.run_market(
-        days, files, tick, tighten=tighten,
-        allow_pre_activation=allow_pre_activation)
+    trades, summary = engine_1m.run_market(days, files, tick, **dials)
     for t in trades:
         t["market"] = key
     summary.update(market=key, status="OK", note=note, tick=tick)

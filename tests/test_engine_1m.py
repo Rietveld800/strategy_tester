@@ -353,3 +353,78 @@ def test_window_dial_monday_trades_from_open():
                            allow_pre_activation=False)
     assert len(trades) == 1
     assert "03:00" in trades[0]["entry_ts"]
+
+
+def test_confirm_dial_off_carries_the_unconfirmed_trade():
+    """The entry day settles AT the first reversal, so the clause aborts
+    the trade there. With confirm=False there is no such test: the trade
+    is carried to the next day's settlement with the stop live."""
+    def make_days():
+        return [
+            Day(date=date(2026, 6, 10), contract="GCQ6",
+                bars=short_entry_day() + flat_bars(10, "04:00", 3, 100.0),
+                settle_ts=ts(10, "17:30"), settle_price=100.0),
+            Day(date=date(2026, 6, 11), contract="GCQ6",
+                bars=flat_bars(11, "01:00", 3, 98.0),
+                settle_ts=ts(11, "17:30"), settle_price=98.0),
+        ]
+    on, _ = run_market(make_days(), [base_file()], TICK, confirm=True)
+    off, _ = run_market(make_days(), [base_file()], TICK, confirm=False)
+    assert len(on) == 1 and on[0]["reason"] == "no_confirm"
+    assert on[0]["exit"] == 100.0 and on[0]["net_r"] < 0
+    assert len(off) == 1 and off[0]["reason"] == "close1"
+    assert off[0]["exit"] == 98.0 and off[0]["net_r"] > 0
+
+
+def test_stop_mode_widens_to_a_session_extreme_beyond_the_ladder():
+    """The USO case in miniature: the session prints 103.0 before the
+    trade exists, past the ladder stop at 102.6. ladder_or_extreme moves
+    the stop to 103.1 and R with it (3.1 instead of 2.6), so the SAME
+    price move books fewer R."""
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=[bar(ts(10, "01:00"), 99.5, 99.5, 99.5, 99.5),
+                  bar(ts(10, "02:00"), 99.5, 103.0, 99.5, 102.5),
+                  bar(ts(10, "03:00"), 102.5, 102.5, 99.8, 99.8)]
+                 + flat_bars(10, "04:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    ladder, _ = run_market(days, [base_file()], TICK, stop_mode="ladder")
+    hybrid, _ = run_market(days, [base_file()], TICK,
+                           stop_mode="ladder_or_extreme")
+    assert abs(ladder[0]["stop"] - 102.6) < 1e-9
+    assert abs(ladder[0]["rpu"] - 2.6) < 1e-9
+    assert abs(hybrid[0]["stop"] - 103.1) < 1e-9
+    assert abs(hybrid[0]["rpu"] - 3.1) < 1e-9
+    assert hybrid[0]["exit"] == ladder[0]["exit"] == 98.0
+    assert hybrid[0]["gross_r"] < ladder[0]["gross_r"]
+
+
+def test_stop_mode_keeps_the_ladder_when_the_extreme_is_inside_it():
+    """Running high 102.0 against a ladder stop of 102.6: the hybrid must
+    not TIGHTEN, while plain extreme deliberately does (102.1)."""
+    def make_days():
+        return [
+            Day(date=date(2026, 6, 10), contract="GCQ6",
+                bars=short_entry_day() + flat_bars(10, "04:00", 3, 99.7),
+                settle_ts=ts(10, "17:30"), settle_price=99.5),
+            Day(date=date(2026, 6, 11), contract="GCQ6",
+                bars=flat_bars(11, "01:00", 3, 98.0),
+                settle_ts=ts(11, "17:30"), settle_price=98.0),
+        ]
+    hybrid, _ = run_market(make_days(), [base_file()], TICK,
+                           stop_mode="ladder_or_extreme")
+    extreme, _ = run_market(make_days(), [base_file()], TICK,
+                            stop_mode="extreme")
+    assert abs(hybrid[0]["stop"] - 102.6) < 1e-9
+    assert abs(extreme[0]["stop"] - 102.1) < 1e-9
+    assert abs(extreme[0]["rpu"] - 2.1) < 1e-9
+
+
+def test_unknown_stop_mode_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        run_market([], [], TICK, stop_mode="cluster")

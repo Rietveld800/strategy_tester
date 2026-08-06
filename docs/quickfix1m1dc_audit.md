@@ -297,6 +297,87 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 10. The confirmation clause is gone, the ladder stop stays (2026-08-06)
+
+Two questions from reading USO 2026-03-13 (a no_confirm abort at -0.96R,
+four cents short of its stop, on a day whose session high had passed the
+stop 29 minutes BEFORE the entry existed):
+
+1. should the stop sit beyond the session's running extreme rather than
+   only beyond the ladder?
+2. does the confirmation clause make sense at all?
+
+The clause had NEVER been measured: it arrived with the v1 design, sat in
+no experiment (E1-E5 covered fill, limit lifetime, stops, window, rule-2
+anchor), and had two behaviour tests and no economics. Both questions
+became dials (`confirm`, `stop_mode`) and the matrix was rerun as
+{confirm, hold} x {ladder, hybrid, extreme}, everything else at the
+baseline.
+
+| variant | trades | wr% | netR | streak | max DD | final | stop/abort/day-2 |
+|---|---|---|---|---|---|---|---|
+| confirm+ladder (old baseline) | 153 | 30.7 | +26.63 | 8 | 17.78% | $124,827 | 70/23/60 |
+| **hold+ladder (NEW BASELINE)** | 153 | **36.6** | **+34.56** | 8 | **14.70%** | **$134,426** | 82/0/71 |
+| confirm+hybrid | 144 | 32.6 | +16.92 | 8 | 19.21% | $115,454 | 58/25/61 |
+| hold+hybrid | 143 | 39.9 | +24.84 | **6** | 16.78% | $124,415 | 69/0/74 |
+| confirm+extreme | 172 | 26.2 | +8.49 | 11 | 29.14% | $104,238 | 97/23/52 |
+| hold+extreme | 169 | 30.8 | +17.52 | 10 | 24.11% | $113,519 | 107/0/62 |
+
+Levered to a 6% drawdown, the same order: hold+ladder $113,556 at 0.391%
+risk, confirm+ladder $108,549 (0.327%), hold+hybrid $108,533 (0.344%),
+down to confirm+extreme $101,401.
+
+**THE CLAUSE COSTS MONEY, on an IDENTICAL set of 153 entries** - neither
+dial changes which trades are taken here, so this is a rare like-for-like
+comparison with no cascade distortion. Dropping it improves net R, win
+rate AND drawdown at once. Mechanism: the 23 aborted trades, carried
+instead, cost -2.70R rather than -10.64R (12 stopped, 11 reached the
+day-2 settlement, and enough of those won to pay for the 12).
+
+The decision is the MIRROR of rule 3's. Rule 3 was unprincipled and
+profitable and went anyway; the clause was PRINCIPLED (the intraday
+stand-in for the daily engine's close-beyond-the-level entry proof, which
+is what kept quickfixclose1 a fair baseline) and unprofitable, and goes
+because "simplify, and even come out on top with better metrics" (Lode).
+Consequence to state plainly: quickfix1m1dc is now a pure touch-entry
+strategy that carries every position overnight with the stop live, and it
+no longer asks the daily engine's question at all.
+
+**GAP RISK WAS THE CLAUSE'S ORIGINAL PURPOSE** (Lode's recollection:
+stop a losing trade being gapped through its stop the next morning) and
+it barely exists in this sample. Measured on the new baseline: 6 of 80
+stop exits opened beyond their stop, understating the loss by +0.52R in
+TOTAL, only 2 of them overnight, and NONE of them trades the clause used
+to abort. Related known modelling gap, worth its own fix: engine_1m books
+a stop AT the stop price whatever the bar did, where the daily engine
+fills a gapped stop at the open. Cost of that optimism, measured: ~0.5R
+across the sample.
+
+**THE STOP STAYS LADDER-ANCHORED, and the hybrid is not retired** (Lode:
+"something to keep an eye on"). The hybrid does exactly what it was
+predicted to do - fewer trades (143 v 153), better win rate (39.9 v 36.6)
+and the SHORTEST losing streak in the grid (6) - but the wider stop is a
+bigger R denominator, so the same price move books fewer R: about -9.7R
+either way, and the drawdown goes UP rather than down. (Claude predicted
+-15R to -25R from a per-trade diagnostic; Lode called that too high, and
+was right.) `extreme` (tighter than the ladder) is far worse still, which
+is what it was in the grid to establish: the ladder anchor earns its
+place in BOTH directions, and moving the stop at all is the wrong lever.
+hold+hybrid keeps a report of its own,
+`output/quickfix1m1dc_report_hold_hybrid.html`, built from the matrix
+trades with no extra backtest.
+
+Diagnostics behind the discussion, kept because they shape the next
+round: the wider stop would have moved the stop on 60 of 153 trades
+(median 0.47R further, so a third less size), and of the 26 entry-day
+stop-outs it touches only 6 survive the rest of the day. And the trades
+it touches are the GOOD ones: entries taken after the session had already
+traded through the ladder top are 60 trades at +21.36R (25% wr, winners
++3.99R average) against 93 clean entries at +5.27R (34% wr, +1.22R). Same
+shape as the rule 3 finding - the structurally ugliest setups are the
+strong-trend ones - and it is why an entry FILTER on that condition would
+be the wrong move too.
+
 ## 9. Rule 3 removed (Lode, 2026-08-06)
 
 Rule 3 (>= 3.5x room to the nearest opposite-side reversal, including its

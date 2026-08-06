@@ -209,6 +209,13 @@ stops, 50 close1, 17 no_confirm. Stars: ZW +18.97R, DX +16.55R;
 worst: ZB -7.02R, ZC -5.85R, FGBL -4.98R, ES -4.72R. Full details:
 output/quickfix1m1dc_matrix.{json,html} (run_1m_matrix.py).
 
+The per-trade REPORT for the inspection round is
+output/quickfix1m1dc_report.html (build_1m_report.py, 2026-08-06): the
+rules and dials, the KPIs, the exit-class anatomy, the full blotter, the
+per-market table and the daily calendar, with every blotter row linking
+into the trade study at that trade. output/quickfix1m1dc_matrix.html
+stays the variant comparison this section asked for.
+
 Superseded: the trade study fed off the v1 blotter when this was written.
 It now carries the current baseline - charter's `site/1m/*__trades.json`
 and `output/quickfix1m1dc_all.json` agree at 153 trades (post-rule-3,

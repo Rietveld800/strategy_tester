@@ -66,7 +66,11 @@ ENTRY_SLIP_TICKS = 2      # market-order entry slippage, in the PRICE
 RISK_PCT = 1.0            # percent of cash balance risked per trade
 STARTING_CAPITAL = 100_000.0
 SLIP_STOP_TICKS = 2       # stop exits (3 -> 2, Lode 2026-08-06)
-SLIP_SCHEDULED_TICKS = 1  # settlement exits are scheduled orders
+SLIP_SCHEDULED_TICKS = 1  # settlement exits (close1, no_confirm): the time
+                          # is known in advance, so the order can be worked.
+                          # NOT a liquidity claim - the day's volume peaks are
+                          # the open and the session close, and settlement is
+                          # neither (Lode, 2026-08-06)
 
 
 @dataclass

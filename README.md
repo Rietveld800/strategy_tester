@@ -337,8 +337,13 @@ We only have daily bars, not intraday ticks (that arrives later with IBKR data).
   mildly conservative — the gap is already in the fill price — and is left alone deliberately:
   it is an order-type cost, not a re-pricing of the fill.
 - The **bar exits** are charged the **limit rate** (1 tick), not the stop rate: a
-  market-on-close and a market-on-open are scheduled orders placed into the most liquid
-  minutes of the session, not a stop fired into a move nobody chose the timing of. Same
+  market-on-close and a market-on-open are orders whose **time is known in advance**, so they
+  can be worked, rather than a stop fired into a move nobody chose the timing of. **That is an
+  order-type argument, not a liquidity one** (corrected 2026-08-06, Lode): the day's volume
+  peaks are the **open** and the **session close**, and the "close" these strategies exit on is
+  the **settlement**, which is neither. So the open exits do land on a real volume peak, while
+  on the settlement side the 1 tick rests on the order type alone and is, if anything,
+  optimistic. The rate is unchanged; only the reason for it was wrong. Same
   reasoning already applied to `data_end`. It matters more here than anywhere else — at two
   ticks round trip it is the difference between a winner and a loser on quickfixclose0's
   smallest trades, and those trades are the *only* way it loses at all. A bar-exit trade that

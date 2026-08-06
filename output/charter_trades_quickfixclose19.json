@@ -668,13 +668,13 @@
      "side": "short",
      "entry_date": "2026-07-08",
      "entry": 3.305,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-04",
+     "exit": 2.682,
      "stop": 3.356,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_close",
+     "r": 12.216,
+     "bars": 19
     }
    ]
   },

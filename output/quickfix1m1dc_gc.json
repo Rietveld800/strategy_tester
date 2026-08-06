@@ -1,0 +1,240 @@
+{
+  "strategy": "quickfix1m1dc",
+  "design_doc": "../data_center/docs/backtest_1m_design.md",
+  "params": {
+    "tick": 0.1,
+    "risk_pct": 1.0,
+    "stop_mult": 1.5,
+    "activation_utc": "07:35",
+    "start_capital": 100000.0
+  },
+  "summary": {
+    "trades": 9,
+    "wins": 6,
+    "win_rate": 66.7,
+    "net_r_total": 10.31,
+    "final_cash": 110637.55,
+    "return_pct": 10.64,
+    "zero_dist_entries": 0,
+    "reasons": {
+      "stop": 3,
+      "no_confirm": 0,
+      "close1": 6,
+      "data_end": 0
+    }
+  },
+  "excluded_days": [
+    {
+      "date": "2026-01-28",
+      "why": "segment last day"
+    },
+    {
+      "date": "2026-01-29",
+      "why": "new front day"
+    },
+    {
+      "date": "2026-03-27",
+      "why": "segment last day"
+    },
+    {
+      "date": "2026-03-30",
+      "why": "new front day"
+    },
+    {
+      "date": "2026-05-27",
+      "why": "segment last day"
+    },
+    {
+      "date": "2026-05-28",
+      "why": "new front day"
+    },
+    {
+      "date": "2026-07-29",
+      "why": "segment last day"
+    },
+    {
+      "date": "2026-07-30",
+      "why": "new front day"
+    },
+    {
+      "date": "2026-07-31",
+      "why": "segment last day"
+    }
+  ],
+  "skipped_files": [
+    "2026-04-17"
+  ],
+  "trades": [
+    {
+      "side": "short",
+      "contract": "GCJ6",
+      "entry_date": "2026-03-02",
+      "entry_ts": "2026-03-01 23:00:00+00:00",
+      "entry": 5358.1,
+      "stop": 5419.45,
+      "rpu": 61.349999999999454,
+      "stop_tightened": null,
+      "exit_ts": "2026-03-02 07:12:00+00:00",
+      "exit": 5419.45,
+      "reason": "stop",
+      "gross_r": -1.0,
+      "cost_r": 0.0065,
+      "net_r": -1.0065,
+      "risk_usd": 1000.0,
+      "pnl_usd": -1006.52,
+      "cash_after": 98993.48
+    },
+    {
+      "side": "short",
+      "contract": "GCJ6",
+      "entry_date": "2026-03-02",
+      "entry_ts": "2026-03-02 14:25:00+00:00",
+      "entry": 5358.1,
+      "stop": 5472.1,
+      "rpu": 114.0,
+      "stop_tightened": 5434.200000000001,
+      "exit_ts": "2026-03-03 18:30:18.014790957+00:00",
+      "exit": 5123.700000000001,
+      "reason": "close1",
+      "gross_r": 2.0561,
+      "cost_r": 0.0018,
+      "net_r": 2.0544,
+      "risk_usd": 989.93,
+      "pnl_usd": 2033.71,
+      "cash_after": 101027.19
+    },
+    {
+      "side": "long",
+      "contract": "GCJ6",
+      "entry_date": "2026-03-24",
+      "entry_ts": "2026-03-24 07:35:00+00:00",
+      "entry": 4335.0,
+      "stop": 4291.950000000001,
+      "rpu": 43.04999999999973,
+      "stop_tightened": 4306.2,
+      "exit_ts": "2026-03-25 17:30:24.039028893+00:00",
+      "exit": 4552.3,
+      "reason": "close1",
+      "gross_r": 5.0476,
+      "cost_r": 0.0046,
+      "net_r": 5.043,
+      "risk_usd": 1010.27,
+      "pnl_usd": 5094.77,
+      "cash_after": 106121.96
+    },
+    {
+      "side": "short",
+      "contract": "GCM6",
+      "entry_date": "2026-05-11",
+      "entry_ts": "2026-05-11 13:50:00+00:00",
+      "entry": 4746.0,
+      "stop": 4764.6,
+      "rpu": 18.60000000000082,
+      "stop_tightened": 4758.500000000001,
+      "exit_ts": "2026-05-11 22:46:00+00:00",
+      "exit": 4758.500000000001,
+      "reason": "stop",
+      "gross_r": -0.672,
+      "cost_r": 0.0215,
+      "net_r": -0.6935,
+      "risk_usd": 1061.22,
+      "pnl_usd": -736.01,
+      "cash_after": 105385.96
+    },
+    {
+      "side": "short",
+      "contract": "GCM6",
+      "entry_date": "2026-05-12",
+      "entry_ts": "2026-05-12 01:27:00+00:00",
+      "entry": 4746.0,
+      "stop": 4802.1,
+      "rpu": 56.10000000000082,
+      "stop_tightened": 4783.500000000001,
+      "exit_ts": "2026-05-13 17:30:19.035981267+00:00",
+      "exit": 4706.700000000001,
+      "reason": "close1",
+      "gross_r": 0.7005,
+      "cost_r": 0.0036,
+      "net_r": 0.697,
+      "risk_usd": 1053.86,
+      "pnl_usd": 734.51,
+      "cash_after": 106120.46
+    },
+    {
+      "side": "long",
+      "contract": "GCQ6",
+      "entry_date": "2026-06-08",
+      "entry_ts": "2026-06-08 11:19:00+00:00",
+      "entry": 4347.0,
+      "stop": 4266.0,
+      "rpu": 81.0,
+      "stop_tightened": 4292.9,
+      "exit_ts": "2026-06-09 15:31:00+00:00",
+      "exit": 4292.9,
+      "reason": "stop",
+      "gross_r": -0.6679,
+      "cost_r": 0.0049,
+      "net_r": -0.6728,
+      "risk_usd": 1061.2,
+      "pnl_usd": -714.02,
+      "cash_after": 105406.44
+    },
+    {
+      "side": "long",
+      "contract": "GCQ6",
+      "entry_date": "2026-06-11",
+      "entry_ts": "2026-06-11 07:35:00+00:00",
+      "entry": 4103.0,
+      "stop": 4017.8,
+      "rpu": 85.19999999999959,
+      "stop_tightened": 4046.1000000000004,
+      "exit_ts": "2026-06-12 17:30:18.342425067+00:00",
+      "exit": 4238.8,
+      "reason": "close1",
+      "gross_r": 1.5939,
+      "cost_r": 0.0023,
+      "net_r": 1.5915,
+      "risk_usd": 1054.06,
+      "pnl_usd": 1677.6,
+      "cash_after": 107084.04
+    },
+    {
+      "side": "long",
+      "contract": "GCQ6",
+      "entry_date": "2026-06-30",
+      "entry_ts": "2026-06-30 01:20:00+00:00",
+      "entry": 3984.0,
+      "stop": 3941.1000000000004,
+      "rpu": 42.899999999999864,
+      "stop_tightened": 3955.3,
+      "exit_ts": "2026-07-01 17:30:20.901573509+00:00",
+      "exit": 4082.4,
+      "reason": "close1",
+      "gross_r": 2.2937,
+      "cost_r": 0.0047,
+      "net_r": 2.289,
+      "risk_usd": 1070.84,
+      "pnl_usd": 2451.2,
+      "cash_after": 109535.24
+    },
+    {
+      "side": "long",
+      "contract": "GCQ6",
+      "entry_date": "2026-07-17",
+      "entry_ts": "2026-07-17 13:37:00+00:00",
+      "entry": 3984.0,
+      "stop": 3952.500000000001,
+      "rpu": 31.499999999999318,
+      "stop_tightened": 3962.9000000000005,
+      "exit_ts": "2026-07-20 17:30:17.802646573+00:00",
+      "exit": 4015.9,
+      "reason": "close1",
+      "gross_r": 1.0127,
+      "cost_r": 0.0063,
+      "net_r": 1.0063,
+      "risk_usd": 1095.35,
+      "pnl_usd": 1102.31,
+      "cash_after": 110637.55
+    }
+  ]
+}

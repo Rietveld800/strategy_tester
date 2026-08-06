@@ -152,13 +152,13 @@
      "side": "short",
      "entry_date": "2026-07-24",
      "entry": 706.0,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-04",
+     "exit": 638.4,
      "stop": 711.3,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_close",
+     "r": 12.755,
+     "bars": 7
     }
    ]
   },
@@ -278,13 +278,13 @@
      "side": "short",
      "entry_date": "2026-07-24",
      "entry": 488.1,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-04",
+     "exit": 465.4,
      "stop": 492.1,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_close",
+     "r": 5.675,
+     "bars": 7
     }
    ]
   },
@@ -728,13 +728,13 @@
      "side": "long",
      "entry_date": "2026-07-29",
      "entry": 2.69,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-04",
+     "exit": 2.665,
      "stop": 2.665,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "stop",
+     "r": -1.0,
+     "bars": 4
     }
    ]
   },

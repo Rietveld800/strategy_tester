@@ -171,29 +171,23 @@ def test_gap_through_level_fills_from_first_available_price():
     assert abs(trades[0]["entry"] - (99.7 - 0.2)) < 1e-9
 
 
-def test_rule3_enabled_by_update_bringing_bearish_reversals():
-    old = file_at(8, ts(9, "00:00"), bull=BULL5, bear=[], prev_close=99.0)
-    new = file_at(9, ts(10, "07:35"), bull=BULL5, bear=[90.0],
-                  prev_close=99.0)
-    bars = [
-        bar(ts(10, "01:00"), 99.5, 99.5, 99.5, 99.5),
-        bar(ts(10, "02:00"), 99.5, 102.0, 99.5, 101.5),
-        bar(ts(10, "03:00"), 101.5, 101.5, 99.8, 99.8),  # touch, but no room
-        bar(ts(10, "08:00"), 99.9, 100.4, 99.8, 99.8),   # post-update touch
-    ]
+def test_no_opposite_reversals_is_still_a_trade():
+    """Rule 3 is REMOVED (Lode, 2026-08-06): a file with a full ladder and
+    NO opposite-side reversals - the GC 2026-02-02 configuration - trades
+    normally; there is no room requirement and no existence requirement."""
+    f = base_file(bear=[])
     days = [
         Day(date=date(2026, 6, 10), contract="GCQ6",
-            bars=bars + flat_bars(10, "09:00", 3, 99.7),
+            bars=short_entry_day() + flat_bars(10, "04:00", 3, 99.7),
             settle_ts=ts(10, "17:30"), settle_price=99.5),
         Day(date=date(2026, 6, 11), contract="GCQ6",
             bars=flat_bars(11, "01:00", 3, 98.0),
             settle_ts=ts(11, "17:30"), settle_price=98.0),
     ]
-    trades, _ = run_market(days, [old, new], TICK)
+    trades, _ = run_market(days, [f], TICK)
     assert len(trades) == 1
-    assert "08:00" in trades[0]["entry_ts"]
-    # the level PRINTS in the bar -> the market order fires at the level
-    assert abs(trades[0]["entry"] - (100.0 - 0.2)) < 1e-9
+    assert "03:00" in trades[0]["entry_ts"]
+    assert trades[0]["reason"] == "close1"
 
 
 def test_rule2_refusal_blocks_day_for_that_ladder():
@@ -213,8 +207,8 @@ def test_rule2_refusal_blocks_day_for_that_ladder():
 def test_same_day_reentry_keeps_ladder_stop():
     """Stopped out at the ladder stop; price returns through the level and
     re-enters the same day. The ladder stop does NOT widen (unlike the old
-    extreme-multiple stop); only rule 3's grown base gates the re-entry -
-    bear at 70 gives room 30 >= 3.5 x 2.7."""
+    extreme-multiple stop); with rule 3 removed only a fresh trigger gates
+    the re-entry."""
     deep_room = base_file(bear=[70.0])
     bars = short_entry_day()                                   # entry 03:00
     bars += [

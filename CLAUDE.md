@@ -542,9 +542,12 @@ Not yet done: intraday price data (IBKR) to replace the daily-proxy fill assumpt
 ## 1-minute workstream (2026-08-03, standalone — NOT in the registry)
 
 `engine_1m.py` + `run_1m.py` + `tests/test_engine_1m.py` implement
-**quickfix1m1dc**: quickfix rules 1-3 evaluated INTRADAY on 1-minute bars,
-stop = 3x the entry-to-running-extreme distance, exit at next-day
-settlement. The full rule set, every decision and the first results live
+**quickfix1m1dc v2**: rules 1-2 evaluated INTRADAY on 1-minute bars
+(rule 3 REMOVED 2026-08-06 - target-era logic), market-order entry when
+the first reversal prints (2 ticks slippage), ladder-anchored stop (one
+tick beyond the 5th reversal, 4th when only four; ladder must carry 4),
+R denominated level-to-stop, exit at next-day settlement. Baseline dials
+(run_1m.BASELINE): no tightening, no pre-activation entries. The full rule set, every decision and the first results live
 in `../data_center/docs/backtest_1m_design.md` — READ THAT before touching
 any of it. The 2026-08-05 trade-review audit (fill-model phantoms, stop
 variants, overnight-window dial, verified timing model) is

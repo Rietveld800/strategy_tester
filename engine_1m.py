@@ -15,6 +15,12 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
   eligible ladder, or beyond the 4th when only four exist. A setup
   requires the ladder to carry at least MIN_LADDER (4) reversals.
   No multiplier, no cluster/gap logic (parked by decision).
+- RULE 3 IS REMOVED (Lode, 2026-08-06): the 3.5x room-to-opposite-
+  structure requirement was target-era logic - this strategy exits at
+  the next day's settlement regardless, so the requirement guarded
+  nothing and its existence clause (no opposite-side reversals -> no
+  trade at all) blocked exactly the one-sided files that mark the
+  strongest trends (GC 2026-02-02).
 - TIGHTENING IS A DIAL (`tighten`): when on, a confirmed trade's stop
   moves to the entry day's extreme +- 1 tick at the entry-day
   settlement (the daily engine's stop, now knowable); when off the
@@ -33,8 +39,6 @@ Rules recap (short side; long is the mirror):
   Rule 1: >= MIN_REVERSALS tested (run_high reached them); the ladder
   itself must carry >= MIN_LADDER levels. first = lowest, second = next.
 - Rule 2: one verdict per (day, ladder): refuse if day open >= second.
-- Rule 3: nearest bearish reversal below first must be >= MIN_RR x the
-  entry-to-extreme distance (max(run_high - first, 1 tick)) below it.
 - Trigger: once armed, the first minute in which the first-reversal
   price PRINTS (low <= first <= high) - the market order fires at the
   level, entry = first - ENTRY_SLIP_TICKS. If the bar GAPS past the
@@ -57,7 +61,6 @@ from dataclasses import dataclass
 
 MIN_REVERSALS = 3         # tested reversals required (rule 1)
 MIN_LADDER = 4            # levels the ladder must carry (stop anchor)
-MIN_RR = 3.5
 ENTRY_SLIP_TICKS = 2      # market-order entry slippage, in the PRICE
                           # (4 -> 2, Lode 2026-08-06)
 RISK_PCT = 1.0            # percent of cash balance risked per trade
@@ -292,18 +295,11 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 dist = (run_high - first) if side == "short" else (first - run_low)
                 if dist <= 0:
                     zero_dist_entries += 1
-                base = max(dist, tick)
                 if side == "short":
-                    opposite = [b for b in f.bear if b < first]
-                    if not opposite or (first - max(opposite)) < MIN_RR * base:
-                        continue
                     stop = anchor + tick
                     rpu = stop - first
                     entry_price = entry_base - ENTRY_SLIP_TICKS * tick
                 else:
-                    opposite = [b for b in f.bull if b > first]
-                    if not opposite or (min(opposite) - first) < MIN_RR * base:
-                        continue
                     stop = anchor - tick
                     rpu = first - stop
                     entry_price = entry_base + ENTRY_SLIP_TICKS * tick

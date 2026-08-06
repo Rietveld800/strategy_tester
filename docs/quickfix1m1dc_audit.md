@@ -265,3 +265,35 @@ Candidate directions for the next research round (open, no decisions):
 - Execution: every tick of real-world slippage saved goes straight into
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
+
+## 9. Rule 3 removed (Lode, 2026-08-06)
+
+Rule 3 (>= 3.5x room to the nearest opposite-side reversal, including its
+existence clause: no opposite reversals -> no trade) was target-era logic.
+quickfix1m1dc exits at the next day's settlement regardless, so the
+requirement guarded nothing - and the existence clause blocked exactly the
+one-sided files that mark the strongest trends. The motivating case now
+trades: GC 2026-02-02 06:55 long 4517.2 (a file with a five-level bear
+ladder and zero bulls) -> 4935.0 at next-day settlement, +2.10R.
+
+Measured cost, honestly stated - the removal is a PRINCIPLED change, not a
+performance win. Baseline (frozen+blocked, 2-tick slippage):
+
+| | with rule 3 | without |
+|---|---|---|
+| trades | 130 | 153 |
+| win rate | 30.8% | 30.7% |
+| net R | +31.54 | +26.63 |
+| longest losing streak | 7 | 8 |
+| max DD | 17.95% | 17.78% |
+| final | $131,386 | $124,827 |
+
+The 23 recovered trades split: 7 new stop-outs (-8.1R), 6 no_confirm
+aborts (-1.9R), 10 survived to close1 (7 winners, +5.2R) - net -4.9R.
+Rule 3 HAD been acting as an accidental entry-quality filter, mediocre
+but positive. Keeping a rule for accidental benefit is curve-fitting;
+the honest path is the one taken: remove the unprincipled rule, and let
+the entry-quality research (section 8) earn those 7 stop-outs back with
+a filter that has a reason to exist. Anatomy without rule 3: stop 70x
+-1.19R avg, no_confirm 23x -0.46R, close1 60 trades / 47 wins / +2.01R
+avg - survival-to-settlement still wins 78%.

@@ -552,7 +552,27 @@ Not yet done: intraday price data (IBKR) to replace the daily-proxy fill assumpt
 the first reversal prints (2 ticks slippage), ladder-anchored stop (one
 tick beyond the 5th reversal, 4th when only four; ladder must carry 4),
 R denominated level-to-stop, exit at next-day settlement. Baseline dials
-(run_1m.BASELINE): no tightening, no pre-activation entries. The full rule set, every decision and the first results live
+(run_1m.BASELINE): no tightening, no pre-activation entries, **no
+confirmation clause**, ladder stop.
+**THE CONFIRMATION CLAUSE WENT ON 2026-08-06** (Lode), and it is the
+MIRROR of rule 3: rule 3 was unprincipled and profitable and went anyway;
+the clause was PRINCIPLED (the intraday stand-in for the daily engine's
+close-beyond-the-level entry proof) and cost money. Measured on an
+IDENTICAL 153 entries, dropping it improved net R (+26.63 -> +34.56), win
+rate (30.7 -> 36.6%) and drawdown (17.78 -> 14.70%) at once; the 23
+aborted trades carried instead cost -2.70R against -10.64R. So the model
+is now a pure touch-entry strategy carrying every position overnight with
+the stop live, and it no longer asks the daily engine's question. The
+gap risk the clause was FOR barely exists here: 6 of 80 stops opened
+through their stop, 0.52R in total, none of them former aborts. Related
+open item: engine_1m books a stop AT the stop price where the daily
+engine fills a gapped stop at the OPEN, worth ~0.5R of optimism.
+**TWO DIALS carry this**: `confirm` and `stop_mode` (`ladder` /
+`ladder_or_extreme` / `extreme`). The hybrid stop is NOT retired (Lode:
+"keep an eye on") - it wins on win rate (39.9%) and has the shortest
+losing streak in the grid (6), but a wider stop is a bigger R denominator
+so it books ~9.7R less; `extreme` is far worse, which is how we know the
+ladder anchor earns its place in both directions. See audit section 10. The full rule set, every decision and the first results live
 in `../data_center/docs/backtest_1m_design.md` — READ THAT before touching
 any of it. The 2026-08-05 trade-review audit (fill-model phantoms, stop
 variants, overnight-window dial, verified timing model) is
@@ -582,6 +602,13 @@ into charter's 1m study at that trade** (`trades.html?m=<Market>&t=<n>`,
 does); the link needs charter's `serve.py` running. The old dark
 `quickfix1m1dc_equity.html` and `run_1m.build_html` are GONE (2026-08-06) --
 the report says everything they said.
+`build_1m_report.py --variant hold+hybrid` builds a report for ANY cell of
+`run_1m_matrix.py` straight from the matrix trades, with no extra backtest
+(the matrix already ran every dial over one data load) and under its own
+filename. Only the published baseline goes through `run_1m.py`, because that
+run is also what charter's trade study reads. The rules block and the stop
+sentence are GENERATED from the payload's dials, so a variant page states its
+own model rather than the baseline's.
 
 ## Working agreements (carried over from charter)
 

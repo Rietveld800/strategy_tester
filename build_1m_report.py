@@ -29,6 +29,7 @@ figures run_1m wrote and warns on drift.
 """
 
 import json
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -40,6 +41,7 @@ from build_equity_html import CSS
 
 HERE = Path(__file__).resolve().parent
 IN_JSON = HERE / "output" / "quickfix1m1dc_all.json"
+MATRIX_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_report.html"
 LIB_PATH = (HERE / ".." / "data_center" / "scripts"
             / "lightweight-charts.4.2.3.standalone.js")
@@ -196,10 +198,30 @@ def kpi(label, value, sub="", tone=""):
             f'<div class="sub">{sub}</div></div>')
 
 
+STOP_TEXT = {
+    "ladder": "one tick beyond the <b>5th reversal</b> of the active ladder, "
+              "the 4th when only four exist",
+    "ladder_or_extreme": "one tick beyond whichever is further away, the "
+                         "<b>5th reversal</b> of the active ladder or the "
+                         "<b>session's running extreme at entry</b>",
+    "extreme": "one tick beyond the <b>session's running extreme at "
+               "entry</b>, ignoring the ladder",
+}
+
+
 def rules_html(p):
     slip = (f'{engine_1m.ENTRY_SLIP_TICKS} ticks on entry, '
             f'{engine_1m.SLIP_STOP_TICKS} on a stop, '
             f'{engine_1m.SLIP_SCHEDULED_TICKS} on a settlement exit')
+    confirm = p.get("confirm", True)
+    exit_card = (
+        "The <b>settlement of the day after entry</b>, with the stop live "
+        "throughout. Nothing else closes the trade."
+        if not confirm else
+        "The <b>settlement of the day after entry</b>. If the entry day does "
+        "not settle at least one tick beyond the active first reversal, the "
+        "trade is aborted at that settlement instead "
+        "(<b>no confirmation</b>). The stop is live throughout.")
     cards = [
         ("1", "Signal",
          f"At least <b>{p['min_tested']} reversals</b> of the active file's "
@@ -217,11 +239,7 @@ def rules_html(p):
          f"<b>{engine_1m.ENTRY_SLIP_TICKS} ticks</b> of adverse slippage. "
          "Risk is denominated on the <b>first reversal to the stop</b>, never "
          "on the slipped fill."),
-        ("4", "Exit",
-         "The <b>settlement of the day after entry</b>. If the entry day does "
-         "not settle at least one tick beyond the active first reversal, the "
-         "trade is aborted at that settlement instead "
-         "(<b>no confirmation</b>). The stop is live throughout."),
+        ("4", "Exit", exit_card),
     ]
     grid = "".join(
         f'<div class="rule"><div class="n">{n}</div><div>'
@@ -234,20 +252,24 @@ def rules_html(p):
   1-minute bars. Rule 3, the 3.5R room requirement, was removed on 2026-08-06
   as target-era logic: this strategy exits at a settlement regardless, so it
   guarded nothing, and its existence clause blocked the one-sided files that
-  mark the strongest trends.</div></div>
+  mark the strongest trends.{"" if confirm else " The confirmation clause went"
+  " the same day, and for the opposite reason: it was measured, and cutting"
+  " unconfirmed trades at the entry-day close cost net R, win rate AND"
+  " drawdown against simply carrying them."}</div></div>
   <div class="rulegrid">{grid}</div>
-  <div class="rulefoot"><b>The stop</b> is one tick beyond the
-  <b>5th reversal</b> of the active ladder, the 4th when only four exist. It
+  <div class="rulefoot"><b>The stop</b> is
+  {STOP_TEXT.get(p.get('stop_mode', 'ladder'), p.get('stop_mode'))}. It
   is structural, not a multiple of the move, and it is what makes 1R a
   distance the chart can show. <b>1R = {p['risk_pct']}%</b> of equity at
   entry.</div>
-  <div class="rulefoot"><b>Dials</b>, at the baseline this page is built at:
-  stop tightening at the entry-day settlement is
-  <b>{'on' if p['tighten'] else 'off'}</b>, entries before the day's own
-  update is active are
+  <div class="rulefoot"><b>Dials</b>, at the setting this page is built at:
+  the <b>confirmation clause</b> is
+  <b>{'on' if confirm else 'off'}</b>, stop tightening at the entry-day
+  settlement is <b>{'on' if p['tighten'] else 'off'}</b>, entries before the
+  day's own update is active are
   <b>{'allowed' if p['allow_pre_activation'] else 'blocked'}</b>, and levels
-  activate at <b>{p['activation_utc']} UTC</b>. That pair won the 2x2 on every
-  priority metric, see the audit.</div>
+  activate at <b>{p.get('activation_utc', '07:35')} UTC</b>. Every one of
+  those was chosen by a measured matrix, see the audit.</div>
   <div class="rulefoot"><b>Slippage</b>: {slip}. The entry is charged in the
   PRICE, the exits in R. The settlement rate is an order-type argument, the
   time is known in advance so the order can be worked, and not a liquidity
@@ -564,8 +586,41 @@ __JS__
 </body></html>"""
 
 
-def build():
-    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+def variant_payload(name):
+    """A blotter-shaped payload for one cell of run_1m_matrix.py.
+
+    The matrix already ran every dial combination over one data load, so a
+    variant report costs no backtest: its trades, per-market rows and
+    exclusions are all in the matrix JSON. Only the published baseline
+    goes through run_1m.py, because that run is also what charter's trade
+    study reads.
+    """
+    m = json.loads(MATRIX_JSON.read_text(encoding="utf-8"))
+    if name not in m["variants"]:
+        raise SystemExit(f"{name} is not in the matrix "
+                         f"({', '.join(m['variants'])})")
+    v = m["variants"][name]
+    trades = sorted(m["trades"][name], key=lambda t: t["entry_ts"])
+    return dict(
+        strategy=f"quickfix1m1dc [{name}]",
+        params=dict(m["params"], activation_utc="07:35",
+                    stop="see stop_mode", **v["dials"]),
+        portfolio=dict(final=v["final_cash"], max_dd_pct=v["max_dd_pct"],
+                       trades=v["trades"], win_rate=v["win_rate"],
+                       net_r=v["net_r"]),
+        markets=m["per_market"][name], excluded=m.get("excluded", []),
+        trades=trades)
+
+
+def build(data=None, out=None, variant=None):
+    """The published baseline by default; one matrix cell when `variant`
+    names one, written beside it under its own filename."""
+    if variant:
+        data = variant_payload(variant)
+        out = OUT_HTML.with_name(
+            f"{OUT_HTML.stem}_{variant.replace('+', '_')}.html")
+    data = data or json.loads(IN_JSON.read_text(encoding="utf-8"))
+    out = out or OUT_HTML
     trades = data["trades"]
     p = data["params"]
     published = data["portfolio"]
@@ -728,11 +783,17 @@ def build():
                      .replace("__EQ__", ser(eq))
                      .replace("__DD__", ser(dd))
                      .replace("__OP__", ser(openpos))))
-    OUT_HTML.write_text(html, encoding="utf-8")
+    out.write_text(html, encoding="utf-8")
     print(f"report: {len(trades)} trades, final ${final:,.2f}, max drawdown "
-          f"{max_dd:.2f}%, {len(days)} days -> {OUT_HTML.name} "
+          f"{max_dd:.2f}%, {len(days)} days -> {out.name} "
           f"({len(html) / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":
-    build()
+    # python build_1m_report.py                     the published baseline
+    # python build_1m_report.py --variant hold+hybrid   one matrix cell
+    args = sys.argv[1:]
+    if args and args[0] == "--variant":
+        build(variant=args[1])
+    else:
+        build()

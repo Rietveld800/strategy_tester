@@ -1,8 +1,8 @@
 """Tests for engine_1m v2 - the audit-decision mechanics (2026-08-06):
-market-order entry at the level touch with 4 ticks slippage, R denominated
+market-order entry at the level touch with 2 ticks slippage, R denominated
 level-to-ladder-stop, ladder-anchored stop (5th else 4th reversal), the
 tighten and allow_pre_activation dials. Synthetic minute bars; prices in
-gold-like terms, tick 0.1 (slippage = 0.4)."""
+gold-like terms, tick 0.1 (slippage = 0.2)."""
 
 import sys
 from datetime import date
@@ -55,7 +55,7 @@ def short_entry_day(day=10):
     """Open 99.5 (below second 100.5); the rally bar tests four reversals
     (high 102) and closes back above the first, so it does NOT enter (the
     arming bar needs its close back beyond the level); the next bar's low
-    touches 100 -> market order, entry 100 - 4 ticks = 99.6."""
+    touches 100 -> market order, entry 100 - 2 ticks = 99.8."""
     return [
         bar(ts(day, "01:00"), 99.5, 99.5, 99.5, 99.5),
         bar(ts(day, "02:00"), 99.5, 102.0, 99.5, 101.5),
@@ -77,12 +77,12 @@ def test_basic_short_slipped_entry_ladder_stop_close1():
     t = trades[0]
     assert t["side"] == "short"
     assert "03:00" in t["entry_ts"]          # not the arming bar
-    assert abs(t["entry"] - 99.6) < 1e-9     # 100.0 - 4 ticks slippage
+    assert abs(t["entry"] - 99.8) < 1e-9     # 100.0 - 2 ticks slippage
     assert abs(t["stop"] - 102.6) < 1e-9     # 5th reversal 102.5 + tick
     assert abs(t["rpu"] - 2.6) < 1e-9        # first->stop, NOT entry->stop
     assert abs(t["stop_tightened"] - 102.1) < 1e-9   # day high 102 + tick
     assert t["reason"] == "close1" and t["exit"] == 98.0
-    assert abs(t["gross_r"] - (99.6 - 98.0) / 2.6) < 1e-3
+    assert abs(t["gross_r"] - (99.8 - 98.0) / 2.6) < 1e-3
 
 
 def test_four_level_ladder_anchors_stop_on_fourth():
@@ -146,13 +146,13 @@ def test_update_switch_enables_trade_from_pre_update_extremes():
     trades, _ = run_market(days, [old, new], TICK)
     assert len(trades) == 1
     assert "08:00" in trades[0]["entry_ts"]
-    assert abs(trades[0]["entry"] - 99.6) < 1e-9
+    assert abs(trades[0]["entry"] - 99.8) < 1e-9
 
 
 def test_gap_through_level_fills_from_first_available_price():
     """Armed the bar before; the next bar OPENS below the first reversal
     (price jumped the level) -> the market order fills from the open, not
-    the level: entry = open - 4 ticks."""
+    the level: entry = open - 2 ticks."""
     bars = [
         bar(ts(10, "01:00"), 99.5, 99.5, 99.5, 99.5),
         bar(ts(10, "02:00"), 99.5, 102.0, 100.2, 101.5),  # arms, low ABOVE first
@@ -168,7 +168,7 @@ def test_gap_through_level_fills_from_first_available_price():
     ]
     trades, _ = run_market(days, [base_file()], TICK)
     assert len(trades) == 1
-    assert abs(trades[0]["entry"] - (99.7 - 0.4)) < 1e-9
+    assert abs(trades[0]["entry"] - (99.7 - 0.2)) < 1e-9
 
 
 def test_rule3_enabled_by_update_bringing_bearish_reversals():
@@ -193,7 +193,7 @@ def test_rule3_enabled_by_update_bringing_bearish_reversals():
     assert len(trades) == 1
     assert "08:00" in trades[0]["entry_ts"]
     # the level PRINTS in the bar -> the market order fires at the level
-    assert abs(trades[0]["entry"] - (100.0 - 0.4)) < 1e-9
+    assert abs(trades[0]["entry"] - (100.0 - 0.2)) < 1e-9
 
 
 def test_rule2_refusal_blocks_day_for_that_ladder():
@@ -235,7 +235,7 @@ def test_same_day_reentry_keeps_ladder_stop():
     assert first["reason"] == "stop" and abs(first["exit"] - 102.6) < 1e-9
     # a stop-out costs MORE than 1R now: slippage widened entry-to-stop
     assert first["gross_r"] < -1.0
-    assert abs(second["entry"] - 99.6) < 1e-9
+    assert abs(second["entry"] - 99.8) < 1e-9
     assert abs(second["stop"] - first["stop"]) < 1e-9   # same ladder stop
     # day extreme 102.7 + tick is NOT tighter than 102.6 -> no tightening
     assert second["stop_tightened"] is None
@@ -305,7 +305,7 @@ def test_tighten_dial_on_and_off():
     off, _ = run_market(make_days(), [base_file()], TICK, tighten=False)
     assert on[0]["reason"] == "stop"
     assert abs(on[0]["exit"] - 102.1) < 1e-9
-    assert -1.0 < on[0]["gross_r"] < -0.5      # (99.6-102.1)/2.6
+    assert -1.0 < on[0]["gross_r"] < -0.5      # (99.8-102.1)/2.6
     assert off[0]["reason"] == "close1"
     assert off[0]["stop_tightened"] is None
     assert abs(off[0]["exit"] - 102.0) < 1e-9

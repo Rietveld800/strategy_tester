@@ -212,3 +212,20 @@ output/quickfix1m1dc_matrix.{json,html} (run_1m_matrix.py).
 NOT yet done: the trade study still feeds off the v1 blotter - the new
 baseline is regenerated (run_1m.py with the chosen dials) once Lode
 picks a variant, then the full manual re-inspection starts.
+
+## 7. Slippage revision (Lode, 2026-08-06): 2 ticks entry, 2 ticks stop
+
+Entry slippage 4 -> 2 ticks, stop-exit slippage 3 -> 2 ticks (settlement
+exits stay 1 tick). Same trades, same dials; only costs moved. The 2x2 at
+the new costs:
+
+| variant | trades | wr% | netR | longest losing streak | max DD | final |
+|---|---|---|---|---|---|---|
+| tighten+window | 141 | 30.5 | +30.31 | 8 | 18.57% | $129,760 |
+| tighten+blocked | 132 | 28.8 | +30.81 | 8 | 18.84% | $130,371 |
+| frozen+window | 137 | 32.1 | +30.41 | 7 | 17.67% | $129,948 |
+| frozen+blocked (baseline) | 130 | 30.8 | +31.54 | 7 | 17.95% | $131,386 |
+
+The two ticks of slippage were worth ~12R across 130 trades - the
+strategy is highly slippage-sensitive, which is exactly why the IB
+streaming entry path matters on the roadmap.

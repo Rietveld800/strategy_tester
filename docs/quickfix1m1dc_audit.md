@@ -150,3 +150,65 @@ study.
 4. E5 (Rule-2 anchor): include or park.
 5. Limit-lifetime candidates for E2.
 6. Daily-site level-day convention (1.5).
+
+## 5. DECISIONS (Lode, 2026-08-06) - the v2 model
+
+- E1/E2 CLOSED by a model change: entry is a MARKET ORDER the moment the
+  first-reversal price trades - no limit orders, no fill uncertainty, no
+  phantoms, no missed winners, no limit lifetime. Flat 4 ticks adverse
+  slippage on every entry (an average; the roadmap replaces it with IB
+  streaming, ~4 value batches/second - the 1m chart is a visual
+  validator, we model acting in real time).
+- RISK stays denominated on the FIRST-REVERSAL price to the stop, never
+  on the slipped entry.
+- STOP: always one tick beyond the 5th reversal; beyond the 4th when only
+  four exist. A setup requires at least 4 reversals. No cluster/gap logic
+  (parked). Stop-above-daily-high remains only as the TIGHTENING dial.
+- E3 reduced to {tighten | frozen}; E4 stays {window | blocked}. 2x2.
+- E5 RESOLVED, no experiment: the DAY OPEN stays the anchor; each new
+  ladder is judged against the same day open when it activates (current
+  engine behavior). A new ladder invalidates old-ladder setups; entries
+  fire only off the ACTIVE file's first reversal (also current behavior).
+- Daily-site level drawing stays AS-IS (deliberate visual: a reversal
+  starts on the previous day's bar because the daily bar cannot show that
+  the level was alive during the morning half of its own day). Both
+  charts are now correct in their own terms.
+- Monday clarification (Lode): the Saturday-landing file IS Monday's
+  update (its second-column date is Monday). Blocking the overnight
+  window must NOT block Mondays - encoded as: entries require the active
+  file's publish (data) date >= previous trading date.
+
+Implementation assumptions to confirm (constants, trivial to flip):
+- MIN_REVERSALS (tested) stays 3; MIN_LADDER = 4 is the new requirement.
+- "5th reversal" = 5th level of the eligible ladder (file levels beyond
+  prev_close), counted from the first.
+
+## 6. v2 implemented and the 2x2 rerun (2026-08-06)
+
+engine_1m v2: touch-trigger (level must PRINT in the bar, or the bar
+gaps past it - fill from the open), 4-tick slipped market entries,
+ladder stop, tighten/window dials; 15 synthetic tests green. Two bugs
+the first matrix run exposed, both fixed: ICE sentinel prices leaked
+through a low/high-only filter into bar OPENS (CC booked a 9.2e9 entry;
+all four OHLC fields now sanitized in run_1m), and the first
+touch-trigger fired when price was merely BEYOND the level rather than
+the level printing (CC longs 600+ points past the reversal).
+
+Portfolio results (1% risk, shared-account replay):
+
+| variant | trades | wr% | netR | longest losing streak | max DD | final |
+|---|---|---|---|---|---|---|
+| tighten+window | 141 | 29.1 | +17.39 | 9 | 24.08% | $114,188 |
+| tighten+blocked | 132 | 28.8 | +18.35 | 8 | 24.27% | $115,248 |
+| frozen+window | 137 | 30.7 | +17.67 | 9 | 23.13% | $114,554 |
+| frozen+blocked | 130 | 30.8 | +19.25 | 7 | 23.32% | $116,336 |
+
+frozen+blocked leads on every priority metric (fewest trades, highest
+wr, most net R, shortest losing streak). Exit mix (frozen+blocked): 63
+stops, 50 close1, 17 no_confirm. Stars: ZW +18.97R, DX +16.55R;
+worst: ZB -7.02R, ZC -5.85R, FGBL -4.98R, ES -4.72R. Full details:
+output/quickfix1m1dc_matrix.{json,html} (run_1m_matrix.py).
+
+NOT yet done: the trade study still feeds off the v1 blotter - the new
+baseline is regenerated (run_1m.py with the chosen dials) once Lode
+picks a variant, then the full manual re-inspection starts.

@@ -1,10 +1,31 @@
-"""Build the quickfix1m1dc portfolio report from the saved trades JSON.
+"""Build the quickfix1m1dc REPORT from the saved trades JSON.
 
-Three synced panes in the style of the daily reports: equity curve, max
-drawdown, open positions — DAILY series from the window start to the last
-data day, so the time axis is honest (flat segments are days without
-exits) and strictly ascending by construction. Regenerates from
-output/quickfix1m1dc_all.json without re-running the backtest.
+The 1-minute workstream's answer to the daily project's
+`equity_<strategy>.html`: the model and its dials, the KPI row, the three
+synced panes (equity, drawdown, open positions), per-trade statistics, the
+exit-class anatomy, the full trade blotter, the per-market table and the
+daily calendar. Regenerates from output/quickfix1m1dc_all.json without
+re-running the backtest.
+
+It borrows `build_equity_html.CSS` rather than carrying a second
+stylesheet, so this page ages with the daily reports instead of drifting
+away from them. What it does NOT borrow is `mountReport`: that renderer is
+bound to the registry and the shared variant grid, and quickfix1m1dc is
+deliberately outside both. The tables here are therefore rendered in
+Python, and the only script on the page is the three charts plus a table
+sorter.
+
+Every blotter row LINKS INTO charter's 1-minute trade study at that exact
+trade (`trades.html?m=<Market>&t=<n>`), which is the workflow the page
+exists for: read a row, jump to the picture. The link needs charter's
+serve.py running, since the study is served over HTTP.
+
+Money: the portfolio replay is `run_1m.portfolio_replay` mirrored so the
+blotter can show each trade's dollar risk, P&L and running balance. The
+trades' own `pnl_usd` / `cash_after` fields are PER MARKET (each market a
+fresh $100k) and would be a different account entirely, so they are not
+used here. The build checks its final capital and drawdown against the
+figures run_1m wrote and warns on drift.
 """
 
 import json
@@ -13,149 +34,704 @@ from pathlib import Path
 
 import pandas as pd
 
+import engine_1m
+import run_1m
+from build_equity_html import CSS
+
 HERE = Path(__file__).resolve().parent
 IN_JSON = HERE / "output" / "quickfix1m1dc_all.json"
-OUT_HTML = HERE / "output" / "quickfix1m1dc_equity.html"
+OUT_HTML = HERE / "output" / "quickfix1m1dc_report.html"
 LIB_PATH = (HERE / ".." / "data_center" / "scripts"
             / "lightweight-charts.4.2.3.standalone.js")
 
-WINDOW_START = date(2026, 1, 1)
-WINDOW_END = date(2026, 7, 31)
 START_CAPITAL = 100_000.0
 RISK_PCT = 1.0
+# charter serves site/ over HTTP (serve.py, port 8000 by default and the
+# next free one after that). A file:// link cannot reach the study, so the
+# page says what has to be running.
+STUDY_BASE = "http://localhost:8000/1m/trades.html"
+
+REASON_TEXT = {
+    "stop": "Stop",
+    "close1": "Day-2 settlement",
+    "no_confirm": "No confirmation",
+    "data_end": "Data end",
+}
+REASON_NOTE = {
+    "stop": "the ladder stop traded",
+    "close1": "held to the settlement of the day after entry, the rule exit",
+    "no_confirm": "the entry day did not settle beyond the first reversal, "
+                  "so the trade was aborted at that settlement",
+    "data_end": "collection stopped while the position was open",
+}
 
 
-def daily_series(trades):
+# ---------------------------------------------------------------- formatting
+
+def esc(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def money(v):
+    return f"${v:,.0f}" if abs(v) >= 1000 else f"${v:,.2f}"
+
+
+def signed_money(v):
+    return ("+" if v >= 0 else "-") + money(abs(v))
+
+
+def signed(v, n=2):
+    return f"{v:+.{n}f}"
+
+
+def price(v):
+    if v is None:
+        return "&mdash;"
+    return f"{v:,.4f}".rstrip("0").rstrip(".") if abs(v) < 100 else f"{v:,.2f}"
+
+
+def cls(v):
+    return "pos" if v > 0 else "neg" if v < 0 else ""
+
+
+def stamp(ts):
+    return pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+
+def held(minutes):
+    if minutes < 90:
+        return f"{minutes:.0f}m"
+    if minutes < 60 * 48:
+        return f"{minutes / 60:.1f}h"
+    return f"{minutes / 1440:.1f}d"
+
+
+# ------------------------------------------------------------------- numbers
+
+def replay(trades):
+    """run_1m.portfolio_replay, keeping each trade's own money.
+
+    Same event order (exits before entries at an equal timestamp) and the
+    same sizing rule (RISK_PCT of equity at entry), so the final capital
+    is the figure run_1m published.
+    """
     events = []
-    for t in trades:
-        entry = pd.Timestamp(t["entry_ts"])
-        exit_ = pd.Timestamp(t["exit_ts"])
-        events.append((entry, "entry", id(t), t))
-        events.append((exit_, "exit", id(t), t))
-    events.sort(key=lambda e: (e[0], 0 if e[1] == "exit" else 1))
+    for i, t in enumerate(trades):
+        events.append((pd.Timestamp(t["entry_ts"]), 1, i))
+        events.append((pd.Timestamp(t["exit_ts"]), 0, i))
+    events.sort(key=lambda e: (e[0], e[1]))
 
-    equity = START_CAPITAL
-    open_risk = {}
-    eod_equity = {}
-    for ts, kind, tid, t in events:
-        if kind == "entry":
-            open_risk[tid] = equity * RISK_PCT / 100.0
+    equity, peak, max_dd = START_CAPITAL, START_CAPITAL, 0.0
+    open_risk, money_of, eod = {}, {}, {}
+    for ts, kind, i in events:
+        if kind == 1:
+            open_risk[i] = equity * RISK_PCT / 100.0
         else:
-            equity += t["net_r"] * open_risk.pop(tid, equity / 100.0)
-            eod_equity[ts.date()] = equity
+            risk = open_risk.pop(i, equity * RISK_PCT / 100.0)
+            pnl = trades[i]["net_r"] * risk
+            equity += pnl
+            peak = max(peak, equity)
+            max_dd = max(max_dd, (peak - equity) / peak * 100.0)
+            money_of[i] = dict(risk_usd=risk, pnl_usd=pnl, balance=equity)
+            eod[ts.date()] = equity
+    return money_of, eod, equity, max_dd
 
+
+def daily_series(trades, eod):
     spans = [(pd.Timestamp(t["entry_ts"]).date(),
               pd.Timestamp(t["exit_ts"]).date()) for t in trades]
-
+    first = min(a for a, _ in spans)
+    last = max(b for _, b in spans)
     days, eq, dd, openpos = [], [], [], []
     value, peak = START_CAPITAL, START_CAPITAL
-    d = WINDOW_START
-    while d <= WINDOW_END:
-        if d in eod_equity:
-            value = eod_equity[d]
+    d = date(first.year, first.month, 1)
+    while d <= last:
+        if d in eod:
+            value = eod[d]
         peak = max(peak, value)
         days.append(str(d))
         eq.append(round(value, 2))
         dd.append(round((peak - value) / peak * 100.0, 3))
         openpos.append(sum(1 for a, b in spans if a <= d < b))
         d += timedelta(days=1)
-    return days, eq, dd, openpos, value, max(dd)
+    return days, eq, dd, openpos
+
+
+def streaks(trades):
+    """Longest winning and losing run, in ENTRY order and off net R.
+
+    The project's rule (user, 2026-07-29): the blotter is sorted by entry,
+    so a reader counting losing rows counts entry order, and keying off R
+    keeps the figure independent of the bet size.
+    """
+    best_w = best_l = cur_w = cur_l = 0
+    for t in sorted(trades, key=lambda x: x["entry_ts"]):
+        if t["net_r"] > 0:
+            cur_w, cur_l = cur_w + 1, 0
+        else:
+            cur_l, cur_w = cur_l + 1, 0
+        best_w, best_l = max(best_w, cur_w), max(best_l, cur_l)
+    return best_w, best_l
+
+
+def exit_classes(trades):
+    out = {}
+    for t in trades:
+        c = out.setdefault(t["reason"], dict(n=0, wins=0, r=0.0))
+        c["n"] += 1
+        c["wins"] += 1 if t["net_r"] > 0 else 0
+        c["r"] += t["net_r"]
+    for c in out.values():
+        c["avg"] = c["r"] / c["n"]
+    return dict(sorted(out.items(), key=lambda kv: -kv[1]["n"]))
+
+
+# --------------------------------------------------------------------- parts
+
+def kpi(label, value, sub="", tone=""):
+    tone = f" {tone}" if tone else ""
+    return (f'<div class="kpi"><div class="k">{label}</div>'
+            f'<div class="v{tone}">{value}</div>'
+            f'<div class="sub">{sub}</div></div>')
+
+
+def rules_html(p):
+    slip = (f'{engine_1m.ENTRY_SLIP_TICKS} ticks on entry, '
+            f'{engine_1m.SLIP_STOP_TICKS} on a stop, '
+            f'{engine_1m.SLIP_SCHEDULED_TICKS} on a settlement exit')
+    cards = [
+        ("1", "Signal",
+         f"At least <b>{p['min_tested']} reversals</b> of the active file's "
+         "ladder are tested beyond the previous close, measured on the "
+         "session's <b>running extremes</b>, minute by minute. The ladder "
+         f"itself must carry <b>{p['min_ladder']} levels</b>, since the stop "
+         "is anchored in it."),
+        ("2", "Clean setup",
+         "Refused if the <b>day's open</b> is already at or beyond the second "
+         "reversal. The verdict is taken once per ladder against that same "
+         "day open, and it governs while that ladder is active."),
+        ("3", "Entry",
+         "A <b>market order</b> the moment the first reversal price prints "
+         f"(or the bar gaps past it, filling from the open), at "
+         f"<b>{engine_1m.ENTRY_SLIP_TICKS} ticks</b> of adverse slippage. "
+         "Risk is denominated on the <b>first reversal to the stop</b>, never "
+         "on the slipped fill."),
+        ("4", "Exit",
+         "The <b>settlement of the day after entry</b>. If the entry day does "
+         "not settle at least one tick beyond the active first reversal, the "
+         "trade is aborted at that settlement instead "
+         "(<b>no confirmation</b>). The stop is live throughout."),
+    ]
+    grid = "".join(
+        f'<div class="rule"><div class="n">{n}</div><div>'
+        f'<div class="rn">Rule {n} &middot; {t}</div>'
+        f'<div class="rt">{body}</div></div></div>'
+        for n, t, body in cards)
+    return f"""<div class="rules">
+  <div class="rhead"><div class="t">quickfix1m1dc, the v2 model</div>
+  <div class="s">Rules 1 and 2 are the daily project's, evaluated INTRADAY on
+  1-minute bars. Rule 3, the 3.5R room requirement, was removed on 2026-08-06
+  as target-era logic: this strategy exits at a settlement regardless, so it
+  guarded nothing, and its existence clause blocked the one-sided files that
+  mark the strongest trends.</div></div>
+  <div class="rulegrid">{grid}</div>
+  <div class="rulefoot"><b>The stop</b> is one tick beyond the
+  <b>5th reversal</b> of the active ladder, the 4th when only four exist. It
+  is structural, not a multiple of the move, and it is what makes 1R a
+  distance the chart can show. <b>1R = {p['risk_pct']}%</b> of equity at
+  entry.</div>
+  <div class="rulefoot"><b>Dials</b>, at the baseline this page is built at:
+  stop tightening at the entry-day settlement is
+  <b>{'on' if p['tighten'] else 'off'}</b>, entries before the day's own
+  update is active are
+  <b>{'allowed' if p['allow_pre_activation'] else 'blocked'}</b>, and levels
+  activate at <b>{p['activation_utc']} UTC</b>. That pair won the 2x2 on every
+  priority metric, see the audit.</div>
+  <div class="rulefoot"><b>Slippage</b>: {slip}. The entry is charged in the
+  PRICE, the exits in R. The settlement rate is an order-type argument, the
+  time is known in advance so the order can be worked, and not a liquidity
+  claim: the day's volume peaks are the open and the session close, and
+  settlement is neither.</div>
+</div>"""
+
+
+def blotter_html(trades, money_of, links):
+    cols = [("Market", "l", 10), ("Side", "l", 5), ("In (UTC)", "l", 13),
+            ("Out (UTC)", "l", 13), ("Held", "", 6), ("In", "", 8.5),
+            ("Out", "", 8.5), ("Stop", "", 8.5), ("R", "", 5.5),
+            ("P&amp;L $", "", 8), ("Reason", "l", 14)]
+    head = "".join(
+        f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
+        f'<span class="ar"></span></th>'
+        for i, (lab, c, w) in enumerate(cols))
+    rows = []
+    for t in sorted(range(len(trades)), key=lambda k: trades[k]["entry_ts"]):
+        tr = trades[t]
+        m = money_of[t]
+        mins = ((pd.Timestamp(tr["exit_ts"]) - pd.Timestamp(tr["entry_ts"]))
+                .total_seconds() / 60.0)
+        link = links.get(tr["market"])
+        name = esc(tr["market"])
+        cell = (f'<a href="{link[0]}&amp;t={link[1][t]}" target="_blank" '
+                f'title="{esc(link[2])}, trade {link[1][t]} in the 1m study">'
+                f'{name}</a>') if link else name
+        rows.append(
+            f'<tr>'
+            f'<td class="l" data-s="{name}">{cell}</td>'
+            f'<td class="l" data-s="{tr["side"]}">{tr["side"]}</td>'
+            f'<td class="l mono" data-s="{tr["entry_ts"]}">'
+            f'{stamp(tr["entry_ts"])}</td>'
+            f'<td class="l mono" data-s="{tr["exit_ts"]}">'
+            f'{stamp(tr["exit_ts"])}</td>'
+            f'<td class="mono" data-s="{mins:.0f}">{held(mins)}</td>'
+            f'<td class="mono" data-s="{tr["entry"]}">{price(tr["entry"])}</td>'
+            f'<td class="mono" data-s="{tr["exit"]}">{price(tr["exit"])}</td>'
+            f'<td class="mono" data-s="{tr["stop"]}">{price(tr["stop"])}</td>'
+            f'<td class="mono {cls(tr["net_r"])}" data-s="{tr["net_r"]}">'
+            f'{signed(tr["net_r"])}</td>'
+            f'<td class="mono {cls(m["pnl_usd"])}" data-s="{m["pnl_usd"]:.2f}">'
+            f'{signed_money(m["pnl_usd"])}</td>'
+            f'<td class="l" data-s="{tr["reason"]}">'
+            f'{REASON_TEXT.get(tr["reason"], tr["reason"])}</td>'
+            f'</tr>')
+    return (f'<div class="tradecard"><div class="tradescroll">'
+            f'<table class="trades" data-sort="2" data-dir="1">'
+            f'<thead><tr>{head}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div></div>')
+
+
+def markets_html(rows, excluded, links):
+    cols = [("Market", "l", 26), ("Trades", "", 9), ("Win %", "", 9),
+            ("Net R", "", 10), ("Stops", "", 9), ("Aborts", "", 9),
+            ("Settlement", "", 12), ("Return %", "", 16)]
+    head = "".join(
+        f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
+        f'<span class="ar"></span></th>'
+        for i, (lab, c, w) in enumerate(cols))
+    body = []
+    for r in rows:
+        key = r["market"]
+        link = links.get(key)
+        name = (f'<a href="{link[0]}" target="_blank" '
+                f'title="{esc(link[2])} in the 1m study">{esc(key)}</a>'
+                if link else esc(key))
+        note = r.get("note", "")
+        # The note is a DATA provenance line ("futures, frozen calendar" is
+        # data_center's roll calendar, not an obsolete market), so it belongs
+        # in the tooltip. The tag says only what the instrument is.
+        tag = '<span class="tag">ETF</span>' if note.startswith("ETF") else ""
+        wr = r["win_rate"]
+        body.append(
+            f'<tr>'
+            f'<td class="l" data-s="{esc(key)}" title="{esc(note)}">'
+            f'{name}{tag}</td>'
+            f'<td class="mono" data-s="{r["trades"]}">{r["trades"]}</td>'
+            f'<td class="mono" data-s="{wr if wr is not None else -1}">'
+            f'{f"{wr:.0f}%" if wr is not None else "&mdash;"}</td>'
+            f'<td class="mono {cls(r["net_r_total"])}" '
+            f'data-s="{r["net_r_total"]}">{signed(r["net_r_total"])}</td>'
+            f'<td class="mono" data-s="{r["reasons"]["stop"]}">'
+            f'{r["reasons"]["stop"]}</td>'
+            f'<td class="mono" data-s="{r["reasons"]["no_confirm"]}">'
+            f'{r["reasons"]["no_confirm"]}</td>'
+            f'<td class="mono" data-s="{r["reasons"]["close1"]}">'
+            f'{r["reasons"]["close1"]}</td>'
+            f'<td class="mono {cls(r["return_pct"])}" '
+            f'data-s="{r["return_pct"]}">{signed(r["return_pct"])}%</td>'
+            f'</tr>')
+    out = (f'<div class="tradecard"><div class="tradescroll">'
+           f'<table class="trades" data-sort="3" data-dir="-1">'
+           f'<thead><tr>{head}</tr></thead>'
+           f'<tbody>{"".join(body)}</tbody></table></div></div>')
+    if excluded:
+        items = "".join(
+            f'<tr><td class="l">{esc(e["market"])}</td>'
+            f'<td class="l wrap">{esc(e.get("reason", ""))}</td></tr>'
+            for e in excluded)
+        out += (f'<div class="tradecard"><table class="trades">'
+                f'<thead><tr><th class="l" style="width:20%">Not tested</th>'
+                f'<th class="l" style="width:80%">Why</th></tr></thead>'
+                f'<tbody>{items}</tbody></table></div>')
+    return out
+
+
+def calendar_html(days, eq, dd, openpos, trades, money_of):
+    ins, outs = {}, {}
+    for i, t in enumerate(trades):
+        ins.setdefault(pd.Timestamp(t["entry_ts"]).date(), []).append(i)
+        outs.setdefault(pd.Timestamp(t["exit_ts"]).date(), []).append(i)
+    rows = []
+    for d, e, drop, op in zip(days, eq, dd, openpos):
+        day = date.fromisoformat(d)
+        if day not in ins and day not in outs and op == 0:
+            continue
+        acts = []
+        for i in ins.get(day, []):
+            acts.append(f'<span style="color:var(--opened)">opened '
+                        f'{esc(trades[i]["market"])} {trades[i]["side"]}'
+                        f'</span>')
+        for i in outs.get(day, []):
+            t = trades[i]
+            acts.append(f'<span style="color:var(--closed)">closed '
+                        f'{esc(t["market"])} {signed(t["net_r"])}R '
+                        f'{signed_money(money_of[i]["pnl_usd"])}</span>')
+        rows.append(
+            f'<tr><td class="l mono">{d}</td>'
+            f'<td class="mono">{money(e)}</td>'
+            f'<td class="mono">{drop:.2f}%</td>'
+            f'<td class="mono">{op}</td>'
+            f'<td class="l act">{" &middot; ".join(acts) or "&mdash;"}</td>'
+            f'</tr>')
+    return (f'<div class="tradecard"><div class="tradescroll">'
+            f'<table class="trades"><thead><tr>'
+            f'<th class="l" style="width:11%">Date</th>'
+            f'<th style="width:12%">Capital</th>'
+            f'<th style="width:9%">Drawdown</th>'
+            f'<th style="width:7%">Open</th>'
+            f'<th class="l" style="width:61%">Activity</th>'
+            f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></div>')
+
+
+PAGE_JS = r"""<script>
+// Two small things only: the three panes, and a table sorter. Everything
+// else on this page is rendered server-side, because quickfix1m1dc is
+// outside the registry and there is no variant grid to replay.
+(function () {
+  function cssv(n) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(n).trim();
+  }
+  function opts() {
+    return {
+      layout: { background: { color: cssv('--surface') },
+                textColor: cssv('--ink2'), attributionLogo: false },
+      grid: { vertLines: { color: cssv('--grid') },
+              horzLines: { color: cssv('--grid') } },
+      rightPriceScale: { borderColor: cssv('--border') },
+      timeScale: { borderColor: cssv('--border') },
+    };
+  }
+  var charts = [];
+  function mk(id) {
+    var el = document.getElementById(id);
+    // Height minus slack: the time-axis label row clips when the canvas
+    // fills the container exactly (seen in Chrome, headless and normal).
+    var c = LightweightCharts.createChart(el, Object.assign(
+      { width: el.clientWidth, height: el.clientHeight - 18 }, opts()));
+    charts.push([el, c]);
+    return c;
+  }
+  var ceq = mk('eq');
+  ceq.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2 })
+    .setData(__EQ__);
+  var cdd = mk('dd');
+  cdd.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
+    priceFormat: { type: 'custom',
+      formatter: function (v) { return v.toFixed(2) + '%'; } } })
+    .setData(__DD__);
+  var cop = mk('op');
+  cop.addHistogramSeries({ color: cssv('--bars') }).setData(__OP__);
+  function resize() {
+    charts.forEach(function (p) {
+      p[1].resize(p[0].clientWidth, p[0].clientHeight - 18);
+    });
+  }
+  window.addEventListener('resize', resize);
+  charts.forEach(function (p) {
+    p[1].timeScale().subscribeVisibleLogicalRangeChange(function (r) {
+      if (!r) return;
+      charts.forEach(function (q) {
+        if (q[1] !== p[1]) q[1].timeScale().setVisibleLogicalRange(r);
+      });
+    });
+    p[1].timeScale().fitContent();
+  });
+  // The canvas keeps whatever colours it was built with, so the print
+  // stylesheet's forced light palette would not reach it. Re-read the
+  // variables on both events; print resolves them against the print CSS.
+  function retheme() { charts.forEach(function (p) { p[1].applyOptions(opts()); }); }
+  window.addEventListener('beforeprint', retheme);
+  window.addEventListener('afterprint', retheme);
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', retheme);
+  }
+
+  // Sorter: every cell carries data-s, so a column sorts on its own value
+  // rather than on the formatted text (dates, R, dollars all differ).
+  document.querySelectorAll('table.trades').forEach(function (tbl) {
+    var body = tbl.tBodies[0];
+    if (!body) return;
+    var key = Number(tbl.dataset.sort), dir = Number(tbl.dataset.dir) || 1;
+    function val(row, i) {
+      var td = row.cells[i];
+      var s = td ? (td.dataset.s !== undefined ? td.dataset.s
+                    : td.textContent) : '';
+      var n = parseFloat(s);
+      return (s !== '' && !isNaN(n) && /^[-+0-9.eE]+$/.test(s)) ? n : s;
+    }
+    function apply() {
+      var rows = Array.prototype.slice.call(body.rows);
+      rows.sort(function (a, b) {
+        var x = val(a, key), y = val(b, key);
+        if (x === y) return 0;
+        return (x > y ? 1 : -1) * dir;
+      });
+      rows.forEach(function (r) { body.appendChild(r); });
+      tbl.querySelectorAll('th').forEach(function (th) {
+        th.classList.remove('sorted');
+        var ar = th.querySelector('.ar');
+        if (ar) ar.textContent = '';
+      });
+      var th = tbl.querySelector('th[data-i="' + key + '"]');
+      if (th) {
+        th.classList.add('sorted');
+        var ar = th.querySelector('.ar');
+        if (ar) ar.textContent = dir > 0 ? '▲' : '▼';
+      }
+    }
+    tbl.querySelectorAll('th.sortable').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var i = Number(th.dataset.i);
+        if (i === key) { dir = -dir; } else { key = i; dir = 1; }
+        apply();
+      });
+    });
+    if (!isNaN(key)) apply();
+  });
+})();
+</script>"""
+
+
+PAGE = r"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>quickfix1m1dc &mdash; 1-minute report</title>
+__CSS__
+<style>
+/* the three panes; the daily reports draw their own SVG, this page uses
+   lightweight-charts, so the containers need explicit heights */
+#eq{height:330px}#dd{height:150px}#op{height:130px}
+#eq,#dd,#op{margin-bottom:4px}
+.panelbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin:10px 2px 4px}
+table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
+table.trades td a:hover{text-decoration:underline}
+@media print{#eq{height:300px}#dd,#op{height:120px}}
+</style></head><body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">1-minute workstream</div>
+  <h1>quickfix1m1dc</h1>
+  <p class="lede">__LEDE__</p>
+</header>
+__RULES__
+<div class="kpis">__KPIS__</div>
+<div class="card">
+  <div class="charthead"><div class="t">One shared account</div>
+  <div class="s">__CHARTSUB__</div></div>
+  <div class="panelbl">Equity</div><div id="eq"></div>
+  <div class="panelbl">Drawdown</div><div id="dd"></div>
+  <div class="panelbl">Open positions</div><div id="op"></div>
+</div>
+<div class="note">__NOTE__</div>
+<div class="section-h">Per-trade statistics</div>
+<div class="stats4">__STATS__</div>
+<div class="section-h">Where the trades end</div>
+<div class="tradecard"><table class="trades"><thead><tr>
+  <th class="l" style="width:20%">Exit class</th>
+  <th style="width:9%">Trades</th><th style="width:9%">Wins</th>
+  <th style="width:9%">Win %</th><th style="width:11%">Net R</th>
+  <th style="width:9%">Avg R</th>
+  <th class="l wrap" style="width:33%">What it means</th>
+</tr></thead><tbody>__CLASSES__</tbody></table></div>
+<div class="section-h">All trades</div>
+<p class="chartnote">__BLOTNOTE__</p>
+__BLOTTER__
+<div class="section-h">By market</div>
+<p class="chartnote">__MKTNOTE__</p>
+__MARKETS__
+<div class="section-h">Daily calendar</div>
+<p class="chartnote">Every day that opened, closed or carried a position.
+<b style="color:var(--opened)">Purple</b> is a position opened,
+<b style="color:var(--closed)">blue</b> one closed. Capital and drawdown are
+the shared account at the end of that day.</p>
+__CALENDAR__
+<footer>__FOOTER__</footer>
+</div>
+<script>__LIB__</script>
+__JS__
+</body></html>"""
 
 
 def build():
     data = json.loads(IN_JSON.read_text(encoding="utf-8"))
     trades = data["trades"]
-    rows = data["markets"]
-    days, eq, dd, openpos, final, max_dd = daily_series(trades)
-    wins = sum(1 for t in trades if t["net_r"] > 0)
-    wr = round(100 * wins / len(trades), 1) if trades else 0
+    p = data["params"]
+    published = data["portfolio"]
 
-    def series(values):
+    money_of, eod, final, max_dd = replay(trades)
+    days, eq, dd, openpos = daily_series(trades, eod)
+    if abs(final - published["final"]) > 0.01:
+        print(f"WARNING: replay final ${final:,.2f} against run_1m's "
+              f"${published['final']:,.2f}")
+    if abs(max_dd - published["max_dd_pct"]) > 0.01:
+        print(f"WARNING: replay drawdown {max_dd:.2f}% against run_1m's "
+              f"{published['max_dd_pct']:.2f}%")
+
+    wins = [t for t in trades if t["net_r"] > 0]
+    losses = [t for t in trades if t["net_r"] <= 0]
+    net_r = sum(t["net_r"] for t in trades)
+    wr = 100 * len(wins) / len(trades)
+    avg_w = sum(t["net_r"] for t in wins) / len(wins) if wins else 0.0
+    avg_l = sum(t["net_r"] for t in losses) / len(losses) if losses else 0.0
+    gross_win = sum(t["net_r"] for t in wins)
+    gross_loss = -sum(t["net_r"] for t in losses)
+    pf = gross_win / gross_loss if gross_loss else None
+    best = max(t["net_r"] for t in trades)
+    worst = min(t["net_r"] for t in trades)
+    run_w, run_l = streaks(trades)
+    holds = [(pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])
+              ).total_seconds() / 60.0 for t in trades]
+    avg_hold = sum(holds) / len(holds)
+    max_open = max(openpos)
+    in_market = 100 * sum(1 for o in openpos if o) / len(openpos)
+    classes = exit_classes(trades)
+
+    # key -> (study url, {trade index in this build: n in the study},
+    #         market folder). charter sorts each market's trades by entry,
+    #         and its counter is 1-based, so the link lands on the row.
+    by_market = {}
+    for i, t in enumerate(trades):
+        by_market.setdefault(t["market"], []).append(i)
+    links = {}
+    for key, idxs in by_market.items():
+        try:
+            folder = run_1m.market_info(key)["array_dir"]
+        except (KeyError, StopIteration):
+            continue
+        order = sorted(idxs, key=lambda i: trades[i]["entry_ts"])
+        links[key] = (f"{STUDY_BASE}?m={folder}",
+                      {i: n + 1 for n, i in enumerate(order)}, folder)
+
+    traded = sum(1 for r in data["markets"] if r["trades"])
+    kpis = "".join([
+        kpi("Closed trades", f"{len(trades)}",
+            f"{traded} markets traded of {len(data['markets'])} tested"),
+        kpi("Win rate", f"{wr:.1f}%", f"{len(wins)} won, {len(losses)} lost"),
+        kpi("Net R", signed(net_r, 2), "after slippage"),
+        kpi("Final capital", money(final),
+            f"from {money(START_CAPITAL)}", cls(final - START_CAPITAL)),
+        kpi("Return", signed(100 * (final / START_CAPITAL - 1), 2) + "%",
+            f"at {RISK_PCT}% risk per trade",
+            cls(final - START_CAPITAL)),
+        kpi("Max drawdown", f"{max_dd:.2f}%", "worst peak to trough"),
+        kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
+    ])
+
+    stats = "".join([
+        kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
+            "pos"),
+        kpi("Average loser", signed(avg_l) + "R", f"{len(losses)} trades",
+            "neg"),
+        kpi("Expectancy", signed(net_r / len(trades)) + "R", "per trade",
+            cls(net_r)),
+        kpi("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
+            f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
+        kpi("Best trade", signed(best) + "R", "gross of nothing, net of all"),
+        kpi("Worst trade", signed(worst) + "R",
+            "a gapped or slipped stop can cost more than 1R"),
+        kpi("Longest winning run", f"{run_w}", "positions, in entry order"),
+        kpi("Average hold", held(avg_hold), "entry to exit"),
+        kpi("Max concurrent", f"{max_open}", "positions open at once"),
+        kpi("Time in market", f"{in_market:.0f}%",
+            "of days with a position open"),
+    ])
+
+    class_rows = "".join(
+        f'<tr><td class="l">{REASON_TEXT.get(k, k)}</td>'
+        f'<td class="mono">{c["n"]}</td>'
+        f'<td class="mono">{c["wins"]}</td>'
+        f'<td class="mono">{100 * c["wins"] / c["n"]:.0f}%</td>'
+        f'<td class="mono {cls(c["r"])}">{signed(c["r"])}</td>'
+        f'<td class="mono {cls(c["avg"])}">{signed(c["avg"])}</td>'
+        f'<td class="l wrap">{REASON_NOTE.get(k, "")}</td></tr>'
+        for k, c in classes.items())
+
+    def ser(values):
         return json.dumps([{"time": d, "value": v}
-                           for d, v in zip(days, values)])
+                           for d, v in zip(days, values)],
+                          separators=(",", ":"))
 
-    table = "".join(
-        f"<tr><td>{r['market']}</td><td>{r['trades']}</td>"
-        f"<td>{r['win_rate'] if r['win_rate'] is not None else '-'}</td>"
-        f"<td>{r['net_r_total']}</td><td>{r['reasons']['stop']}</td>"
-        f"<td>{r['reasons']['no_confirm']}</td>"
-        f"<td>{r['reasons']['close1']}</td></tr>"
-        for r in rows)
+    survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
+    lede = (
+        f"One shared account of {money(START_CAPITAL)} across "
+        f"{len(data['markets'])} tested markets, {traded} of which traded, "
+        f"{days[0]} to {days[-1]}, at "
+        f"{RISK_PCT}% risk per trade. Rules 1 and 2 are the daily project's, "
+        f"evaluated minute by minute; the trade is entered with a market "
+        f"order and marked out at the settlement of the day after entry. "
+        f"This page is the blotter: every one of the {len(trades)} trades is "
+        f"listed, and each row opens that trade in charter's 1-minute study.")
+    note = (
+        "<b>Read the execution assumptions before reading the result.</b> "
+        f"Entries are market orders charged {engine_1m.ENTRY_SLIP_TICKS} ticks "
+        "and stops another two, and moving those two ticks was worth about 12R "
+        "across the sample, so professional execution is a first-order part of "
+        "this edge rather than a detail. The win rate lives in one place: a "
+        f"trade that survives to the day-2 settlement wins "
+        f"{100 * survivors['wins'] / survivors['n']:.0f}% of the time at "
+        f"{signed(survivors['avg'])}R average, while the stop class bleeds. "
+        "See docs/quickfix1m1dc_audit.md, sections 8 and 9.")
+    blotnote = (
+        "Sorted by entry, newest sort on any column. <b>The market name is a "
+        "link</b>: it opens charter's 1-minute trade study centred on that "
+        "trade, which needs charter's <b>serve.py</b> running "
+        f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
+        "P&amp;L is this trade's share of the shared account.")
+    mktnote = (
+        "Each market's own figures at the same 1% risk, on a fresh "
+        f"{money(START_CAPITAL)} rather than the shared account, so the "
+        "returns do not add up to the headline. <b>Aborts</b> are the "
+        "no-confirmation exits, <b>settlement</b> the day-2 rule exits.")
+    chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
+                f"{RISK_PCT}% risk per trade")
+    footer = (
+        f"quickfix1m1dc, built from output/{IN_JSON.name} at the published "
+        f"baseline (tighten "
+        f"{'on' if p['tighten'] else 'off'}, overnight window "
+        f"{'open' if p['allow_pre_activation'] else 'blocked'}). Rules, "
+        f"decisions and the experiment history: docs/quickfix1m1dc_audit.md. "
+        f"All times UTC. This strategy is deliberately outside the daily "
+        f"registry, so it has no cap dial, no risk dial and no variant grid.")
 
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>quickfix1m1dc — portfolio report</title><style>
-body {{ background:#131722; color:#d1d4dc;
-font:13px -apple-system,Segoe UI,sans-serif; margin:0; padding:16px; }}
-h1 {{ font-size:16px; margin:0 0 2px; }}
-.sub {{ color:#787b86; margin-bottom:12px; }}
-.lbl {{ color:#787b86; font-size:11px; text-transform:uppercase;
-letter-spacing:.5px; margin:12px 0 4px; }}
-#eq {{ height:340px; }} #dd, #op {{ height:150px; }}
-#eq, #dd, #op {{ margin-bottom:6px; }}
-/* Scoped to the results table ONLY: unscoped td/th rules leak into
-   lightweight-charts' internal table layout and push its time-axis
-   canvas down, clipping the labels (found 2026-08-03). */
-table.results {{ border-collapse:collapse; margin-top:16px; }}
-table.results td, table.results th {{ padding:4px 12px;
-border-bottom:1px solid #2a2e39; text-align:right; }}
-table.results td:first-child, table.results th:first-child {{
-text-align:left; }}
-table.results th {{ color:#787b86; font-weight:normal; }}
-</style></head><body>
-<h1>quickfix1m1dc — {len(rows)} markets, {days[0]} to {days[-1]}</h1>
-<div class="sub">{len(trades)} trades, win rate {wr}%, final
-${final:,.2f} ({(final / START_CAPITAL - 1) * 100:+.2f}%), max drawdown
-{max_dd:.2f}%, risk {RISK_PCT}% of equity per trade</div>
-<div class="lbl">Equity</div><div id="eq"></div>
-<div class="lbl">Drawdown %</div><div id="dd"></div>
-<div class="lbl">Open positions</div><div id="op"></div>
-<table class="results"><tr><th>market</th><th>trades</th><th>wr%</th>
-<th>netR</th><th>stops</th><th>no-confirm</th><th>close1</th></tr>
-{table}</table>
-<script>{LIB_PATH.read_text(encoding="utf-8")}</script><script>
-function mk(id) {{
-  const el = document.getElementById(id);
-  // Height minus slack: the time-axis label row clips when the canvas
-  // fills the container exactly (seen in Chrome, headless and normal).
-  return LightweightCharts.createChart(el, {{
-    width: el.clientWidth, height: el.clientHeight - 18,
-    layout: {{ background: {{ color: '#131722' }},
-               textColor: '#d1d4dc' }},
-    grid: {{ vertLines: {{ color: '#1e222d' }},
-             horzLines: {{ color: '#1e222d' }} }},
-    rightPriceScale: {{ borderColor: '#2a2e39' }},
-    timeScale: {{ borderColor: '#2a2e39' }},
-  }});
-}}
-const ceq = mk('eq');
-ceq.addLineSeries({{ color: '#26a69a', lineWidth: 2 }})
-  .setData({series(eq)});
-const cdd = mk('dd');
-cdd.addLineSeries({{ color: '#ef5350', lineWidth: 1,
-  priceFormat: {{ type: 'custom',
-    formatter: v => v.toFixed(2) + '%' }} }})
-  .setData({series(dd)});
-const cop = mk('op');
-cop.addHistogramSeries({{ color: '#5b6b8c' }})
-  .setData({series(openpos)});
-const charts = [ceq, cdd, cop];
-window.addEventListener('resize', () => {{
-  for (const [id, c] of [['eq', ceq], ['dd', cdd], ['op', cop]]) {{
-    const el = document.getElementById(id);
-    c.resize(el.clientWidth, el.clientHeight - 18);
-  }}
-}});
-for (const a of charts) {{
-  a.timeScale().subscribeVisibleLogicalRangeChange(r => {{
-    if (r) for (const b of charts) if (b !== a)
-      b.timeScale().setVisibleLogicalRange(r);
-  }});
-}}
-for (const c of charts) c.timeScale().fitContent();
-</script></body></html>"""
+    html = (PAGE
+            .replace("__CSS__", CSS)
+            .replace("__LEDE__", lede)
+            .replace("__RULES__", rules_html(p))
+            .replace("__KPIS__", kpis)
+            .replace("__CHARTSUB__", chartsub)
+            .replace("__NOTE__", note)
+            .replace("__STATS__", stats)
+            .replace("__CLASSES__", class_rows)
+            .replace("__BLOTNOTE__", blotnote)
+            .replace("__BLOTTER__", blotter_html(trades, money_of, links))
+            .replace("__MKTNOTE__", mktnote)
+            .replace("__MARKETS__", markets_html(data["markets"],
+                                                 data.get("excluded", []),
+                                                 links))
+            .replace("__CALENDAR__", calendar_html(days, eq, dd, openpos,
+                                                   trades, money_of))
+            .replace("__FOOTER__", footer)
+            .replace("__LIB__", LIB_PATH.read_text(encoding="utf-8"))
+            .replace("__JS__", PAGE_JS
+                     .replace("__EQ__", ser(eq))
+                     .replace("__DD__", ser(dd))
+                     .replace("__OP__", ser(openpos))))
     OUT_HTML.write_text(html, encoding="utf-8")
-    print(f"report: final ${final:,.2f}, max drawdown {max_dd:.2f}%, "
-          f"{len(days)} days -> {OUT_HTML.name}")
+    print(f"report: {len(trades)} trades, final ${final:,.2f}, max drawdown "
+          f"{max_dd:.2f}%, {len(days)} days -> {OUT_HTML.name} "
+          f"({len(html) / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":

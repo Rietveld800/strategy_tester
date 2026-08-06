@@ -11,8 +11,9 @@ Levels and prev_close are decoded with the same per-market price codecs
 as the fingerprint (ZN 64ths, ZW/ZC eighths) — the reversal levels in the
 xlsx are in Socrates notation too.
 
-Outputs: output/quickfix1m1dc_all.json, output/quickfix1m1dc_equity.html,
-console summary. Usage: python run_1m.py [KEY ...] (default: all eligible).
+Outputs: output/quickfix1m1dc_all.json, output/quickfix1m1dc_report.html
+(built by build_1m_report.py), console summary.
+Usage: python run_1m.py [KEY ...] (default: all eligible).
 """
 
 import json
@@ -41,7 +42,8 @@ DC = HERE / ".." / "data_center"
 ARRAY_ROOT = HERE / ".." / "hyperliquid_bot" / "data" / "array"
 META = DC / "metadata"
 OUT_JSON = HERE / "output" / "quickfix1m1dc_all.json"
-OUT_HTML = HERE / "output" / "quickfix1m1dc_equity.html"
+# The page is built by build_1m_report.py (the report), and the 2x2 by
+# run_1m_matrix.py, which reads this LIB_PATH.
 LIB_PATH = DC / "scripts" / "lightweight-charts.4.2.3.standalone.js"
 
 PX_SCALE = 1e-9
@@ -375,42 +377,6 @@ def portfolio_replay(all_trades, start_capital=100_000.0, risk_pct=1.0):
     return equity, max_dd, curve
 
 
-def build_html(curve, rows, final, max_dd):
-    lib = LIB_PATH.read_text(encoding="utf-8")
-    table = "".join(
-        f"<tr><td>{r['market']}</td><td>{r['trades']}</td>"
-        f"<td>{r['win_rate']}</td><td>{r['net_r_total']}</td>"
-        f"<td>{r['reasons']['stop']}</td><td>{r['note']}</td></tr>"
-        for r in rows)
-    data = json.dumps([{"time": t, "value": v} for t, v in curve])
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>quickfix1m1dc — portfolio</title><style>
-body {{ background:#131722; color:#d1d4dc; font:13px -apple-system,Segoe UI,
-sans-serif; margin:0; padding:14px; }}
-#chart {{ height:420px; }} table {{ border-collapse:collapse; margin-top:14px; }}
-td, th {{ padding:4px 10px; border-bottom:1px solid #2a2e39; text-align:right; }}
-td:first-child, th:first-child {{ text-align:left; }}
-</style></head><body>
-<b>quickfix1m1dc — {len(rows)} markets, Jan–Jul 2026</b>
-<span style="color:#787b86"> final ${final:,.0f}, max drawdown
-{max_dd:.2f}%, 1% risk per trade</span>
-<div id="chart"></div>
-<table><tr><th>market</th><th>trades</th><th>wr%</th><th>netR</th>
-<th>stops</th><th>note</th></tr>{table}</table>
-<script>{lib}</script><script>
-const chart = LightweightCharts.createChart(
-  document.getElementById('chart'),
-  {{ layout: {{ background: {{ color: '#131722' }}, textColor: '#d1d4dc' }},
-     grid: {{ vertLines: {{ color: '#1e222d' }},
-              horzLines: {{ color: '#1e222d' }} }},
-     timeScale: {{ timeVisible: true }} }});
-const s = chart.addLineSeries({{ color: '#26a69a', lineWidth: 2 }});
-s.setData({data});
-chart.timeScale().fitContent();
-</script></body></html>"""
-    OUT_HTML.write_text(html, encoding="utf-8")
-
-
 def main():
     keys = sys.argv[1:] or (ELIGIBLE_FUTURES + ETFS + list(BINANCE))
     all_trades, rows, skipped = [], [], []
@@ -433,7 +399,7 @@ def main():
               f"({summary['note']})", flush=True)
 
     all_trades.sort(key=lambda t: t["entry_ts"])
-    final, max_dd, curve = portfolio_replay(all_trades)
+    final, max_dd, _curve = portfolio_replay(all_trades)
     total_r = round(sum(t["net_r"] for t in all_trades), 2)
     wins = sum(1 for t in all_trades if t["net_r"] > 0)
     wr = round(100 * wins / len(all_trades), 1) if all_trades else None
@@ -460,7 +426,7 @@ def main():
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report
     build_1m_report.build()
-    print(f"wrote {OUT_JSON.name} and {OUT_HTML.name}")
+    print(f"wrote {OUT_JSON.name}")
 
 
 if __name__ == "__main__":

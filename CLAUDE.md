@@ -564,6 +564,25 @@ variant grid or charter hand-off until the results earn it. venv gained
 pyarrow and pytest for this (requirements.txt updated). Run the tests
 with `venv\Scripts\python.exe -m pytest tests -q`.
 
+**THE REPORT IS `build_1m_report.py` -> `output/quickfix1m1dc_report.html`**
+(2026-08-06, Lode: "so I can look up the different trades", in the format of
+the daily reports). It rebuilds from `quickfix1m1dc_all.json` alone, no
+backtest, and carries the v2 rule block and dials, the KPI row, the three
+lightweight-charts panes, per-trade statistics, the EXIT-CLASS anatomy, the
+full 153-row blotter, the per-market table and the daily calendar. It
+**imports `build_equity_html.CSS`** so the look cannot drift from the daily
+pages, but NOT `mountReport`: that renderer is bound to the registry and the
+variant grid, and this strategy is outside both, so the tables are rendered
+in Python and the only script is the panes plus a table sorter. Its money is
+`run_1m.portfolio_replay` MIRRORED (the trades' own `pnl_usd` / `cash_after`
+are PER MARKET, a different account) and the build warns if its final capital
+or drawdown drifts from what `run_1m` published. **Every blotter row links
+into charter's 1m study at that trade** (`trades.html?m=<Market>&t=<n>`,
+1-based, charter sorts each market's trades by entry exactly as the report
+does); the link needs charter's `serve.py` running. The old dark
+`quickfix1m1dc_equity.html` and `run_1m.build_html` are GONE (2026-08-06) --
+the report says everything they said.
+
 ## Working agreements (carried over from charter)
 
 - Commit straight to main.

@@ -33,6 +33,7 @@ from expand_process import (  # noqa: E402
     SENTINEL,
     TRADE_SESSION_BARS,
     decode_price,
+    load_bars,
     trading_date_series,
 )
 
@@ -189,7 +190,10 @@ def futures_days(m):
         path = market_dir(m) / "bars" / f"{seg['symbol']}.parquet"
         if not path.exists():
             continue
-        bars = pd.read_parquet(path).reset_index()
+        # load_bars, never read_parquet: XEUR and IFUS publish each minute
+        # twice, on-book and off-book, and an off-book block is not a
+        # price our orders could have hit (data_center, 2026-08-07).
+        bars = load_bars(path).reset_index()
         # ICE minute data carries zero/sentinel price rows; ALL FOUR
         # fields must be sane. v1 filled at the level so a bad OPEN was
         # latent - v2's market-order fill uses it (CC blowup, 2026-08-06).
@@ -244,7 +248,7 @@ def etf_days(m):
     runs to 16:05 NY so the closing-auction print (the official close)
     is always inside the last bar."""
     path = market_dir(m) / "bars" / ETF_PRIMARY[m["key"]]
-    bars = pd.read_parquet(path).reset_index()
+    bars = load_bars(path).reset_index()
     ts_ny = bars["ts_event"].dt.tz_convert("America/New_York")
     bars["ny_date"] = ts_ny.dt.date
     rth = bars[(ts_ny.dt.time >= pd.Timestamp("09:30").time())

@@ -314,10 +314,22 @@ price nobody could have hit.
 Fixed in data_center (`BAR_COLUMNS`, `load_bars()`,
 `rebuild_publisher_bars.py` re-deriving from the raw DBN already on disk -
 no repurchase, no row lost). Both consumers now read through `load_bars`.
-The direction was confirmed independently: Socrates itself excludes
-off-book prints (FGBL session H/L matches its daily bar 97.2%/98.6%
-on-book-only against 88.7%/83.1% with off-book in), which also retires the
-old "vendor clips the extremes" caveat.
+
+**The ground for the fix is UNTRADEABILITY, and that is the whole of it for
+this project**: a block negotiated away from the book is not a price our
+orders could have hit, so the engine and the charts must not see it.
+A second argument was offered here on 2026-08-06 and was WRONG AS STATED -
+"Socrates itself excludes off-book prints" holds for **XEUR only**. It came
+from FGBL (session H/L matching its daily bar 97.2%/98.6% on-book-only
+against 88.7%/83.1%, which does retire the old "vendor clips the extremes"
+caveat) and does not generalize: on IFUS the Socrates OPEN matches the
+OFF-BOOK row, verified over the sessions carrying both rows at CC 52 of 67
+against 4 on-book, SB 27 of 30 against 14, KC 46 of 67 against 45. That is
+why data_center's `trade_session_bars()` deliberately reads the RAW frame -
+the fingerprint reproduces what the vendor DISPLAYED, while we trade what
+the book offered. Nothing in this project reads those session bars, and
+every bar the 1m engine sees is on-book only, so the correction changes no
+number here. See data_center's CLAUDE.md.
 
 **Every published figure moved, and all of them for the better** - which is
 what you would expect when phantom triggers and phantom stop-outs come out:

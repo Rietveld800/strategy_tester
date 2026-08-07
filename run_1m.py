@@ -55,7 +55,8 @@ ACTIVATION_UTC = "07:35"
 # identical set of 153 entries). The stop stays ladder-anchored; the
 # hybrid is a live dial, not retired. run_1m_matrix.py runs the grid.
 BASELINE = dict(tighten=False, allow_pre_activation=False,
-                confirm=False, stop_mode="ladder")
+                confirm=False, stop_mode="ladder",
+                max_entries_per_session=1)
 STAT_SETTLEMENT = 3
 FILES_FROM = date(2025, 12, 20)
 ETF_MATCH_MIN = 0.90

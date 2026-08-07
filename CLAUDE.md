@@ -553,7 +553,21 @@ the first reversal prints (2 ticks slippage), ladder-anchored stop (one
 tick beyond the 5th reversal, 4th when only four; ladder must carry 4),
 R denominated level-to-stop, exit at next-day settlement. Baseline dials
 (run_1m.BASELINE): no tightening, no pre-activation entries, **no
-confirmation clause**, ladder stop.
+confirmation clause**, ladder stop, **session lockout at 1**.
+**THE SESSION LOCKOUT** (`max_entries_per_session`, default 1, Lode
+2026-08-07, audit section 11): at most one ENTRY per market per session,
+expiring at the session boundary. NOT part of rules 1-3 by explicit choice --
+those say what the chart must show, this is a fact about our own previous
+trade, the family of one-position-per-market. It counts ENTRIES, NOT EXITS,
+and that is worth 19R: a position carried in from the previous session and
+stopped intraday does not spend today's allowance (9 trades, +19.10R, 6
+winners, including the sample's biggest at +13.41R). Measured first by
+`research_1m_levels.py`: 1st trade of a market-day 39.4% wr / +42.51R, 2nd
+21.4% / -10.39R. The rerun matched the blotter estimate to the decimal, so
+this rule has NO cascades. BUT the net-R gain is ONE MARKET (wheat is -8.47R
+of the -7.94R removed; without wheat the rule is slightly negative) and it
+does NOT fix the drawdown (14.70% -> 14.55%). What it buys is the SHAPE:
+longest losing run 8 -> 6. Provisional on 21 trades.
 **THE CONFIRMATION CLAUSE WENT ON 2026-08-06** (Lode), and it is the
 MIRROR of rule 3: rule 3 was unprincipled and profitable and went anyway;
 the clause was PRINCIPLED (the intraday stand-in for the daily engine's

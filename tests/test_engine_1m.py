@@ -208,7 +208,10 @@ def test_same_day_reentry_keeps_ladder_stop():
     """Stopped out at the ladder stop; price returns through the level and
     re-enters the same day. The ladder stop does NOT widen (unlike the old
     extreme-multiple stop); with rule 3 removed only a fresh trigger gates
-    the re-entry."""
+    the re-entry.
+
+    The mechanic still exists, but the published baseline shuts it off
+    with the session lockout, so this test asks for it explicitly."""
     deep_room = base_file(bear=[70.0])
     bars = short_entry_day()                                   # entry 03:00
     bars += [
@@ -223,7 +226,8 @@ def test_same_day_reentry_keeps_ladder_stop():
             bars=flat_bars(11, "01:00", 3, 98.0),
             settle_ts=ts(11, "17:30"), settle_price=98.0),
     ]
-    trades, _ = run_market(days, [deep_room], TICK)
+    trades, _ = run_market(days, [deep_room], TICK,
+                           max_entries_per_session=None)
     assert len(trades) == 2
     first, second = trades
     assert first["reason"] == "stop" and abs(first["exit"] - 102.6) < 1e-9
@@ -428,3 +432,83 @@ def test_unknown_stop_mode_raises():
     import pytest
     with pytest.raises(ValueError):
         run_market([], [], TICK, stop_mode="cluster")
+
+
+def reentry_day_bars():
+    """Entry 03:00, stopped 04:00, price returns and touches again 05:00."""
+    bars = short_entry_day()
+    bars += [
+        bar(ts(10, "04:00"), 100.9, 102.7, 100.9, 102.6),      # takes the stop
+        bar(ts(10, "05:00"), 102.6, 102.6, 99.9, 99.9),        # returns, touch
+    ]
+    return bars + flat_bars(10, "06:00", 3, 99.7)
+
+
+def test_session_lockout_blocks_the_second_entry():
+    """The default: one entry per market-session. The re-entry that the
+    test above books is simply never taken, and the day ends flat rather
+    than re-attacking the level that just stopped us."""
+    deep_room = base_file(bear=[70.0])
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6", bars=reentry_day_bars(),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    one, _ = run_market(days, [deep_room], TICK)                 # default 1
+    two, _ = run_market(days, [deep_room], TICK,
+                        max_entries_per_session=2)
+    off, _ = run_market(days, [deep_room], TICK,
+                        max_entries_per_session=None)
+    assert len(one) == 1 and one[0]["reason"] == "stop"
+    assert len(two) == 2 and len(off) == 2
+
+
+def test_lockout_expires_at_the_session_boundary():
+    """Stopped out today, a fresh trigger TOMORROW still trades: the
+    lockout is a session rule, and returning to a level on a later day is
+    what the research says pays."""
+    deep_room = base_file(bear=[70.0])
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6", bars=reentry_day_bars(),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=short_entry_day(day=11) + flat_bars(11, "06:00", 2, 99.7),
+            settle_ts=ts(11, "17:30"), settle_price=99.0),
+        Day(date=date(2026, 6, 12), contract="GCQ6",
+            bars=flat_bars(12, "01:00", 3, 98.0),
+            settle_ts=ts(12, "17:30"), settle_price=98.0),
+    ]
+    trades, _ = run_market(days, [deep_room], TICK)
+    assert len(trades) == 2
+    assert trades[0]["entry_date"] == "2026-06-10"
+    assert trades[1]["entry_date"] == "2026-06-11"
+
+
+def test_carried_position_stopped_intraday_leaves_the_allowance_intact():
+    """THE 19R DISTINCTION: the lockout counts ENTRIES, not exits. A
+    position carried in from the previous session and stopped this morning
+    does not spend today's allowance, so the fresh signal still trades."""
+    deep_room = base_file(bear=[70.0])
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=short_entry_day() + flat_bars(10, "04:00", 2, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        # Day 2 takes out yesterday's stop on its first bar and then sets
+        # up afresh. That bar has to OPEN below the second reversal or
+        # rule 2 refuses the whole session and the lockout never gets a
+        # say - which is what the first draft of this test did.
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=[bar(ts(11, "00:30"), 99.5, 102.7, 99.5, 102.6)]
+                 + short_entry_day(day=11) + flat_bars(11, "06:00", 2, 99.7),
+            settle_ts=ts(11, "17:30"), settle_price=99.0),
+        Day(date=date(2026, 6, 12), contract="GCQ6",
+            bars=flat_bars(12, "01:00", 3, 98.0),
+            settle_ts=ts(12, "17:30"), settle_price=98.0),
+    ]
+    trades, _ = run_market(days, [deep_room], TICK)              # default 1
+    assert len(trades) == 2
+    assert trades[0]["reason"] == "stop"
+    assert trades[0]["exit_ts"].startswith("2026-06-11")   # stopped today
+    assert trades[1]["entry_date"] == "2026-06-11"         # and still traded

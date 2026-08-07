@@ -30,6 +30,26 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
   update (publish/data date >= previous trading date). Monday's update
   lands Saturday (its second-column date is Monday), so Mondays trade
   from the open in both modes.
+- THE SESSION LOCKOUT (`max_entries_per_session`, default 1, Lode
+  2026-08-06). At most N ENTRIES per market per session; with N=1 a
+  market that has taken its trade is shut for the rest of that day, so
+  a stop-out cannot be re-attacked. It is NOT part of rules 1-3: those
+  describe what the chart must show, this is a fact about our own
+  previous trade, the same family as one-position-per-market.
+  Measured before it was built (research_1m_levels.py): the 1st trade
+  of a market-day wins 39.4% for +42.51R, the 2nd wins 21.4% for
+  -10.39R, the 4th and 5th win nothing. Every same-session repeat in
+  the sample was a re-attack of the SAME level.
+  IT COUNTS ENTRIES, NOT EXITS, and that distinction is worth 19R: a
+  position carried in from the previous session and stopped intraday
+  does NOT consume today's allowance. Nine trades sit in that case,
+  +19.10R with 6 winners, including the sample's biggest (ZW +13.41R,
+  entered 12 minutes after the previous day's position was stopped).
+  Being stopped out of yesterday's trade after a fresh session and a
+  fresh update is not the same event as re-attacking a level that has
+  just chopped you.
+  THE LOCKOUT EXPIRES AT THE SESSION BOUNDARY, never longer: returning
+  to a level on a LATER day pays (+12.60R on this sample).
 - THE CONFIRMATION CLAUSE IS A DIAL (`confirm`, 2026-08-06). On (the
   model as designed): the entry day must settle at least a tick beyond
   the first reversal or the trade is flattened there. Off: every trade
@@ -176,7 +196,8 @@ STOP_MODES = ("ladder", "ladder_or_extreme", "extreme")
 
 def run_market(days, files, tick, risk_pct=RISK_PCT,
                start_capital=STARTING_CAPITAL, tighten=True,
-               allow_pre_activation=True, confirm=True, stop_mode="ladder"):
+               allow_pre_activation=True, confirm=True, stop_mode="ladder",
+               max_entries_per_session=1):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
@@ -222,6 +243,10 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
         prev_c = None
         day_open = day.bars[0][1] if day.bars else None
         settled = False
+        # The session lockout counts ENTRIES TAKEN TODAY, so a position
+        # carried in from the previous session spends none of it (see the
+        # module docstring: that distinction is worth 19R).
+        entries_today = 0
         # Rule 2 verdicts, one per (ladder, side), keyed by publish_date.
         rule2 = {}
 
@@ -287,8 +312,10 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                     pos = None
 
             # --- look for an entry ---------------------------------------
+            locked = (max_entries_per_session is not None
+                      and entries_today >= max_entries_per_session)
             scan = not (pos is not None or not day.entries_allowed
-                        or settled)
+                        or settled or locked)
             f = _active_file(files, bts) if scan else None
             if f is not None and not allow_pre_activation and (
                     prev_trading_date is None
@@ -358,6 +385,7 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                                 entry=entry_price, stop=stop, stop_entry=stop,
                                 rpu=rpu, entry_first=first,
                                 risk_usd=risk_usd)
+                entries_today += 1
                 break
             prev_c = c
 

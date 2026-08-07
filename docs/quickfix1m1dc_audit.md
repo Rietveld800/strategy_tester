@@ -338,6 +338,49 @@ were 14.55% and 14.70%. Section 11's honest limits were written on the
 contaminated run; the shape of its argument survives, the specific figures
 in it do not.
 
+## 11a. WHY the lockout exists (Lode, 2026-08-07) - read this before 11b
+
+The measured improvement is not the reason for the rule, and the rule does
+not stand or fall with it. Lode, in his own terms:
+
+> The lockout is not just a rule we came up with to improve the overall
+> metrics of the backtest. The most important thing is that this rule will
+> PROTECT THE PORTFOLIO FROM THE WHIPSAW EFFECT DURING A SINGLE SESSION.
+> What we saw with wheat, the 5 consecutive losses on one day, contributes
+> to a deeper drawdown. The other markets didn't even have a chance to
+> soften the drawdown with a winning trade, because the 5 losses all
+> happened intraday. And when a market does that 5 times in a day, it could
+> also do it 10 times in a day. It's simply not yet in our source data
+> series. With the lockout we prevent all of that. Yes, we're throwing away
+> winners in return. But we're not creating rules that fit the better
+> outcome. We make rules only because they make sense.
+
+Three things follow, and they are why this rule is different in kind from
+the cap or the stop dials:
+
+1. **It bounds a tail the sample has not shown us.** Five same-session
+   stop-outs on one level is not a limit the strategy respects, it is the
+   worst case that happened to occur in seven months. Nothing in the rules
+   stopped it at five. The lockout makes the per-market, per-session loss
+   bounded BY CONSTRUCTION at one R, which is a property of the rule rather
+   than an observation about the data.
+2. **Intraday clustering is the drawdown mechanism, not trade count.** Losses
+   spread across markets and days get interleaved with winners that soften
+   the curve; five losses inside one session in one market arrive with
+   nothing in between. That is why the same R can dig a deeper hole
+   depending on WHEN it arrives, and why the equity curve is the right thing
+   to judge it on.
+3. **The cost is accepted with eyes open.** It throws winners away (USO's
+   repeats were +8.78R) and section 11b shows the sample's whole net-R gain
+   is one market. That is not the argument. A rule that caps a tail is worth
+   paying a known price for; a rule that only shows up as a better backtest
+   number is curve-fitting, and this project has removed rules for exactly
+   that reason before (rule 3, section 9).
+
+So: keep the lockout even if a later sample shows its measured edge shrink
+toward zero. The thing to watch is whether the CAP still binds, not whether
+the R total still flatters it.
+
 ## 11b. Verdict on corrected bars (Lode, 2026-08-07)
 
 Lode, once section 12's data fix landed: "we can eventually see that the
@@ -456,9 +499,19 @@ runs say nothing yet about WHY a cluster stops repelling price.
 
 Note on reading the page later: every figure above was measured on the
 PRE-LOCKOUT baseline, which is the evidence the rule was decided on. The
-page rebuilds from whatever blotter is current, so on the new baseline its
-same-session cuts are empty BY CONSTRUCTION. The pre-lockout page and its
-JSON are preserved in git at commit 1761f5a.
+page rebuilds from whatever blotter is current, so on the live baseline its
+same-session cuts are empty BY CONSTRUCTION - the rule deleted the thing
+the page exists to show.
+
+**THE NO-LOCKOUT PAGE IS THEREFORE KEPT AS A PAGE OF ITS OWN** (Lode,
+2026-08-07): `research_1m_levels.py --variant "no lockout"` builds the same
+measurement off that cell of the matrix and writes
+`output/quickfix1m1dc_levels_no_lockout.{json,html}` beside the baseline's,
+labelled as a dial setting that is NOT what runs. On corrected bars it has
+147 trades and **19 episodes that traded more than once**, wheat's
+`LLLLL` at 620.625 among them. Any matrix cell works the same way. The
+pre-lockout page in git at commit 1761f5a is the CONTAMINATED-bar version
+and is superseded by this one for every purpose except reading the history.
 
 ## 10. The confirmation clause is gone, the ladder stop stays (2026-08-06)
 

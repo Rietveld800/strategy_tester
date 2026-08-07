@@ -1,5 +1,6 @@
 {
  "source": "quickfix1m1dc_all.json",
+ "variant": null,
  "params": {
   "risk_pct": 1.0,
   "entry_slip_ticks": 2,

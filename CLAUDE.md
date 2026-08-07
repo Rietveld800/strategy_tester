@@ -562,11 +562,17 @@ trade, the family of one-position-per-market. It counts ENTRIES, NOT EXITS,
 and that is worth 19R: a position carried in from the previous session and
 stopped intraday does not spend today's allowance (9 trades, +19.10R, 6
 winners, including the sample's biggest at +13.41R). Measured first by
-`research_1m_levels.py`: 1st trade of a market-day 39.4% wr / +42.51R, 2nd
-21.4% / -10.39R. The rerun matched the blotter estimate to the decimal, so
-this rule has NO cascades. BUT the net-R gain is ONE MARKET (wheat is -8.47R
-of the -7.86R removed; without wheat the rule is a wash at +0.62R).
-Provisional on 19 trades.
+`research_1m_levels.py`. The rerun matched the blotter estimate to the
+decimal, so this rule has NO cascades.
+**ON CORRECTED BARS THE PATTERN IS SHARPER AND THE RULE WINS ON EVERY
+METRIC** (audit 11b): 1st trade of a market-day 41.4% wr / +55.34R, 2nd
+**16.7%** / -10.30R (was 21.4% on contaminated bars), and lockout 1 beats no
+lockout 128v147 trades, 41.4%v38.1%, +55.34Rv+47.48R, streak 7v8,
+**11.20%v14.99% DD**, $165,921v$152,571. Lode's read, recorded: the
+win-rate-first thesis is what carried it. STILL TRUE THOUGH: the measured
+gain is one market's one session -- removing WHEAT's six repeats BY HAND
+gives a better drawdown (9.77%) than the rule itself, and the other 13
+repeats are +0.62R. Keep the rule and watch it; do not believe the +7.86R.
 **OFF-BOOK PRINTS WERE IN THE BARS UNTIL 2026-08-07** (audit section 12,
 found from "FGBL's 1m chart doesn't show properly"): XEUR and IFUS publish
 each minute twice, on-book and off-book, data_center's writers dropped

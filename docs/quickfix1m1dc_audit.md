@@ -338,6 +338,49 @@ were 14.55% and 14.70%. Section 11's honest limits were written on the
 contaminated run; the shape of its argument survives, the specific figures
 in it do not.
 
+## 11b. Verdict on corrected bars (Lode, 2026-08-07)
+
+Lode, once section 12's data fix landed: "we can eventually see that the
+theory was indeed right. Lockout 1 did make a significant improvement in
+drawdown, and it improved significantly on all metrics. I knew that when
+getting the win rate higher that everything would fit in eventually."
+
+That is the right read of the headline, and the clean bars make the pattern
+SHARPER than the run the rule was decided on. Which trade of the market-day
+it is, no lockout, corrected bars:
+
+| | trades | win rate | net R | avg R |
+|---|---|---|---|---|
+| 1st | 128 | **41.4%** | +55.34 | +0.43 |
+| 2nd | 12 | **16.7%** | -10.30 | -0.86 |
+| 3rd | 5 | 20.0% | +5.39 | +1.08 |
+| 4th+ | 2 | 0% | -2.94 | -1.47 |
+
+The 2nd trade's win rate was 21.4% on contaminated bars and is 16.7% on
+clean ones. And the lockout now beats no-lockout on every metric at once:
+128 v 147 trades, 41.4% v 38.1%, +55.34R v +47.48R, streak 7 v 8, **11.20%
+v 14.99% drawdown**, $165,921 v $152,571. The win-rate-first thesis is what
+carried it: the rule does nothing but delete a class that wins 16.7% of the
+time, and everything else follows.
+
+**WHAT THE SAMPLE STILL WILL NOT SAY, and it is the same limit as before.**
+Leave wheat's six repeats out by hand and take everything else:
+
+| | trades | wr | net R | streak | max DD | final |
+|---|---|---|---|---|---|---|
+| no lockout | 147 | 38.1% | +47.48 | 8 | 14.99% | $152,571 |
+| minus WHEAT's repeats only | 141 | 39.7% | +55.96 | 7 | **9.77%** | $166,297 |
+| minus all repeats (the rule) | 128 | 41.4% | +55.34 | 7 | 11.20% | $165,921 |
+
+Removing one market's one session gets a BETTER drawdown than the rule
+does. The other 13 repeats are +0.62R together and their removal costs 1.4
+points of drawdown, because USO's repeat winners were cushioning it. So the
+honest statement is: the theory named the right class and the prescription
+is sound, the class is genuinely bad wherever it appears (16.7% over 12
+trades), and on THIS sample the whole measured gain still traces to
+2026-04-27 in wheat. That is an argument for keeping the rule and watching
+it, not for believing the +7.86R. Prospective trades are what settle it.
+
 ## 11. The session lockout (Lode, 2026-08-07)
 
 Lode, reading wheat trades 1-5 on the trade study - five stop-outs in one

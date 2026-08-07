@@ -565,10 +565,11 @@ winners, including the sample's biggest at +13.41R). Measured first by
 `research_1m_levels.py`. The rerun matched the blotter estimate to the
 decimal, so this rule has NO cascades.
 **ON CORRECTED BARS THE PATTERN IS SHARPER AND THE RULE WINS ON EVERY
-METRIC** (audit 11b): 1st trade of a market-day 41.4% wr / +55.34R, 2nd
-**16.7%** / -10.30R (was 21.4% on contaminated bars), and lockout 1 beats no
-lockout 128v147 trades, 41.4%v38.1%, +55.34Rv+47.48R, streak 7v8,
-**11.20%v14.99% DD**, $165,921v$152,571. Lode's read, recorded: the
+METRIC** (audit 11b, figures on the CURRENT window to 2026-08-06): 1st trade
+of a market-day 41.0% wr / +53.22R, 2nd **16.7%** / -10.30R (was 21.4% on
+contaminated bars), and lockout 1 beats no lockout 134v153 trades,
+41.0%v37.9%, +53.22Rv+45.36R, streak 7v8,
+**11.20%v14.99% DD**, $162,415v$149,347. Lode's read, recorded: the
 win-rate-first thesis is what carried it. STILL TRUE THOUGH: the measured
 gain is one market's one session -- removing WHEAT's six repeats BY HAND
 gives a better drawdown (9.77%) than the rule itself, and the other 13

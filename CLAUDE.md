@@ -586,9 +586,15 @@ there costs SB 0.836 -> 0.767, DX 0.934 -> 0.908, CC 0.479 -> 0.096, KC 0.452
 -> 0.164). Nothing in THIS project reads those session bars, and every bar the
 1m engine sees is still on-book only. See data_center's CLAUDE.md; do not
 "fix" that function.
-Every published 1m figure moved and all for the better -- **128 trades, 41.4%
-wr, +55.34R, 11.20% max DD, $165,921** at the baseline, against 132 / 39.4% /
-+42.51R / 14.55% / $146,382 on the contaminated bars. Figures quoted from
+Every published 1m figure moved and all for the better -- 128 trades, 41.4%
+wr, +55.34R, 11.20% max DD, $165,921 at the baseline, against 132 / 39.4% /
++42.51R / 14.55% / $146,382 on the contaminated bars, both to 2026-07-31.
+**THE WINDOW THEN REACHED 2026-08-06** (audit section 13): data_center's
+WINDOW_END had been frozen at the pilot's purchase window, silently capping
+the chain, and with it fixed 20 markets carry 1m bars six days further. The
+rerun is PURELY ADDITIVE (6 trades added, 0 removed, no pre-existing R moved,
+no data_end exits), and the live baseline is **134 trades, 41.0% wr, +53.22R,
+11.20% max DD, $162,415**. Figures quoted from
 before that date are pre-correction; the shape of the arguments survived, the
 numbers did not.
 **THE CONFIRMATION CLAUSE WENT ON 2026-08-06** (Lode), and it is the

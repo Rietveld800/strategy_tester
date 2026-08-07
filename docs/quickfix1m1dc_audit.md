@@ -297,6 +297,52 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 13. The window reaches 2026-08-06 (2026-08-08)
+
+The data had been standing still without anyone noticing. data_center's
+`WINDOW_END` was frozen at the pilot's PURCHASE window (2026-08-02), which
+capped the whole live chain: the fingerprint could not see an array day past
+it, so `refresh_1m` never extended a roll calendar, so it never bought a
+1-minute tail. The daily charts kept moving while the 1-minute series stopped
+at 2026-07-31. Fixed upstream (data_center `1fce946`, `WINDOW_END =
+date.today()`), calendars extended and re-fingerprinted, and 20 markets now
+carry 1-minute bars through 2026-08-05/06.
+
+Checked BEFORE republishing, because a longer window is only worth having if
+it is correct: bars, settlements and array files all reach 2026-08-06 (SB, DX
+and FGBL to 08-05, and those three have no statistics by design); the
+calendar's `last_date` excludes the partial Aug 7 evening session rather than
+half-counting it; and entries stay blocked on each segment's last day.
+
+The rerun is **purely additive - 6 trades added, 0 removed, and not one
+pre-existing trade's R moved**, which is the strongest evidence that the
+extension is an extension and not a reshuffle. Five are new August sessions
+(PA, PL, PA, NQ, ES). The sixth is **6J short 2026-07-31 17:45**, which was
+previously refused because Jul 31 was a segment's LAST day; with the calendar
+running to Aug 6 that day is mid-segment and the entry stands. There are no
+`data_end` exits at all, so the window-end forced-exit bias did not bite.
+
+| | through 2026-07-31 | through 2026-08-06 |
+|---|---|---|
+| trades | 128 | **134** |
+| win rate | 41.4% | 41.0% |
+| net R | +55.34 | +53.22 |
+| longest losing streak | 7 | 7 |
+| max drawdown | 11.20% | **11.20%** |
+| final | $165,921 | $162,415 |
+
+The six new trades are -2.12R together, which is the entire difference. The
+lockout matrix moves with it and its ranking does not: lockout 1 134 trades /
+41.0% / +53.22R / streak 7 / 11.20% / $162,415, lockout 2 146 / 39.0% /
++42.91R / 16.66%, no lockout 153 / 37.9% / +45.36R / streak 8 / 14.99%. The
+repeat class is unchanged to the decimal (2nd trade of a market-day still 12
+trades at 16.7% for -10.30R), because the new sessions produced no
+same-session repeats.
+
+Inherited unchanged and still open: the CC/KC/SB/DX roll calendars were frozen
+on volume that counted off-book blocks, and FGBL's volume flip sits one day
+before its 06-05 boundary. See section 12's closing note.
+
 ## 12. Off-book prints were in the bars (2026-08-07)
 
 Lode: "some markets don't show the 1m chart properly, for example FGBL."
@@ -333,6 +379,10 @@ number here. See data_center's CLAUDE.md.
 
 **Every published figure moved, and all of them for the better** - which is
 what you would expect when phantom triggers and phantom stop-outs come out:
+
+Both columns are measured on the SAME window (to 2026-07-31), which is the
+point of the comparison; the live baseline has since extended to 2026-08-06
+and 134 trades, see section 13.
 
 | | contaminated | corrected |
 |---|---|---|
@@ -406,15 +456,15 @@ it is, no lockout, corrected bars:
 
 | | trades | win rate | net R | avg R |
 |---|---|---|---|---|
-| 1st | 128 | **41.4%** | +55.34 | +0.43 |
+| 1st | 134 | **41.0%** | +53.22 | +0.40 |
 | 2nd | 12 | **16.7%** | -10.30 | -0.86 |
 | 3rd | 5 | 20.0% | +5.39 | +1.08 |
 | 4th+ | 2 | 0% | -2.94 | -1.47 |
 
 The 2nd trade's win rate was 21.4% on contaminated bars and is 16.7% on
 clean ones. And the lockout now beats no-lockout on every metric at once:
-128 v 147 trades, 41.4% v 38.1%, +55.34R v +47.48R, streak 7 v 8, **11.20%
-v 14.99% drawdown**, $165,921 v $152,571. The win-rate-first thesis is what
+134 v 153 trades, 41.0% v 37.9%, +53.22R v +45.36R, streak 7 v 8, **11.20%
+v 14.99% drawdown**, $162,415 v $149,347. The win-rate-first thesis is what
 carried it: the rule does nothing but delete a class that wins 16.7% of the
 time, and everything else follows.
 
@@ -423,9 +473,9 @@ Leave wheat's six repeats out by hand and take everything else:
 
 | | trades | wr | net R | streak | max DD | final |
 |---|---|---|---|---|---|---|
-| no lockout | 147 | 38.1% | +47.48 | 8 | 14.99% | $152,571 |
-| minus WHEAT's repeats only | 141 | 39.7% | +55.96 | 7 | **9.77%** | $166,297 |
-| minus all repeats (the rule) | 128 | 41.4% | +55.34 | 7 | 11.20% | $165,921 |
+| no lockout | 153 | 37.9% | +45.36 | 8 | 14.99% | $149,347 |
+| minus WHEAT's repeats only | 147 | 39.5% | +53.83 | 7 | **9.77%** | $162,783 |
+| minus all repeats (the rule) | 134 | 41.0% | +53.22 | 7 | 11.20% | $162,415 |
 
 Removing one market's one session gets a BETTER drawdown than the rule
 does. The other 13 repeats are +0.62R together and their removal costs 1.4
@@ -487,10 +537,10 @@ is itself a finding: this rule has NO cascades. It only removes trades that
 follow a first entry in the same market-day, and the lockout then keeps that
 market shut, so the trade list under the rule IS the first-of-day subset.
 
-RERUN ON CORRECTED BARS (section 12, off-book prints removed): lockout 1
-128 trades / 41.4% / +55.34R / streak 7 / **11.20%** DD / $165,921;
-lockout 2 140 / 39.3% / +45.04R / 16.66%; off 147 / 38.1% / +47.48R /
-streak 8 / 14.99%. The ranking is unchanged and the drawdown case is
+RERUN ON CORRECTED BARS (section 12) AND THE EXTENDED WINDOW (section 13):
+lockout 1 134 trades / 41.0% / +53.22R / streak 7 / **11.20%** DD /
+$162,415; lockout 2 146 / 39.0% / +42.91R / 16.66%; off 153 / 37.9% /
++45.36R / streak 8 / 14.99%. The ranking is unchanged and the drawdown case is
 STRONGER than it was here - on the contaminated series the lockout barely
 moved drawdown (14.55 against 14.70), on clean bars it takes 3.8 points off.
 

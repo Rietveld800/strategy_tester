@@ -16,18 +16,18 @@
     "stop_mode": "ladder",
     "max_entries_per_session": 1
    },
-   "trades": 128,
-   "win_rate": 41.4,
-   "net_r": 55.34,
+   "trades": 134,
+   "win_rate": 41.0,
+   "net_r": 53.22,
    "longest_losing_streak": 7,
    "max_dd_r": 10.63,
-   "final_cash": 165921.26,
+   "final_cash": 162415.31,
    "max_dd_pct": 11.2,
    "exit_mix": {
     "stop": {
-     "n": 60,
+     "n": 64,
      "wins": 0,
-     "net_r": -68.29
+     "net_r": -72.55
     },
     "no_confirm": {
      "n": 0,
@@ -35,9 +35,9 @@
      "net_r": 0
     },
     "close1": {
-     "n": 68,
-     "wins": 53,
-     "net_r": 123.63
+     "n": 70,
+     "wins": 55,
+     "net_r": 125.77
     },
     "data_end": {
      "n": 0,
@@ -54,18 +54,18 @@
     "stop_mode": "ladder",
     "max_entries_per_session": 2
    },
-   "trades": 140,
-   "win_rate": 39.3,
-   "net_r": 45.04,
+   "trades": 146,
+   "win_rate": 39.0,
+   "net_r": 42.91,
    "longest_losing_streak": 7,
    "max_dd_r": 16.42,
-   "final_cash": 149588.06,
+   "final_cash": 146427.23,
    "max_dd_pct": 16.66,
    "exit_mix": {
     "stop": {
-     "n": 70,
+     "n": 74,
      "wins": 0,
-     "net_r": -80.75
+     "net_r": -85.01
     },
     "no_confirm": {
      "n": 0,
@@ -73,9 +73,9 @@
      "net_r": 0
     },
     "close1": {
-     "n": 70,
-     "wins": 55,
-     "net_r": 125.78
+     "n": 72,
+     "wins": 57,
+     "net_r": 127.92
     },
     "data_end": {
      "n": 0,
@@ -92,18 +92,18 @@
     "stop_mode": "ladder",
     "max_entries_per_session": null
    },
-   "trades": 147,
-   "win_rate": 38.1,
-   "net_r": 47.48,
+   "trades": 153,
+   "win_rate": 37.9,
+   "net_r": 45.36,
    "longest_losing_streak": 8,
    "max_dd_r": 14.49,
-   "final_cash": 152570.81,
+   "final_cash": 149346.96,
    "max_dd_pct": 14.99,
    "exit_mix": {
     "stop": {
-     "n": 76,
+     "n": 80,
      "wins": 0,
-     "net_r": -89.22
+     "net_r": -93.49
     },
     "no_confirm": {
      "n": 0,
@@ -111,9 +111,9 @@
      "net_r": 0
     },
     "close1": {
-     "n": 71,
-     "wins": 56,
-     "net_r": 136.71
+     "n": 73,
+     "wins": 58,
+     "net_r": 138.85
     },
     "data_end": {
      "n": 0,
@@ -180,15 +180,15 @@
     "tick": 5e-05
    },
    {
-    "trades": 4,
+    "trades": 5,
     "wins": 1,
-    "win_rate": 25.0,
-    "net_r_total": 0.35,
-    "final_cash": 100265.39,
-    "return_pct": 0.27,
+    "win_rate": 20.0,
+    "net_r_total": -0.72,
+    "final_cash": 99194.76,
+    "return_pct": -0.81,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 3,
+     "stop": 4,
      "no_confirm": 0,
      "close1": 1,
      "data_end": 0
@@ -270,15 +270,15 @@
     "tick": 0.001
    },
    {
-    "trades": 1,
+    "trades": 3,
     "wins": 0,
     "win_rate": 0.0,
-    "net_r_total": -0.11,
-    "final_cash": 99894.74,
-    "return_pct": -0.11,
+    "net_r_total": -2.29,
+    "final_cash": 97728.54,
+    "return_pct": -2.27,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 0,
+     "stop": 2,
      "no_confirm": 0,
      "close1": 1,
      "data_end": 0
@@ -288,17 +288,17 @@
     "tick": 0.5
    },
    {
-    "trades": 3,
-    "wins": 0,
-    "win_rate": 0.0,
-    "net_r_total": -1.63,
-    "final_cash": 98376.75,
-    "return_pct": -1.62,
+    "trades": 4,
+    "wins": 1,
+    "win_rate": 25.0,
+    "net_r_total": -0.68,
+    "final_cash": 99309.25,
+    "return_pct": -0.69,
     "zero_dist_entries": 0,
     "reasons": {
      "stop": 1,
      "no_confirm": 0,
-     "close1": 2,
+     "close1": 3,
      "data_end": 0
     },
     "market": "NQ",
@@ -306,17 +306,17 @@
     "tick": 0.25
    },
    {
-    "trades": 5,
-    "wins": 0,
-    "win_rate": 0.0,
-    "net_r_total": -3.66,
-    "final_cash": 96394.1,
-    "return_pct": -3.61,
+    "trades": 6,
+    "wins": 1,
+    "win_rate": 16.7,
+    "net_r_total": -2.46,
+    "final_cash": 97541.65,
+    "return_pct": -2.46,
     "zero_dist_entries": 0,
     "reasons": {
      "stop": 3,
      "no_confirm": 0,
-     "close1": 2,
+     "close1": 3,
      "data_end": 0
     },
     "market": "ES",
@@ -396,15 +396,15 @@
     "tick": 0.015625
    },
    {
-    "trades": 4,
+    "trades": 5,
     "wins": 3,
-    "win_rate": 75.0,
-    "net_r_total": 0.93,
-    "final_cash": 100921.04,
-    "return_pct": 0.92,
+    "win_rate": 60.0,
+    "net_r_total": -0.08,
+    "final_cash": 99897.47,
+    "return_pct": -0.1,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 1,
+     "stop": 2,
      "no_confirm": 0,
      "close1": 3,
      "data_end": 0
@@ -740,15 +740,15 @@
     "tick": 5e-05
    },
    {
-    "trades": 5,
+    "trades": 6,
     "wins": 2,
-    "win_rate": 40.0,
-    "net_r_total": 1.07,
-    "final_cash": 100988.23,
-    "return_pct": 0.99,
+    "win_rate": 33.3,
+    "net_r_total": 0.0,
+    "final_cash": 99909.89,
+    "return_pct": -0.09,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 3,
+     "stop": 4,
      "no_confirm": 0,
      "close1": 2,
      "data_end": 0
@@ -830,15 +830,15 @@
     "tick": 0.001
    },
    {
-    "trades": 1,
+    "trades": 3,
     "wins": 0,
     "win_rate": 0.0,
-    "net_r_total": -0.11,
-    "final_cash": 99894.74,
-    "return_pct": -0.11,
+    "net_r_total": -2.29,
+    "final_cash": 97728.54,
+    "return_pct": -2.27,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 0,
+     "stop": 2,
      "no_confirm": 0,
      "close1": 1,
      "data_end": 0
@@ -848,17 +848,17 @@
     "tick": 0.5
    },
    {
-    "trades": 3,
-    "wins": 0,
-    "win_rate": 0.0,
-    "net_r_total": -1.63,
-    "final_cash": 98376.75,
-    "return_pct": -1.62,
+    "trades": 4,
+    "wins": 1,
+    "win_rate": 25.0,
+    "net_r_total": -0.68,
+    "final_cash": 99309.25,
+    "return_pct": -0.69,
     "zero_dist_entries": 0,
     "reasons": {
      "stop": 1,
      "no_confirm": 0,
-     "close1": 2,
+     "close1": 3,
      "data_end": 0
     },
     "market": "NQ",
@@ -866,17 +866,17 @@
     "tick": 0.25
    },
    {
-    "trades": 6,
-    "wins": 0,
-    "win_rate": 0.0,
-    "net_r_total": -4.75,
-    "final_cash": 95340.07,
-    "return_pct": -4.66,
+    "trades": 7,
+    "wins": 1,
+    "win_rate": 14.3,
+    "net_r_total": -3.56,
+    "final_cash": 96475.07,
+    "return_pct": -3.52,
     "zero_dist_entries": 0,
     "reasons": {
      "stop": 4,
      "no_confirm": 0,
-     "close1": 2,
+     "close1": 3,
      "data_end": 0
     },
     "market": "ES",
@@ -956,15 +956,15 @@
     "tick": 0.015625
    },
    {
-    "trades": 4,
+    "trades": 5,
     "wins": 3,
-    "win_rate": 75.0,
-    "net_r_total": 0.93,
-    "final_cash": 100921.04,
-    "return_pct": 0.92,
+    "win_rate": 60.0,
+    "net_r_total": -0.08,
+    "final_cash": 99897.47,
+    "return_pct": -0.1,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 1,
+     "stop": 2,
      "no_confirm": 0,
      "close1": 3,
      "data_end": 0
@@ -1300,15 +1300,15 @@
     "tick": 5e-05
    },
    {
-    "trades": 5,
+    "trades": 6,
     "wins": 2,
-    "win_rate": 40.0,
-    "net_r_total": 1.07,
-    "final_cash": 100988.23,
-    "return_pct": 0.99,
+    "win_rate": 33.3,
+    "net_r_total": 0.0,
+    "final_cash": 99909.89,
+    "return_pct": -0.09,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 3,
+     "stop": 4,
      "no_confirm": 0,
      "close1": 2,
      "data_end": 0
@@ -1390,15 +1390,15 @@
     "tick": 0.001
    },
    {
-    "trades": 1,
+    "trades": 3,
     "wins": 0,
     "win_rate": 0.0,
-    "net_r_total": -0.11,
-    "final_cash": 99894.74,
-    "return_pct": -0.11,
+    "net_r_total": -2.29,
+    "final_cash": 97728.54,
+    "return_pct": -2.27,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 0,
+     "stop": 2,
      "no_confirm": 0,
      "close1": 1,
      "data_end": 0
@@ -1408,17 +1408,17 @@
     "tick": 0.5
    },
    {
-    "trades": 3,
-    "wins": 0,
-    "win_rate": 0.0,
-    "net_r_total": -1.63,
-    "final_cash": 98376.75,
-    "return_pct": -1.62,
+    "trades": 4,
+    "wins": 1,
+    "win_rate": 25.0,
+    "net_r_total": -0.68,
+    "final_cash": 99309.25,
+    "return_pct": -0.69,
     "zero_dist_entries": 0,
     "reasons": {
      "stop": 1,
      "no_confirm": 0,
-     "close1": 2,
+     "close1": 3,
      "data_end": 0
     },
     "market": "NQ",
@@ -1426,17 +1426,17 @@
     "tick": 0.25
    },
    {
-    "trades": 6,
-    "wins": 0,
-    "win_rate": 0.0,
-    "net_r_total": -4.75,
-    "final_cash": 95340.07,
-    "return_pct": -4.66,
+    "trades": 7,
+    "wins": 1,
+    "win_rate": 14.3,
+    "net_r_total": -3.56,
+    "final_cash": 96475.07,
+    "return_pct": -3.52,
     "zero_dist_entries": 0,
     "reasons": {
      "stop": 4,
      "no_confirm": 0,
-     "close1": 2,
+     "close1": 3,
      "data_end": 0
     },
     "market": "ES",
@@ -1516,15 +1516,15 @@
     "tick": 0.015625
    },
    {
-    "trades": 4,
+    "trades": 5,
     "wins": 3,
-    "win_rate": 75.0,
-    "net_r_total": 0.93,
-    "final_cash": 100921.04,
-    "return_pct": 0.92,
+    "win_rate": 60.0,
+    "net_r_total": -0.08,
+    "final_cash": 99897.47,
+    "return_pct": -0.1,
     "zero_dist_entries": 0,
     "reasons": {
-     "stop": 1,
+     "stop": 2,
      "no_confirm": 0,
      "close1": 3,
      "data_end": 0
@@ -2250,6 +2250,27 @@
    },
    {
     "side": "short",
+    "contract": "6JU6",
+    "entry_date": "2026-07-31",
+    "entry_ts": "2026-07-31 17:45:00+00:00",
+    "entry": 0.0063159999999999996,
+    "stop": 0.0063465,
+    "rpu": 2.9500000000000012e-05,
+    "entry_first": 0.006317,
+    "stop_tightened": null,
+    "exit_ts": "2026-07-31 20:19:00+00:00",
+    "exit": 0.0063465,
+    "reason": "stop",
+    "gross_r": -1.0339,
+    "cost_r": 0.0339,
+    "net_r": -1.0678,
+    "risk_usd": 1002.65,
+    "pnl_usd": -1070.63,
+    "cash_after": 99194.76,
+    "market": "6J"
+   },
+   {
+    "side": "short",
     "contract": "LEJ6",
     "entry_date": "2026-01-29",
     "entry_ts": "2026-01-29 14:45:00+00:00",
@@ -2754,6 +2775,48 @@
    },
    {
     "side": "short",
+    "contract": "PAU6",
+    "entry_date": "2026-08-04",
+    "entry_ts": "2026-08-04 13:05:00+00:00",
+    "entry": 1324.6,
+    "stop": 1347.1,
+    "rpu": 21.5,
+    "entry_first": 1325.6,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-04 14:59:00+00:00",
+    "exit": 1347.1,
+    "reason": "stop",
+    "gross_r": -1.0465,
+    "cost_r": 0.0465,
+    "net_r": -1.093,
+    "risk_usd": 998.95,
+    "pnl_usd": -1091.87,
+    "cash_after": 98802.86,
+    "market": "PA"
+   },
+   {
+    "side": "short",
+    "contract": "PAU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 12:34:00+00:00",
+    "entry": 1367.1,
+    "stop": 1391.0,
+    "rpu": 22.90000000000009,
+    "entry_first": 1368.1,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 01:00:00+00:00",
+    "exit": 1391.0,
+    "reason": "stop",
+    "gross_r": -1.0437,
+    "cost_r": 0.0437,
+    "net_r": -1.0873,
+    "risk_usd": 988.03,
+    "pnl_usd": -1074.32,
+    "cash_after": 97728.54,
+    "market": "PA"
+   },
+   {
+    "side": "short",
     "contract": "NQM6",
     "entry_date": "2026-04-24",
     "entry_ts": "2026-04-24 13:55:00+00:00",
@@ -2813,6 +2876,27 @@
     "risk_usd": 984.5,
     "pnl_usd": -73.0,
     "cash_after": 98376.75,
+    "market": "NQ"
+   },
+   {
+    "side": "short",
+    "contract": "NQU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 14:30:00+00:00",
+    "entry": 29892.3,
+    "stop": 30318.8,
+    "rpu": 426.0,
+    "entry_first": 29892.8,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 20:00:22.965681107+00:00",
+    "exit": 29488.250000000004,
+    "reason": "close1",
+    "gross_r": 0.9485,
+    "cost_r": 0.0006,
+    "net_r": 0.9479,
+    "risk_usd": 983.77,
+    "pnl_usd": 932.5,
+    "cash_after": 99309.25,
     "market": "NQ"
    },
    {
@@ -2918,6 +3002,27 @@
     "risk_usd": 966.24,
     "pnl_usd": -229.47,
     "cash_after": 96394.1,
+    "market": "ES"
+   },
+   {
+    "side": "short",
+    "contract": "ESU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 15:17:00+00:00",
+    "entry": 7772.5,
+    "stop": 7804.5,
+    "rpu": 31.5,
+    "entry_first": 7773.0,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 20:00:19.352506823+00:00",
+    "exit": 7734.750000000001,
+    "reason": "close1",
+    "gross_r": 1.1984,
+    "cost_r": 0.0079,
+    "net_r": 1.1905,
+    "risk_usd": 963.94,
+    "pnl_usd": 1147.55,
+    "cash_after": 97541.65,
     "market": "ES"
    },
    {
@@ -3548,6 +3653,27 @@
     "risk_usd": 995.54,
     "pnl_usd": 1367.13,
     "cash_after": 100921.04,
+    "market": "PL"
+   },
+   {
+    "side": "short",
+    "contract": "PLV6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 08:31:00+00:00",
+    "entry": 1769.3999999999999,
+    "stop": 1797.6999999999998,
+    "rpu": 28.09999999999991,
+    "entry_first": 1769.6,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 01:10:00+00:00",
+    "exit": 1797.6999999999998,
+    "reason": "stop",
+    "gross_r": -1.0071,
+    "cost_r": 0.0071,
+    "net_r": -1.0142,
+    "risk_usd": 1009.21,
+    "pnl_usd": -1023.58,
+    "cash_after": 99897.47,
     "market": "PL"
    },
    {
@@ -5003,6 +5129,27 @@
    },
    {
     "side": "short",
+    "contract": "6JU6",
+    "entry_date": "2026-07-31",
+    "entry_ts": "2026-07-31 17:45:00+00:00",
+    "entry": 0.0063159999999999996,
+    "stop": 0.0063465,
+    "rpu": 2.9500000000000012e-05,
+    "entry_first": 0.006317,
+    "stop_tightened": null,
+    "exit_ts": "2026-07-31 20:19:00+00:00",
+    "exit": 0.0063465,
+    "reason": "stop",
+    "gross_r": -1.0339,
+    "cost_r": 0.0339,
+    "net_r": -1.0678,
+    "risk_usd": 1009.88,
+    "pnl_usd": -1078.35,
+    "cash_after": 99909.89,
+    "market": "6J"
+   },
+   {
+    "side": "short",
     "contract": "LEJ6",
     "entry_date": "2026-01-29",
     "entry_ts": "2026-01-29 14:45:00+00:00",
@@ -5528,6 +5675,48 @@
    },
    {
     "side": "short",
+    "contract": "PAU6",
+    "entry_date": "2026-08-04",
+    "entry_ts": "2026-08-04 13:05:00+00:00",
+    "entry": 1324.6,
+    "stop": 1347.1,
+    "rpu": 21.5,
+    "entry_first": 1325.6,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-04 14:59:00+00:00",
+    "exit": 1347.1,
+    "reason": "stop",
+    "gross_r": -1.0465,
+    "cost_r": 0.0465,
+    "net_r": -1.093,
+    "risk_usd": 998.95,
+    "pnl_usd": -1091.87,
+    "cash_after": 98802.86,
+    "market": "PA"
+   },
+   {
+    "side": "short",
+    "contract": "PAU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 12:34:00+00:00",
+    "entry": 1367.1,
+    "stop": 1391.0,
+    "rpu": 22.90000000000009,
+    "entry_first": 1368.1,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 01:00:00+00:00",
+    "exit": 1391.0,
+    "reason": "stop",
+    "gross_r": -1.0437,
+    "cost_r": 0.0437,
+    "net_r": -1.0873,
+    "risk_usd": 988.03,
+    "pnl_usd": -1074.32,
+    "cash_after": 97728.54,
+    "market": "PA"
+   },
+   {
+    "side": "short",
     "contract": "NQM6",
     "entry_date": "2026-04-24",
     "entry_ts": "2026-04-24 13:55:00+00:00",
@@ -5587,6 +5776,27 @@
     "risk_usd": 984.5,
     "pnl_usd": -73.0,
     "cash_after": 98376.75,
+    "market": "NQ"
+   },
+   {
+    "side": "short",
+    "contract": "NQU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 14:30:00+00:00",
+    "entry": 29892.3,
+    "stop": 30318.8,
+    "rpu": 426.0,
+    "entry_first": 29892.8,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 20:00:22.965681107+00:00",
+    "exit": 29488.250000000004,
+    "reason": "close1",
+    "gross_r": 0.9485,
+    "cost_r": 0.0006,
+    "net_r": 0.9479,
+    "risk_usd": 983.77,
+    "pnl_usd": 932.5,
+    "cash_after": 99309.25,
     "market": "NQ"
    },
    {
@@ -5713,6 +5923,27 @@
     "risk_usd": 955.67,
     "pnl_usd": -226.96,
     "cash_after": 95340.07,
+    "market": "ES"
+   },
+   {
+    "side": "short",
+    "contract": "ESU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 15:17:00+00:00",
+    "entry": 7772.5,
+    "stop": 7804.5,
+    "rpu": 31.5,
+    "entry_first": 7773.0,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 20:00:19.352506823+00:00",
+    "exit": 7734.750000000001,
+    "reason": "close1",
+    "gross_r": 1.1984,
+    "cost_r": 0.0079,
+    "net_r": 1.1905,
+    "risk_usd": 953.4,
+    "pnl_usd": 1135.0,
+    "cash_after": 96475.07,
     "market": "ES"
    },
    {
@@ -6427,6 +6658,27 @@
     "risk_usd": 995.54,
     "pnl_usd": 1367.13,
     "cash_after": 100921.04,
+    "market": "PL"
+   },
+   {
+    "side": "short",
+    "contract": "PLV6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 08:31:00+00:00",
+    "entry": 1769.3999999999999,
+    "stop": 1797.6999999999998,
+    "rpu": 28.09999999999991,
+    "entry_first": 1769.6,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 01:10:00+00:00",
+    "exit": 1797.6999999999998,
+    "reason": "stop",
+    "gross_r": -1.0071,
+    "cost_r": 0.0071,
+    "net_r": -1.0142,
+    "risk_usd": 1009.21,
+    "pnl_usd": -1023.58,
+    "cash_after": 99897.47,
     "market": "PL"
    },
    {
@@ -7966,6 +8218,27 @@
    },
    {
     "side": "short",
+    "contract": "6JU6",
+    "entry_date": "2026-07-31",
+    "entry_ts": "2026-07-31 17:45:00+00:00",
+    "entry": 0.0063159999999999996,
+    "stop": 0.0063465,
+    "rpu": 2.9500000000000012e-05,
+    "entry_first": 0.006317,
+    "stop_tightened": null,
+    "exit_ts": "2026-07-31 20:19:00+00:00",
+    "exit": 0.0063465,
+    "reason": "stop",
+    "gross_r": -1.0339,
+    "cost_r": 0.0339,
+    "net_r": -1.0678,
+    "risk_usd": 1009.88,
+    "pnl_usd": -1078.35,
+    "cash_after": 99909.89,
+    "market": "6J"
+   },
+   {
+    "side": "short",
     "contract": "LEJ6",
     "entry_date": "2026-01-29",
     "entry_ts": "2026-01-29 14:45:00+00:00",
@@ -8491,6 +8764,48 @@
    },
    {
     "side": "short",
+    "contract": "PAU6",
+    "entry_date": "2026-08-04",
+    "entry_ts": "2026-08-04 13:05:00+00:00",
+    "entry": 1324.6,
+    "stop": 1347.1,
+    "rpu": 21.5,
+    "entry_first": 1325.6,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-04 14:59:00+00:00",
+    "exit": 1347.1,
+    "reason": "stop",
+    "gross_r": -1.0465,
+    "cost_r": 0.0465,
+    "net_r": -1.093,
+    "risk_usd": 998.95,
+    "pnl_usd": -1091.87,
+    "cash_after": 98802.86,
+    "market": "PA"
+   },
+   {
+    "side": "short",
+    "contract": "PAU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 12:34:00+00:00",
+    "entry": 1367.1,
+    "stop": 1391.0,
+    "rpu": 22.90000000000009,
+    "entry_first": 1368.1,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 01:00:00+00:00",
+    "exit": 1391.0,
+    "reason": "stop",
+    "gross_r": -1.0437,
+    "cost_r": 0.0437,
+    "net_r": -1.0873,
+    "risk_usd": 988.03,
+    "pnl_usd": -1074.32,
+    "cash_after": 97728.54,
+    "market": "PA"
+   },
+   {
+    "side": "short",
     "contract": "NQM6",
     "entry_date": "2026-04-24",
     "entry_ts": "2026-04-24 13:55:00+00:00",
@@ -8550,6 +8865,27 @@
     "risk_usd": 984.5,
     "pnl_usd": -73.0,
     "cash_after": 98376.75,
+    "market": "NQ"
+   },
+   {
+    "side": "short",
+    "contract": "NQU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 14:30:00+00:00",
+    "entry": 29892.3,
+    "stop": 30318.8,
+    "rpu": 426.0,
+    "entry_first": 29892.8,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 20:00:22.965681107+00:00",
+    "exit": 29488.250000000004,
+    "reason": "close1",
+    "gross_r": 0.9485,
+    "cost_r": 0.0006,
+    "net_r": 0.9479,
+    "risk_usd": 983.77,
+    "pnl_usd": 932.5,
+    "cash_after": 99309.25,
     "market": "NQ"
    },
    {
@@ -8676,6 +9012,27 @@
     "risk_usd": 955.67,
     "pnl_usd": -226.96,
     "cash_after": 95340.07,
+    "market": "ES"
+   },
+   {
+    "side": "short",
+    "contract": "ESU6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 15:17:00+00:00",
+    "entry": 7772.5,
+    "stop": 7804.5,
+    "rpu": 31.5,
+    "entry_first": 7773.0,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 20:00:19.352506823+00:00",
+    "exit": 7734.750000000001,
+    "reason": "close1",
+    "gross_r": 1.1984,
+    "cost_r": 0.0079,
+    "net_r": 1.1905,
+    "risk_usd": 953.4,
+    "pnl_usd": 1135.0,
+    "cash_after": 96475.07,
     "market": "ES"
    },
    {
@@ -9495,6 +9852,27 @@
     "risk_usd": 995.54,
     "pnl_usd": 1367.13,
     "cash_after": 100921.04,
+    "market": "PL"
+   },
+   {
+    "side": "short",
+    "contract": "PLV6",
+    "entry_date": "2026-08-05",
+    "entry_ts": "2026-08-05 08:31:00+00:00",
+    "entry": 1769.3999999999999,
+    "stop": 1797.6999999999998,
+    "rpu": 28.09999999999991,
+    "entry_first": 1769.6,
+    "stop_tightened": null,
+    "exit_ts": "2026-08-06 01:10:00+00:00",
+    "exit": 1797.6999999999998,
+    "reason": "stop",
+    "gross_r": -1.0071,
+    "cost_r": 0.0071,
+    "net_r": -1.0142,
+    "risk_usd": 1009.21,
+    "pnl_usd": -1023.58,
+    "cash_after": 99897.47,
     "market": "PL"
    },
    {

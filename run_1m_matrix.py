@@ -1,22 +1,20 @@
 """The dial matrix for quickfix1m1dc v2: one pass over the data (each
 market's days/files load once), every variant run on the same inputs.
 
-GRID IN FORCE (Lode, 2026-08-06): {confirmation clause on / off} x
-{stop anchor: ladder, ladder_or_extreme, extreme}, everything else at
-the published baseline (no tightening, overnight window blocked).
+GRID IN FORCE (Lode, 2026-08-07): the SESSION LOCKOUT at 1, 2 and off,
+everything else at the published baseline (no tightening, overnight
+window blocked, no confirmation clause, ladder stop). It asks what a
+market that has already traded today is worth: research_1m_levels.py
+measured the 1st trade of a market-day at 39.4% and +42.51R against the
+2nd at 21.4% and -10.39R, and the lockout is the rule that follows from
+it. Read the LOSING STREAK and the drawdown first here: the net-R gain
+is concentrated in wheat, so the case for the rule rests on the shape of
+the equity curve rather than on the total.
 
-- The CLAUSE has never been measured: it arrived with the v1 design and
-  sat in no experiment, with two behaviour tests and no economics. It
-  is the intraday stand-in for the daily engine's close-beyond entry
-  trigger, so this asks what that stand-in is worth, not whether to
-  delete it on sight.
-- The STOP variants come from USO 2026-03-13, where the session had
-  already traded through the trade's own invalidation before the entry
-  existed. `extreme` is in the grid to separate "wider is worse" from
-  "moving the stop at all is worse".
-
-The earlier grid, {tighten on/off} x {window allowed/blocked}, picked
-the baseline and is written up in audit sections 6 and 7; it is in git.
+Earlier grids, all in git and written up in the audit: {tighten} x
+{window} picked the baseline (sections 6 and 7), {confirm} x {stop
+anchor} removed the confirmation clause and kept the ladder stop
+(section 10).
 
 Metrics per variant, portfolio level (Lode's priority order): longest
 losing streak (entry order, net R), max shared-account drawdown, net R,
@@ -36,22 +34,17 @@ HERE = Path(__file__).resolve().parent
 OUT_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_matrix.html"
 
-# Everything sits on the published baseline; only the two new dials move.
-BASE = dict(tighten=False, allow_pre_activation=False)
+# Everything sits on the published baseline; only the dial under test moves.
+BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
+            stop_mode="ladder")
 VARIANTS = [
-    ("confirm+ladder", dict(BASE, confirm=True, stop_mode="ladder")),
-    ("confirm+hybrid", dict(BASE, confirm=True,
-                            stop_mode="ladder_or_extreme")),
-    ("confirm+extreme", dict(BASE, confirm=True, stop_mode="extreme")),
-    ("hold+ladder", dict(BASE, confirm=False, stop_mode="ladder")),
-    ("hold+hybrid", dict(BASE, confirm=False,
-                         stop_mode="ladder_or_extreme")),
-    ("hold+extreme", dict(BASE, confirm=False, stop_mode="extreme")),
+    ("lockout 1", dict(BASE, max_entries_per_session=1)),
+    ("lockout 2", dict(BASE, max_entries_per_session=2)),
+    ("no lockout", dict(BASE, max_entries_per_session=None)),
 ]
-BASELINE_NAME = "confirm+ladder"          # the published run, for reference
-COLORS = {"confirm+ladder": "#8e44ad", "confirm+hybrid": "#1a63c9",
-          "confirm+extreme": "#00838f", "hold+ladder": "#D64545",
-          "hold+hybrid": "#E8A33D", "hold+extreme": "#1B9E4B"}
+BASELINE_NAME = "lockout 1"               # the published run, for reference
+COLORS = {"lockout 1": "#1B9E4B", "lockout 2": "#E8A33D",
+          "no lockout": "#D64545"}
 
 
 def entry_order_metrics(trades):
@@ -179,16 +172,17 @@ text-align:right; }}
 td:first-child, th:first-child {{ text-align:left; }}
 td i {{ display:inline-block; width:22px; height:10px; }}
 </style></head><body>
-<b>quickfix1m1dc v2 - confirmation clause x stop anchor</b>
+<b>quickfix1m1dc v2 - the session lockout</b>
 <span style="color:#666"> market-order entries,
 {run_1m.engine_1m.ENTRY_SLIP_TICKS} ticks entry slippage,
 {run_1m.engine_1m.SLIP_STOP_TICKS} on a stop and
 {run_1m.engine_1m.SLIP_SCHEDULED_TICKS} on a settlement exit, 1% risk on
-the level-to-stop distance, no tightening, overnight window blocked.
-<b>confirm</b> = the entry day must settle beyond the first reversal,
-<b>hold</b> = carry to day 2 regardless; <b>ladder</b> = 5th (else 4th)
-reversal, <b>hybrid</b> = the further of that and the session extreme at
-entry, <b>extreme</b> = the session extreme alone.</span>
+the level-to-stop distance, no tightening, overnight window blocked, no
+confirmation clause, ladder stop.
+<b>lockout N</b> = at most N ENTRIES per market per session, expiring at
+the session boundary; a position carried in from the previous session
+and stopped intraday does not spend the allowance. Read the losing
+streak and the drawdown first.</span>
 <div id="chart"></div>
 <table><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
 <th>longest losing streak</th><th>max DD (R)</th><th>max DD %</th>

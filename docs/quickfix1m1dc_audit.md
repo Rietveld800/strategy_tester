@@ -297,6 +297,79 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 11. The session lockout (Lode, 2026-08-07)
+
+Lode, reading wheat trades 1-5 on the trade study - five stop-outs in one
+session on one level: "when a market oscillates like this between the exact
+same reversals it's the worst possible outcome for us", with the hypothesis
+that a cluster tested many times is less likely to produce the immediate
+move. Understand it before changing anything, so `research_1m_levels.py`
+measured the published baseline first (page:
+output/quickfix1m1dc_levels.html). It groups every trade by market, side,
+first reversal price and LEVEL RUN (the consecutive files carrying that
+level), and counts both ATTEMPTS (another trade) and TESTS (another touch,
+traded or not; a maximal run of minutes containing the level).
+
+**The hypothesis as stated did not survive, and something sharper did.**
+
+- Trading a level AGAIN is not itself bad: 1st attempts 37% wr for +9.29R,
+  repeats 35% for +25.27R. Banning re-entry on a level after a loss would
+  have removed +12.60R of profit.
+- The TEST count predicts nothing: 13+ prior tests is flat (+0.74R over 68
+  trades), 7-12 is the best bucket (+22.69R), and within a session 4+ tests
+  before entry is the best of all (+37.31R over 101).
+- The leak is the SAME SESSION. 1st trade of a market-day: 132 trades,
+  39.4%, +42.51R. 2nd: 14 trades, 21.4%, -10.39R. 3rd: 5 trades, 20%. 4th
+  and 5th: 2 trades, 0%. Every same-session repeat in the sample was a
+  re-attack of the SAME level, so both framings collapse into one.
+
+THE RULE: **`max_entries_per_session`, default 1** - at most one ENTRY per
+market per session, expiring at the session boundary. Deliberately NOT part
+of rules 1-3 (those describe what the chart must show; this is a fact about
+our own previous trade, the family of one-position-per-market), and
+deliberately counting ENTRIES rather than exits.
+
+**That entry/exit distinction is worth 19R.** A position carried in from the
+previous session and stopped intraday does NOT spend today's allowance: nine
+trades sit in that case, +19.10R with 6 winners, including the sample's
+biggest (ZW +13.41R, entered 12 minutes after the previous day's position
+was stopped). Locking a session on any intraday exit would delete all nine.
+Being stopped out of yesterday's trade after a fresh session and a fresh
+update is not the same event as re-attacking a level that just chopped you.
+
+| variant | trades | wr% | netR | streak | max DD | final |
+|---|---|---|---|---|---|---|
+| **lockout 1 (NEW BASELINE)** | 132 | **39.4** | **+42.51** | **6** | **14.55%** | **$146,382** |
+| lockout 2 | 146 | 37.7 | +32.12 | 6 | 19.53% | $131,798 |
+| no lockout | 153 | 36.6 | +34.56 | 8 | 14.70% | $134,426 |
+
+The engine rerun reproduced the blotter-level estimate to the decimal, which
+is itself a finding: this rule has NO cascades. It only removes trades that
+follow a first entry in the same market-day, and the lockout then keeps that
+market shut, so the trade list under the rule IS the first-of-day subset.
+
+**HONEST LIMITS, and they matter more than the table.** The net-R gain is
+one market: of the 21 removed trades wheat is 6 of them and -8.47R, the
+whole loss. Remove wheat and the other 15 repeats are +0.53R, a wash, and
+the rule is then slightly NEGATIVE (+16.62R on 122 trades against +17.15R on
+137). USO's repeats made +8.78R on their own. So the case for the rule is
+the SHAPE of the equity curve - longest losing run 8 -> 6, win rate +2.8
+points, and the worst episode in the sample deleted - not the total. And it
+does NOT fix the drawdown, which was the motivation: 14.70% -> 14.55%.
+Twenty-one trades decide this; treat it as provisional and re-check when the
+sample grows.
+
+Left open, both from the research: the grouping keys on the FIRST REVERSAL
+price while Lode's language was about the CLUSTER, so a re-attack that fires
+off a neighbouring level currently counts as a fresh episode; and the level
+runs say nothing yet about WHY a cluster stops repelling price.
+
+Note on reading the page later: every figure above was measured on the
+PRE-LOCKOUT baseline, which is the evidence the rule was decided on. The
+page rebuilds from whatever blotter is current, so on the new baseline its
+same-session cuts are empty BY CONSTRUCTION. The pre-lockout page and its
+JSON are preserved in git at commit 1761f5a.
+
 ## 10. The confirmation clause is gone, the ladder stop stays (2026-08-06)
 
 Two questions from reading USO 2026-03-13 (a no_confirm abort at -0.96R,

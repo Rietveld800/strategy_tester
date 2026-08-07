@@ -262,6 +262,14 @@ def rules_html(p):
   is structural, not a multiple of the move, and it is what makes 1R a
   distance the chart can show. <b>1R = {p['risk_pct']}%</b> of equity at
   entry.</div>
+  <div class="rulefoot"><b>The session lockout</b>: at most
+  <b>{p.get('max_entries_per_session') or 'any number of'}</b> entries per
+  market per session, expiring at the session boundary. It is not one of the
+  rules above, it is a fact about our own previous trade, in the same family
+  as one position per market at a time. It counts ENTRIES, so a position
+  carried in from the previous session and stopped intraday does not spend
+  the allowance. Measured before it was built: the 1st trade of a market-day
+  won 39.4% for +42.51R, the 2nd won 21.4% for -10.39R.</div>
   <div class="rulefoot"><b>Dials</b>, at the setting this page is built at:
   the <b>confirmation clause</b> is
   <b>{'on' if confirm else 'off'}</b>, stop tightening at the entry-day

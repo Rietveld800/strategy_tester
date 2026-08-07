@@ -476,12 +476,18 @@ def build_page():
              f"{worst['sequence']}", " neg"),
         ])
 
+    same_session = [r for r in rows if r["nth_today"] > 1]
     lede = (
         f"Every trade of the published baseline, grouped by the levels it "
         f"fired on. {len(rows)} trades fall into {len(episodes)} episodes, "
         f"{len(multi)} of which produced more than one trade. The question "
         f"is whether a level that has already been traded, or merely tested, "
-        f"is worth trading again.")
+        f"is worth trading again."
+        + ("" if same_session else
+           " <b>This build carries the session lockout</b>, so there are no "
+           "same-session repeats left to measure: those cuts are empty by "
+           "construction, and the evidence that put the rule there is the "
+           "pre-lockout run preserved in git (audit section 11)."))
     findings = (
         f"<b>First attempts win {wr(fresh):.0f}% and make "
         f"{signed(tot(fresh))}R across {len(fresh)} trades. Repeat attempts "

@@ -577,7 +577,15 @@ repeats are +0.62R. Keep the rule and watch it; do not believe the +7.86R.
 found from "FGBL's 1m chart doesn't show properly"): XEUR and IFUS publish
 each minute twice, on-book and off-book, data_center's writers dropped
 `publisher_id`, and both the charts and the ENGINE ate the duplicates. Fixed
-upstream (`expand_process.load_bars`); every consumer reads through it now.
+upstream (`expand_process.load_bars`); every consumer reads through it now,
+with ONE deliberate exception that is not ours: data_center's own
+`trade_session_bars()` reads the RAW frame, because the FINGERPRINT asks which
+contract SOCRATES DISPLAYED rather than what we could have traded, and on IFUS
+the Socrates open matches the OFF-BOOK row (qualified 2026-08-07; filtering
+there costs SB 0.836 -> 0.767, DX 0.934 -> 0.908, CC 0.479 -> 0.096, KC 0.452
+-> 0.164). Nothing in THIS project reads those session bars, and every bar the
+1m engine sees is still on-book only. See data_center's CLAUDE.md; do not
+"fix" that function.
 Every published 1m figure moved and all for the better -- **128 trades, 41.4%
 wr, +55.34R, 11.20% max DD, $165,921** at the baseline, against 132 / 39.4% /
 +42.51R / 14.55% / $146,382 on the contaminated bars. Figures quoted from

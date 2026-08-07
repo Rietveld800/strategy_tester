@@ -297,6 +297,47 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 12. Off-book prints were in the bars (2026-08-07)
+
+Lode: "some markets don't show the 1m chart properly, for example FGBL."
+The chart was the symptom; the cause was in data_center. XEUR and IFUS
+publish each minute TWICE, on-book and off-book (`*.XOFF` block trades
+reported off-exchange), and every parquet writer selected columns without
+`publisher_id`, so the two became indistinguishable duplicate minutes.
+charter's charts broke on it (lightweight-charts needs strictly ascending
+unique times) and THE BACKTEST TRADED ON IT: 25 trades came from the five
+affected markets and 12 had an off-book print on their entry or exit
+minute. 14,613 FGBL off-book minutes either widen the bar's range or trade
+when the book did not, so a level touch or a stop could be triggered by a
+price nobody could have hit.
+
+Fixed in data_center (`BAR_COLUMNS`, `load_bars()`,
+`rebuild_publisher_bars.py` re-deriving from the raw DBN already on disk -
+no repurchase, no row lost). Both consumers now read through `load_bars`.
+The direction was confirmed independently: Socrates itself excludes
+off-book prints (FGBL session H/L matches its daily bar 97.2%/98.6%
+on-book-only against 88.7%/83.1% with off-book in), which also retires the
+old "vendor clips the extremes" caveat.
+
+**Every published figure moved, and all of them for the better** - which is
+what you would expect when phantom triggers and phantom stop-outs come out:
+
+| | contaminated | corrected |
+|---|---|---|
+| trades | 132 | 128 |
+| win rate | 39.4% | **41.4%** |
+| net R | +42.51 | **+55.34** |
+| longest losing streak | 6 | 7 |
+| max drawdown | 14.55% | **11.20%** |
+| final | $146,382 | **$165,921** |
+
+The lockout matrix was rerun on the corrected bars and the decision holds,
+now with the drawdown improvement it did NOT have before: lockout 1
+11.20% against no lockout 14.99%, where on the contaminated series the two
+were 14.55% and 14.70%. Section 11's honest limits were written on the
+contaminated run; the shape of its argument survives, the specific figures
+in it do not.
+
 ## 11. The session lockout (Lode, 2026-08-07)
 
 Lode, reading wheat trades 1-5 on the trade study - five stop-outs in one
@@ -348,16 +389,22 @@ is itself a finding: this rule has NO cascades. It only removes trades that
 follow a first entry in the same market-day, and the lockout then keeps that
 market shut, so the trade list under the rule IS the first-of-day subset.
 
+RERUN ON CORRECTED BARS (section 12, off-book prints removed): lockout 1
+128 trades / 41.4% / +55.34R / streak 7 / **11.20%** DD / $165,921;
+lockout 2 140 / 39.3% / +45.04R / 16.66%; off 147 / 38.1% / +47.48R /
+streak 8 / 14.99%. The ranking is unchanged and the drawdown case is
+STRONGER than it was here - on the contaminated series the lockout barely
+moved drawdown (14.55 against 14.70), on clean bars it takes 3.8 points off.
+
 **HONEST LIMITS, and they matter more than the table.** The net-R gain is
-one market: of the 21 removed trades wheat is 6 of them and -8.47R, the
-whole loss. Remove wheat and the other 15 repeats are +0.53R, a wash, and
-the rule is then slightly NEGATIVE (+16.62R on 122 trades against +17.15R on
-137). USO's repeats made +8.78R on their own. So the case for the rule is
-the SHAPE of the equity curve - longest losing run 8 -> 6, win rate +2.8
-points, and the worst episode in the sample deleted - not the total. And it
-does NOT fix the drawdown, which was the motivation: 14.70% -> 14.55%.
-Twenty-one trades decide this; treat it as provisional and re-check when the
-sample grows.
+one market, and this survives the data correction: of the 19 removed trades
+(21 before it) wheat is 6 and **-8.47R**, more than the whole -7.86R.
+Without wheat the other 13 are **+0.62R**, a wash. USO's repeats made
++8.78R on their own. So the case for the rule is the SHAPE of the equity
+curve, not the total. What DID change with clean bars is the drawdown: it
+was 14.70% -> 14.55%, "does not fix the motivation", and it is now
+14.99% -> 11.20%. Nineteen trades still decide it; treat it as provisional
+and re-check as the sample grows.
 
 Left open, both from the research: the grouping keys on the FIRST REVERSAL
 price while Lode's language was about the CLUSTER, so a re-attack that fires

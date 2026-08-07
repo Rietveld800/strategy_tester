@@ -565,9 +565,18 @@ winners, including the sample's biggest at +13.41R). Measured first by
 `research_1m_levels.py`: 1st trade of a market-day 39.4% wr / +42.51R, 2nd
 21.4% / -10.39R. The rerun matched the blotter estimate to the decimal, so
 this rule has NO cascades. BUT the net-R gain is ONE MARKET (wheat is -8.47R
-of the -7.94R removed; without wheat the rule is slightly negative) and it
-does NOT fix the drawdown (14.70% -> 14.55%). What it buys is the SHAPE:
-longest losing run 8 -> 6. Provisional on 21 trades.
+of the -7.86R removed; without wheat the rule is a wash at +0.62R).
+Provisional on 19 trades.
+**OFF-BOOK PRINTS WERE IN THE BARS UNTIL 2026-08-07** (audit section 12,
+found from "FGBL's 1m chart doesn't show properly"): XEUR and IFUS publish
+each minute twice, on-book and off-book, data_center's writers dropped
+`publisher_id`, and both the charts and the ENGINE ate the duplicates. Fixed
+upstream (`expand_process.load_bars`); every consumer reads through it now.
+Every published 1m figure moved and all for the better -- **128 trades, 41.4%
+wr, +55.34R, 11.20% max DD, $165,921** at the baseline, against 132 / 39.4% /
++42.51R / 14.55% / $146,382 on the contaminated bars. Figures quoted from
+before that date are pre-correction; the shape of the arguments survived, the
+numbers did not.
 **THE CONFIRMATION CLAUSE WENT ON 2026-08-06** (Lode), and it is the
 MIRROR of rule 3: rule 3 was unprincipled and profitable and went anyway;
 the clause was PRINCIPLED (the intraday stand-in for the daily engine's

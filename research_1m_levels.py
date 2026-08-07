@@ -50,8 +50,42 @@ from build_equity_html import CSS
 
 HERE = Path(__file__).resolve().parent
 IN_JSON = HERE / "output" / "quickfix1m1dc_all.json"
+MATRIX_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
 OUT_JSON = HERE / "output" / "quickfix1m1dc_levels.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_levels.html"
+
+
+def slug(variant):
+    return variant.replace(" ", "_").replace("+", "_")
+
+
+def paths(variant=None):
+    """(json, html) for the published baseline, or for a matrix variant.
+
+    A variant page is the SAME measurement on a different dial setting, so
+    it lives beside the baseline's under its own name rather than
+    overwriting it. The no-lockout one matters in particular: once the
+    lockout is on there are no same-session repeats left to look at, and
+    the episodes table stops being able to show the thing that put the
+    rule there (Lode, 2026-08-07 - "would be nice to keep that no-lockout
+    report too").
+    """
+    if not variant:
+        return OUT_JSON, OUT_HTML
+    return (OUT_JSON.with_name(f"{OUT_JSON.stem}_{slug(variant)}.json"),
+            OUT_HTML.with_name(f"{OUT_HTML.stem}_{slug(variant)}.html"))
+
+
+def variant_source(variant):
+    """A blotter-shaped payload for one cell of run_1m_matrix.py - the
+    same trick build_1m_report.py uses, and for the same reason: the
+    matrix already ran every dial over one data load."""
+    m = json.loads(MATRIX_JSON.read_text(encoding="utf-8"))
+    if variant not in m["variants"]:
+        raise SystemExit(f"{variant} is not in the matrix "
+                         f"({', '.join(m['variants'])})")
+    return dict(params=dict(m["params"], **m["variants"][variant]["dials"]),
+                trades=m["trades"][variant])
 
 
 # --------------------------------------------------------------- level runs
@@ -153,8 +187,9 @@ def annotate(rows):
     return episodes
 
 
-def main(keys=None):
-    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+def main(keys=None, variant=None):
+    data = (variant_source(variant) if variant
+            else json.loads(IN_JSON.read_text(encoding="utf-8")))
     trades = sorted(data["trades"], key=lambda t: t["entry_ts"])
     by_key = defaultdict(list)
     for i, t in enumerate(trades):
@@ -203,14 +238,17 @@ def main(keys=None):
 
     rows.sort(key=lambda r: r["entry_ts"])
     episodes = annotate(rows)
-    write_json(data, rows, episodes)
-    build_page()
+    write_json(data, rows, episodes, variant)
+    build_page(variant)
     return rows, episodes
 
 
-def write_json(data, rows, episodes):
-    OUT_JSON.write_text(json.dumps(dict(
-        source=IN_JSON.name, params=data["params"],
+def write_json(data, rows, episodes, variant=None):
+    out_json, _ = paths(variant)
+    out_json.write_text(json.dumps(dict(
+        source=(f"{MATRIX_JSON.name} [{variant}]" if variant
+                else IN_JSON.name),
+        variant=variant, params=data["params"],
         definitions=dict(
             same_levels="market + side + first reversal price, inside one "
                         "continuous level run (consecutive files carrying "
@@ -218,7 +256,7 @@ def write_json(data, rows, episodes):
             test="a maximal run of minutes whose bar range contains the "
                  "level; price must leave and return to be tested again"),
         trades=rows, episodes=episodes), indent=1) + "\n", encoding="utf-8")
-    print(f"\nwrote {OUT_JSON.name}: {len(rows)} trades, "
+    print(f"\nwrote {out_json.name}: {len(rows)} trades, "
           f"{len(episodes)} episodes")
 
 
@@ -417,11 +455,13 @@ document.querySelectorAll('table.trades[data-sort]').forEach(function (tbl) {
 </script>"""
 
 
-def build_page():
-    d = json.loads(OUT_JSON.read_text(encoding="utf-8"))
+def build_page(variant=None):
+    out_json, out_html = paths(variant)
+    d = json.loads(out_json.read_text(encoding="utf-8"))
     rows = d["trades"]
+    variant = d.get("variant", variant)
     episodes = annotate(rows)
-    write_json(d, rows, episodes)
+    write_json(d, rows, episodes, variant)
     wins = [r for r in rows if r["net_r"] > 0]
     losses = [r for r in rows if r["net_r"] <= 0]
     fresh = [r for r in rows if r["attempt"] == 1]
@@ -535,17 +575,24 @@ losses counts backwards from it and resets on a win. The market name links
 into the 1-minute study at that trade.</p>
 {trades_table(rows, links)}
 <footer>Research only, nothing here changes the strategy. Built by
-research_1m_levels.py from output/{IN_JSON.name} at the published baseline.
+research_1m_levels.py from output/{d["source"]}
+{"at the published baseline" if not variant else
+ "at the <b>" + variant + "</b> dial setting, which is NOT what runs"}.
 All times UTC.</footer>
 </div>{SORT_JS}</body></html>"""
-    OUT_HTML.write_text(page, encoding="utf-8")
+    out_html.write_text(page, encoding="utf-8")
     print(f"page: {len(rows)} trades, {len(episodes)} episodes -> "
-          f"{OUT_HTML.name} ({len(page) / 1024:.0f} KB)")
+          f"{out_html.name} ({len(page) / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":
+    # research_1m_levels.py                          the published baseline
+    # research_1m_levels.py --variant "no lockout"   one matrix cell
+    # research_1m_levels.py --page ["no lockout"]    page only, no bar scan
     args = sys.argv[1:]
-    if args and args[0] == "--page":
-        build_page()
+    if args and args[0] == "--variant":
+        main(variant=args[1])
+    elif args and args[0] == "--page":
+        build_page(args[1] if len(args) > 1 else None)
     else:
         main(args or None)

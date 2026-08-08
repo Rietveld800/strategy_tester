@@ -224,13 +224,16 @@ def class_rows_html(trades):
         sel = [t for t in trades if pick(t)]
         if not sel:
             continue
-        wins = sum(1 for t in sel if t["net_r"] > 0)
         r = sum(t["net_r"] for t in sel)
         avg = r / len(sel)
+        # The % column is this class's share of ALL trades, not a win rate
+        # within the class (user, 2026-08-09), tinted by which side of the
+        # ledger the class sits on.
         rows.append(
             f'<tr><td class="l">{label}</td>'
             f'<td class="mono">{len(sel)}</td>'
-            f'<td class="mono">{100 * wins / len(sel):.0f}%</td>'
+            f'<td class="mono {cls(r)}">'
+            f'{100 * len(sel) / len(trades):.1f}%</td>'
             f'<td class="mono {cls(r)}">{signed(r)}</td>'
             f'<td class="mono {cls(avg)}">{signed(avg)}</td>'
             f'<td class="l wrap">{note}</td></tr>')
@@ -672,7 +675,7 @@ __RULES__
 <div class="tradecard"><table class="trades"><thead><tr>
   <th class="l" style="width:20%">Exit class</th>
   <th style="width:9%">Trades</th>
-  <th style="width:9%">Win %</th><th style="width:11%">Net R</th>
+  <th style="width:9%">%</th><th style="width:11%">Net R</th>
   <th style="width:9%">Avg R</th>
   <th class="l wrap" style="width:42%">What it means</th>
 </tr></thead><tbody>__CLASSES__</tbody></table></div>

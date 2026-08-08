@@ -136,7 +136,14 @@ def replay(trades):
             peak = max(peak, equity)
             max_dd = max(max_dd, (peak - equity) / peak * 100.0)
             money_of[i] = dict(risk_usd=risk, pnl_usd=pnl, balance=equity)
-            eod[ts.date()] = equity
+            # Three numbers per day, not one. The balance at the bell is what
+            # the equity line plots, but the deepest hole of a session can be
+            # filled again before that bell, and the running peak can be set
+            # by a trade that is not the day's last. Carrying only the closing
+            # balance hid 11.20% behind an 8.96% pane (Lode, 2026-08-08).
+            worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
+                        (peak - equity) / peak * 100.0)
+            eod[ts.date()] = (equity, peak, worst)
     return money_of, eod, equity, max_dd
 
 
@@ -150,11 +157,14 @@ def daily_series(trades, eod):
     d = date(first.year, first.month, 1)
     while d <= last:
         if d in eod:
-            value = eod[d]
-        peak = max(peak, value)
+            value, peak, worst = eod[d]
+        else:
+            # Nothing closed, so neither the balance nor the peak moved and
+            # the drawdown simply persists.
+            worst = (peak - value) / peak * 100.0
         days.append(str(d))
         eq.append(round(value, 2))
-        dd.append(round((peak - value) / peak * 100.0, 3))
+        dd.append(round(worst, 3))
         openpos.append(sum(1 for a, b in spans if a <= d < b))
         d += timedelta(days=1)
     return days, eq, dd, openpos
@@ -561,7 +571,8 @@ __RULES__
   <div class="charthead"><div class="t">One shared account</div>
   <div class="s">__CHARTSUB__</div></div>
   <div class="panelbl">Equity</div><div id="eq"></div>
-  <div class="panelbl">Drawdown</div><div id="dd"></div>
+  <div class="panelbl">Drawdown &middot; worst reached each day</div>
+  <div id="dd"></div>
   <div class="panelbl">Open positions</div><div id="op"></div>
 </div>
 <div class="note">__NOTE__</div>
@@ -584,8 +595,9 @@ __MARKETS__
 <div class="section-h">Daily calendar</div>
 <p class="chartnote">Every day that opened, closed or carried a position.
 <b style="color:var(--opened)">Purple</b> is a position opened,
-<b style="color:var(--closed)">blue</b> one closed. Capital and drawdown are
-the shared account at the end of that day.</p>
+<b style="color:var(--closed)">blue</b> one closed. Capital is the shared
+account at the end of that day; drawdown is the worst it reached at any
+point during it, which is why a day can close higher than it dug.</p>
 __CALENDAR__
 <footer>__FOOTER__</footer>
 </div>
@@ -641,6 +653,12 @@ def build(data=None, out=None, variant=None):
     if abs(max_dd - published["max_dd_pct"]) > 0.01:
         print(f"WARNING: replay drawdown {max_dd:.2f}% against run_1m's "
               f"{published['max_dd_pct']:.2f}%")
+    # The headline and the pane are two renderings of one curve, so the
+    # deepest point of the pane has to BE the headline. It was not, for as
+    # long as the pane carried closing balances only.
+    if abs(max(dd) - max_dd) > 0.01:
+        print(f"WARNING: drawdown pane bottoms at {max(dd):.2f}% against the "
+              f"headline {max_dd:.2f}%")
 
     wins = [t for t in trades if t["net_r"] > 0]
     losses = [t for t in trades if t["net_r"] <= 0]

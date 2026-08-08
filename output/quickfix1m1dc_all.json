@@ -15,11 +15,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 162415.31,
+    "final": 162578.7,
     "max_dd_pct": 11.2,
-    "trades": 134,
-    "win_rate": 41.0,
-    "net_r": 53.22
+    "trades": 136,
+    "win_rate": 41.2,
+    "net_r": 53.32
   },
   "markets": [
     {
@@ -156,17 +156,17 @@
       "tick": 0.01
     },
     {
-      "trades": 8,
+      "trades": 9,
       "wins": 3,
-      "win_rate": 37.5,
-      "net_r_total": 3.28,
-      "final_cash": 103137.23,
-      "return_pct": 3.14,
+      "win_rate": 33.3,
+      "net_r_total": 3.04,
+      "final_cash": 102887.2,
+      "return_pct": 2.89,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 5,
         "no_confirm": 0,
-        "close1": 3,
+        "close1": 4,
         "data_end": 0
       },
       "market": "NG",
@@ -308,17 +308,17 @@
       "tick": 0.015625
     },
     {
-      "trades": 5,
-      "wins": 3,
-      "win_rate": 60.0,
-      "net_r_total": -0.08,
-      "final_cash": 99897.47,
-      "return_pct": -0.1,
+      "trades": 6,
+      "wins": 4,
+      "win_rate": 66.7,
+      "net_r_total": 0.26,
+      "final_cash": 100242.31,
+      "return_pct": 0.24,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 2,
         "no_confirm": 0,
-        "close1": 3,
+        "close1": 4,
         "data_end": 0
       },
       "market": "PL",
@@ -3438,6 +3438,48 @@
       "pnl_usd": 1147.55,
       "cash_after": 97541.65,
       "market": "ES"
+    },
+    {
+      "side": "short",
+      "contract": "PLV6",
+      "entry_date": "2026-08-06",
+      "entry_ts": "2026-08-06 08:57:00+00:00",
+      "entry": 1769.3999999999999,
+      "stop": 1797.6999999999998,
+      "rpu": 28.09999999999991,
+      "entry_first": 1769.6,
+      "stop_tightened": null,
+      "exit_ts": "2026-08-07 17:05:16.747681277+00:00",
+      "exit": 1759.6000000000001,
+      "reason": "close1",
+      "gross_r": 0.3488,
+      "cost_r": 0.0036,
+      "net_r": 0.3452,
+      "risk_usd": 998.97,
+      "pnl_usd": 344.84,
+      "cash_after": 100242.31,
+      "market": "PL"
+    },
+    {
+      "side": "long",
+      "contract": "NGU26",
+      "entry_date": "2026-08-06",
+      "entry_ts": "2026-08-06 12:49:00+00:00",
+      "entry": 2.6769999999999996,
+      "stop": 2.609,
+      "rpu": 0.06599999999999984,
+      "entry_first": 2.675,
+      "stop_tightened": null,
+      "exit_ts": "2026-08-07 18:30:37.589458117+00:00",
+      "exit": 2.6620000000000004,
+      "reason": "close1",
+      "gross_r": -0.2273,
+      "cost_r": 0.0152,
+      "net_r": -0.2424,
+      "risk_usd": 1031.37,
+      "pnl_usd": -250.03,
+      "cash_after": 102887.2,
+      "market": "NG"
     }
   ]
 }

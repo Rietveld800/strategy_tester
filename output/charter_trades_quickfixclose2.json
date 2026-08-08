@@ -9,7 +9,7 @@
   "starting_capital": 100000.0,
   "risk_pct": 1.39,
   "n_markets": 28,
-  "n_trades": 92
+  "n_trades": 94
  },
  "markets": {
   "Bitcoin_Per_USD_Binance": {
@@ -590,13 +590,13 @@
      "side": "short",
      "entry_date": "2026-08-06",
      "entry": 4305.3,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-07",
+     "exit": 4363.8,
      "stop": 4363.8,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "stop",
+     "r": -1.0,
+     "bars": 1
     }
    ]
   },
@@ -692,13 +692,13 @@
      "side": "short",
      "entry_date": "2026-08-05",
      "entry": 29892.8,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-07",
+     "exit": 29834.75,
      "stop": 30074.01,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_close",
+     "r": 0.32,
+     "bars": 2
     }
    ]
   },
@@ -753,6 +753,18 @@
      "reason": "exit_close",
      "r": -0.36,
      "bars": 2
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-08-07",
+     "entry": 6.7286,
+     "exit_date": null,
+     "exit": null,
+     "stop": 6.7656,
+     "target": null,
+     "reason": "open_at_end",
+     "r": null,
+     "bars": null
     }
    ]
   },
@@ -825,6 +837,18 @@
      "reason": "exit_close",
      "r": 7.224,
      "bars": 2
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-08-07",
+     "entry": 1386.6,
+     "exit_date": null,
+     "exit": null,
+     "stop": 1412.1,
+     "target": null,
+     "reason": "open_at_end",
+     "r": null,
+     "bars": null
     }
    ]
   },
@@ -884,13 +908,13 @@
      "side": "short",
      "entry_date": "2026-08-05",
      "entry": 1769.6,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-07",
+     "exit": 1759.6,
      "stop": 1798.4,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_close",
+     "r": 0.347,
+     "bars": 2
     }
    ]
   },
@@ -914,13 +938,13 @@
      "side": "short",
      "entry_date": "2026-08-05",
      "entry": 7773.0,
-     "exit_date": null,
-     "exit": null,
+     "exit_date": "2026-08-07",
+     "exit": 7779.75,
      "stop": 7820.26,
      "target": null,
-     "reason": "open_at_end",
-     "r": null,
-     "bars": null
+     "reason": "exit_close",
+     "r": -0.143,
+     "bars": 2
     }
    ]
   },

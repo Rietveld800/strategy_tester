@@ -594,10 +594,12 @@ wr, +55.34R, 11.20% max DD, $165,921 at the baseline, against 132 / 39.4% /
 WINDOW_END had been frozen at the pilot's purchase window, silently capping
 the chain, and with it fixed 20 markets carry 1m bars six days further. The
 rerun is PURELY ADDITIVE (6 trades added, 0 removed, no pre-existing R moved,
-no data_end exits), and the live baseline is **134 trades, 41.0% wr, +53.22R,
-11.20% max DD, $162,415**. Figures quoted from
+no data_end exits). The daily refresh has carried the window on to
+2026-08-07, so the live baseline is now **136 trades, 41.2% wr, +53.32R,
+11.20% max DD, $162,579**. Figures quoted from
 before that date are pre-correction; the shape of the arguments survived, the
-numbers did not.
+numbers did not. Expect the live line to move with every refresh: the dated
+tables in the audit are records, not current claims.
 **THE CONFIRMATION CLAUSE WENT ON 2026-08-06** (Lode), and it is the
 MIRROR of rule 3: rule 3 was unprincipled and profitable and went anyway;
 the clause was PRINCIPLED (the intraday stand-in for the daily engine's
@@ -640,16 +642,24 @@ variant grid, and this strategy is outside both, so the tables are rendered
 in Python and the only script is the panes plus a table sorter. Its money is
 `run_1m.portfolio_replay` MIRRORED (the trades' own `pnl_usd` / `cash_after`
 are PER MARKET, a different account) and the build warns if its final capital
-or drawdown drifts from what `run_1m` published. **Every blotter row links
+or drawdown drifts from what `run_1m` published. **The drawdown pane plots
+the worst drawdown REACHED each day, not the one standing at the bell**, and
+the build warns if the bottom of the pane is not the headline: this is a 1m
+engine resampled to a daily axis, so a session can dig a hole and fill it
+before the close. Carrying only closing balances showed 8.96% under an
+11.20% headline until 2026-08-08. The equity line still plots the close. **Every blotter row links
 into charter's 1m study at that trade** (`trades.html?m=<Market>&t=<n>`,
 1-based, charter sorts each market's trades by entry exactly as the report
 does); the link needs charter's `serve.py` running. The old dark
 `quickfix1m1dc_equity.html` and `run_1m.build_html` are GONE (2026-08-06) --
 the report says everything they said.
-`build_1m_report.py --variant hold+hybrid` builds a report for ANY cell of
+`build_1m_report.py --variant "hybrid stop"` builds a report for ANY cell of
 `run_1m_matrix.py` straight from the matrix trades, with no extra backtest
 (the matrix already ran every dial over one data load) and under its own
-filename. Only the published baseline goes through `run_1m.py`, because that
+filename (the variant name, slugged). A variant worth keeping a report for
+belongs IN the matrix rather than in a page built once: the hybrid stop was
+left outside it and quietly aged a full grid out of date before anyone
+looked (2026-08-08). Only the published baseline goes through `run_1m.py`, because that
 run is also what charter's trade study reads. The rules block and the stop
 sentence are GENERATED from the payload's dials, so a variant page states its
 own model rather than the baseline's.

@@ -11,6 +11,11 @@ it. Read the LOSING STREAK and the drawdown first here: the net-R gain
 is concentrated in wheat, so the case for the rule rests on the shape of
 the equity curve rather than on the total.
 
+A fourth cell rides along, off that axis: the HYBRID STOP at the
+published lockout. It is the dial left open when the confirmation clause
+went (section 10), and it belongs in the grid so it is re-measured with
+everything else instead of ageing in a report of its own.
+
 Earlier grids, all in git and written up in the audit: {tighten} x
 {window} picked the baseline (sections 6 and 7), {confirm} x {stop
 anchor} removed the confirmation clause and kept the ladder stop
@@ -41,10 +46,16 @@ VARIANTS = [
     ("lockout 1", dict(BASE, max_entries_per_session=1)),
     ("lockout 2", dict(BASE, max_entries_per_session=2)),
     ("no lockout", dict(BASE, max_entries_per_session=None)),
+    # Not part of the lockout axis. The hybrid stop stayed an open dial
+    # when the confirmation clause was removed (section 10), so it is
+    # carried here against the published baseline rather than left in a
+    # report nobody re-runs (Lode, 2026-08-08).
+    ("hybrid stop", dict(BASE, stop_mode="ladder_or_extreme",
+                         max_entries_per_session=1)),
 ]
 BASELINE_NAME = "lockout 1"               # the published run, for reference
 COLORS = {"lockout 1": "#1B9E4B", "lockout 2": "#E8A33D",
-          "no lockout": "#D64545"}
+          "no lockout": "#D64545", "hybrid stop": "#3D7FE8"}
 
 
 def entry_order_metrics(trades):

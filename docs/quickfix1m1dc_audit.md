@@ -339,6 +339,12 @@ repeat class is unchanged to the decimal (2nd trade of a market-day still 12
 trades at 16.7% for -10.30R), because the new sessions produced no
 same-session repeats.
 
+The daily refresh has since carried the window to **2026-08-07**, two trades
+further, and the shape held again: baseline 136 trades, 41.2% wr, +53.32R,
+streak 7, 11.20% DD, $162,579. Section 10's hybrid cell was added to the same
+pass. Figures dated earlier than this in the tables above are the record of
+the measurement on the day it was made, not a claim about today's window.
+
 Inherited unchanged and still open: the CC/KC/SB/DX roll calendars were frozen
 on volume that counted off-book blocks, and FGBL's volume flip sits one day
 before its 06-05 boundary. See section 12's closing note.
@@ -641,9 +647,21 @@ either way, and the drawdown goes UP rather than down. (Claude predicted
 was right.) `extreme` (tighter than the ladder) is far worse still, which
 is what it was in the grid to establish: the ladder anchor earns its
 place in BOTH directions, and moving the stop at all is the wrong lever.
-hold+hybrid keeps a report of its own,
-`output/quickfix1m1dc_report_hold_hybrid.html`, built from the matrix
+The hybrid keeps a report of its own,
+`output/quickfix1m1dc_report_hybrid_stop.html`, built from the matrix
 trades with no extra backtest.
+
+Kept honest since (2026-08-08): that report had aged into a page nobody
+re-ran - it still carried the 143-trade, pre-lockout grid above while the
+baseline had moved on. The hybrid is now a standing cell in the matrix
+itself (`hybrid stop`: the published baseline with `stop_mode`
+`ladder_or_extreme`), so it is re-measured on every pass. On the current
+window it reads **132 trades, 43.9% wr, +39.35R, streak 7, 11.92% DD,
+$143,907** against the baseline's 136, 41.2%, +53.32R, streak 7, 11.20%,
+$162,579. The verdict of this section is unchanged and the reason is the
+same one: the better win rate is real and it does not pay, because the
+wider stop books fewer R per move. The drawdown is now level rather than
+worse, which is the one thing that moved.
 
 Diagnostics behind the discussion, kept because they shape the next
 round: the wider stop would have moved the stop on 60 of 153 trades

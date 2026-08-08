@@ -1,8 +1,9 @@
 """Build the quickfix1m1dc REPORT from the saved trades JSON.
 
 The 1-minute workstream's answer to the daily project's
-`equity_<strategy>.html`: the model and its dials, the KPI row, the four
-synced panes (equity, two drawdowns, open positions), per-trade statistics, the
+`equity_<strategy>.html`: the model and its dials, the KPI row, the three
+synced panes (equity, drawdown on daily closes, open positions), per-trade
+statistics, the
 exit-class anatomy, the full trade blotter, the per-market table and the
 daily calendar. Regenerates from output/quickfix1m1dc_all.json without
 re-running the backtest.
@@ -192,6 +193,48 @@ def streaks(trades):
             cur_l, cur_w = cur_l + 1, 0
         best_w, best_l = max(best_w, cur_w), max(best_l, cur_l)
     return best_w, best_l
+
+
+# The settlement class split by outcome (user, 2026-08-09): the edge lives
+# in the day-2 survivors, so the table separates the settlements that paid
+# from the ones that did not instead of averaging them into one row.
+CLASS_DEFS = [
+    ("Day 2 win",
+     lambda t: t["reason"] == "close1" and t["net_r"] > 0,
+     "held to the settlement of the day after entry, the rule exit, and "
+     "settled in profit"),
+    ("Day 2 loss",
+     lambda t: t["reason"] == "close1" and t["net_r"] <= 0,
+     "held to the same rule exit, which settled against the position"),
+    ("Stop loss",
+     lambda t: t["reason"] == "stop",
+     "the ladder stop traded"),
+    ("No confirmation",
+     lambda t: t["reason"] == "no_confirm",
+     REASON_NOTE["no_confirm"]),
+    ("Data end",
+     lambda t: t["reason"] == "data_end",
+     REASON_NOTE["data_end"]),
+]
+
+
+def class_rows_html(trades):
+    rows = []
+    for label, pick, note in CLASS_DEFS:
+        sel = [t for t in trades if pick(t)]
+        if not sel:
+            continue
+        wins = sum(1 for t in sel if t["net_r"] > 0)
+        r = sum(t["net_r"] for t in sel)
+        avg = r / len(sel)
+        rows.append(
+            f'<tr><td class="l">{label}</td>'
+            f'<td class="mono">{len(sel)}</td>'
+            f'<td class="mono">{100 * wins / len(sel):.0f}%</td>'
+            f'<td class="mono {cls(r)}">{signed(r)}</td>'
+            f'<td class="mono {cls(avg)}">{signed(avg)}</td>'
+            f'<td class="l wrap">{note}</td></tr>')
+    return "".join(rows)
 
 
 def exit_classes(trades):
@@ -441,7 +484,7 @@ def calendar_html(days, eq, dd, openpos, trades, money_of):
 
 
 PAGE_JS = r"""<script>
-// Two small things only: the four panes, and a table sorter. Everything
+// Two small things only: the three panes, and a table sorter. Everything
 // else on this page is rendered server-side, because quickfix1m1dc is
 // outside the registry and there is no variant grid to replay.
 (function () {
@@ -475,10 +518,6 @@ PAGE_JS = r"""<script>
   }
   mk('eq', __EQ__, function (c) {
     return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2 });
-  });
-  mk('dd', __DD__, function (c) {
-    return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
-      priceFormat: { type: 'custom', formatter: pct } });
   });
   mk('ddc', __DDC__, function (c) {
     return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
@@ -515,7 +554,7 @@ PAGE_JS = r"""<script>
     });
     p.chart.timeScale().fitContent();
   });
-  // One cursor over all four panes: moving it in any pane places the
+  // One cursor over all three panes: moving it in any pane places the
   // crosshair on the same day in the others, each labelling its own
   // value on its own axis. Programmatic placement does not re-fire
   // crosshairMove, so this cannot loop.
@@ -602,13 +641,13 @@ __CSS__
 <style>
 /* the three panes; the daily reports draw their own SVG, this page uses
    lightweight-charts, so the containers need explicit heights */
-#eq{height:330px}#dd,#ddc{height:150px}#op{height:130px}
-#eq,#dd,#ddc,#op{margin-bottom:4px}
+#eq{height:330px}#ddc{height:150px}#op{height:130px}
+#eq,#ddc,#op{margin-bottom:4px}
 .panelbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink3);font-weight:600;margin:10px 2px 4px}
 table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
 table.trades td a:hover{text-decoration:underline}
-@media print{#eq{height:300px}#dd,#ddc,#op{height:120px}}
+@media print{#eq{height:300px}#ddc,#op{height:120px}}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -622,8 +661,6 @@ __RULES__
   <div class="charthead"><div class="t">One shared account</div>
   <div class="s">__CHARTSUB__</div></div>
   <div class="panelbl">Equity</div><div id="eq"></div>
-  <div class="panelbl">Drawdown &middot; worst reached each day</div>
-  <div id="dd"></div>
   <div class="panelbl">Drawdown &middot; on daily closes</div>
   <div id="ddc"></div>
   <div class="panelbl">Open positions</div><div id="op"></div>
@@ -634,10 +671,10 @@ __RULES__
 <div class="section-h">Where the trades end</div>
 <div class="tradecard"><table class="trades"><thead><tr>
   <th class="l" style="width:20%">Exit class</th>
-  <th style="width:9%">Trades</th><th style="width:9%">Wins</th>
+  <th style="width:9%">Trades</th>
   <th style="width:9%">Win %</th><th style="width:11%">Net R</th>
   <th style="width:9%">Avg R</th>
-  <th class="l wrap" style="width:33%">What it means</th>
+  <th class="l wrap" style="width:42%">What it means</th>
 </tr></thead><tbody>__CLASSES__</tbody></table></div>
 <div class="section-h">All trades</div>
 <p class="chartnote">__BLOTNOTE__</p>
@@ -708,12 +745,12 @@ def build(data=None, out=None, variant=None):
     if abs(max_dd - published["max_dd_pct"]) > 0.01:
         print(f"WARNING: replay drawdown {max_dd:.2f}% against run_1m's "
               f"{published['max_dd_pct']:.2f}%")
-    # The headline and the pane are two renderings of one curve, so the
-    # deepest point of the pane has to BE the headline. It was not, for as
-    # long as the pane carried closing balances only.
+    # The headline and the calendar's drawdown column are two renderings of
+    # one curve, so the deepest point of the series has to BE the headline.
+    # It was not, for as long as it carried closing balances only.
     if abs(max(dd) - max_dd) > 0.01:
-        print(f"WARNING: drawdown pane bottoms at {max(dd):.2f}% against the "
-              f"headline {max_dd:.2f}%")
+        print(f"WARNING: daily worst series bottoms at {max(dd):.2f}% against "
+              f"the headline {max_dd:.2f}%")
 
     wins = [t for t in trades if t["net_r"] > 0]
     losses = [t for t in trades if t["net_r"] <= 0]
@@ -761,8 +798,9 @@ def build(data=None, out=None, variant=None):
         kpi("Return", signed(100 * (final / START_CAPITAL - 1), 2) + "%",
             f"at {RISK_PCT}% risk per trade",
             cls(final - START_CAPITAL)),
-        kpi("Max drawdown", f"{max_dd:.2f}%", "worst peak to trough"),
-        kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
+        kpi("Max drawdown", f"{max_dd:.2f}%", "worst reached intraday"),
+        kpi("Max drawdown on closes", f"{max(ddc):.2f}%",
+            "daily closing balances"),
     ])
 
     stats = "".join([
@@ -778,21 +816,14 @@ def build(data=None, out=None, variant=None):
         kpi("Worst trade", signed(worst) + "R",
             "a gapped or slipped stop can cost more than 1R"),
         kpi("Longest winning run", f"{run_w}", "positions, in entry order"),
+        kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
         kpi("Average hold", held(avg_hold), "entry to exit"),
         kpi("Max concurrent", f"{max_open}", "positions open at once"),
         kpi("Time in market", f"{in_market:.0f}%",
             "of days with a position open"),
     ])
 
-    class_rows = "".join(
-        f'<tr><td class="l">{REASON_TEXT.get(k, k)}</td>'
-        f'<td class="mono">{c["n"]}</td>'
-        f'<td class="mono">{c["wins"]}</td>'
-        f'<td class="mono">{100 * c["wins"] / c["n"]:.0f}%</td>'
-        f'<td class="mono {cls(c["r"])}">{signed(c["r"])}</td>'
-        f'<td class="mono {cls(c["avg"])}">{signed(c["avg"])}</td>'
-        f'<td class="l wrap">{REASON_NOTE.get(k, "")}</td></tr>'
-        for k, c in classes.items())
+    class_rows = class_rows_html(trades)
 
     def ser(values):
         return json.dumps([{"time": d, "value": v}
@@ -862,7 +893,6 @@ def build(data=None, out=None, variant=None):
             .replace("__LIB__", LIB_PATH.read_text(encoding="utf-8"))
             .replace("__JS__", PAGE_JS
                      .replace("__EQ__", ser(eq))
-                     .replace("__DD__", ser(dd))
                      .replace("__DDC__", ser(ddc))
                      .replace("__OP__", ser(openpos))))
     out.write_text(html, encoding="utf-8")

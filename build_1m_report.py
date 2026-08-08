@@ -1,8 +1,8 @@
 """Build the quickfix1m1dc REPORT from the saved trades JSON.
 
 The 1-minute workstream's answer to the daily project's
-`equity_<strategy>.html`: the model and its dials, the KPI row, the three
-synced panes (equity, drawdown, open positions), per-trade statistics, the
+`equity_<strategy>.html`: the model and its dials, the KPI row, the four
+synced panes (equity, two drawdowns, open positions), per-trade statistics, the
 exit-class anatomy, the full trade blotter, the per-market table and the
 daily calendar. Regenerates from output/quickfix1m1dc_all.json without
 re-running the backtest.
@@ -153,8 +153,12 @@ def daily_series(trades, eod):
               pd.Timestamp(t["exit_ts"]).date()) for t in trades]
     first = min(a for a, _ in spans)
     last = max(b for _, b in spans)
-    days, eq, dd, openpos = [], [], [], []
+    days, eq, dd, ddc, openpos = [], [], [], [], []
     value, peak = START_CAPITAL, START_CAPITAL
+    # A second, gentler curve next to the worst-reached one: drawdown on the
+    # CLOSING balances only, peak and trough both read at the bell. A day
+    # that digs and refills before the close does not appear in it.
+    peak_close = START_CAPITAL
     d = date(first.year, first.month, 1)
     while d <= last:
         if d in eod:
@@ -163,12 +167,14 @@ def daily_series(trades, eod):
             # Nothing closed, so neither the balance nor the peak moved and
             # the drawdown simply persists.
             worst = (peak - value) / peak * 100.0
+        peak_close = max(peak_close, value)
         days.append(str(d))
         eq.append(round(value, 2))
         dd.append(round(worst, 3))
+        ddc.append(round((peak_close - value) / peak_close * 100.0, 3))
         openpos.append(sum(1 for a, b in spans if a <= d < b))
         d += timedelta(days=1)
-    return days, eq, dd, openpos
+    return days, eq, dd, ddc, openpos
 
 
 def streaks(trades):
@@ -435,7 +441,7 @@ def calendar_html(days, eq, dd, openpos, trades, money_of):
 
 
 PAGE_JS = r"""<script>
-// Two small things only: the three panes, and a table sorter. Everything
+// Two small things only: the four panes, and a table sorter. Everything
 // else on this page is rendered server-side, because quickfix1m1dc is
 // outside the registry and there is no variant grid to replay.
 (function () {
@@ -453,45 +459,89 @@ PAGE_JS = r"""<script>
       timeScale: { borderColor: cssv('--border') },
     };
   }
-  var charts = [];
-  function mk(id) {
+  function pct(v) { return v.toFixed(2) + '%'; }
+  var panes = [];
+  function mk(id, data, addSeries) {
     var el = document.getElementById(id);
     // Height minus slack: the time-axis label row clips when the canvas
     // fills the container exactly (seen in Chrome, headless and normal).
     var c = LightweightCharts.createChart(el, Object.assign(
       { width: el.clientWidth, height: el.clientHeight - 18 }, opts()));
-    charts.push([el, c]);
-    return c;
+    var s = addSeries(c);
+    s.setData(data);
+    var by = {};
+    data.forEach(function (d) { by[d.time] = d.value; });
+    panes.push({ el: el, chart: c, series: s, by: by });
   }
-  var ceq = mk('eq');
-  ceq.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2 })
-    .setData(__EQ__);
-  var cdd = mk('dd');
-  cdd.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
-    priceFormat: { type: 'custom',
-      formatter: function (v) { return v.toFixed(2) + '%'; } } })
-    .setData(__DD__);
-  var cop = mk('op');
-  cop.addHistogramSeries({ color: cssv('--bars') }).setData(__OP__);
-  function resize() {
-    charts.forEach(function (p) {
-      p[1].resize(p[0].clientWidth, p[0].clientHeight - 18);
+  mk('eq', __EQ__, function (c) {
+    return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2 });
+  });
+  mk('dd', __DD__, function (c) {
+    return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
+      priceFormat: { type: 'custom', formatter: pct } });
+  });
+  mk('ddc', __DDC__, function (c) {
+    return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
+      priceFormat: { type: 'custom', formatter: pct } });
+  });
+  mk('op', __OP__, function (c) {
+    return c.addHistogramSeries({ color: cssv('--bars') });
+  });
+  // One label column for all panes: force every price scale to the widest
+  // one, so the time axes, and with them the month ticks, sit exactly
+  // under each other instead of shifting with each pane's own labels.
+  function alignAxes() {
+    var w = 0;
+    panes.forEach(function (p) {
+      w = Math.max(w, p.chart.priceScale('right').width());
     });
+    panes.forEach(function (p) {
+      p.chart.applyOptions({ rightPriceScale: { minimumWidth: w } });
+    });
+  }
+  function resize() {
+    panes.forEach(function (p) {
+      p.chart.resize(p.el.clientWidth, p.el.clientHeight - 18);
+    });
+    alignAxes();
   }
   window.addEventListener('resize', resize);
-  charts.forEach(function (p) {
-    p[1].timeScale().subscribeVisibleLogicalRangeChange(function (r) {
+  panes.forEach(function (p) {
+    p.chart.timeScale().subscribeVisibleLogicalRangeChange(function (r) {
       if (!r) return;
-      charts.forEach(function (q) {
-        if (q[1] !== p[1]) q[1].timeScale().setVisibleLogicalRange(r);
+      panes.forEach(function (q) {
+        if (q !== p) q.chart.timeScale().setVisibleLogicalRange(r);
       });
     });
-    p[1].timeScale().fitContent();
+    p.chart.timeScale().fitContent();
   });
+  // One cursor over all four panes: moving it in any pane places the
+  // crosshair on the same day in the others, each labelling its own
+  // value on its own axis. Programmatic placement does not re-fire
+  // crosshairMove, so this cannot loop.
+  function tkey(t) {
+    if (typeof t === 'string') return t;
+    if (t && t.year !== undefined) {
+      return t.year + '-' + ('0' + t.month).slice(-2)
+        + '-' + ('0' + t.day).slice(-2);
+    }
+    return String(t);
+  }
+  panes.forEach(function (p) {
+    p.chart.subscribeCrosshairMove(function (param) {
+      panes.forEach(function (q) {
+        if (q === p) return;
+        var v = param.time === undefined ? undefined : q.by[tkey(param.time)];
+        if (v === undefined) q.chart.clearCrosshairPosition();
+        else q.chart.setCrosshairPosition(v, param.time, q.series);
+      });
+    });
+  });
+  requestAnimationFrame(alignAxes);
   // The canvas keeps whatever colours it was built with, so the print
   // stylesheet's forced light palette would not reach it. Re-read the
   // variables on both events; print resolves them against the print CSS.
-  function retheme() { charts.forEach(function (p) { p[1].applyOptions(opts()); }); }
+  function retheme() { panes.forEach(function (p) { p.chart.applyOptions(opts()); }); }
   window.addEventListener('beforeprint', retheme);
   window.addEventListener('afterprint', retheme);
   if (window.matchMedia) {
@@ -552,13 +602,13 @@ __CSS__
 <style>
 /* the three panes; the daily reports draw their own SVG, this page uses
    lightweight-charts, so the containers need explicit heights */
-#eq{height:330px}#dd{height:150px}#op{height:130px}
-#eq,#dd,#op{margin-bottom:4px}
+#eq{height:330px}#dd,#ddc{height:150px}#op{height:130px}
+#eq,#dd,#ddc,#op{margin-bottom:4px}
 .panelbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink3);font-weight:600;margin:10px 2px 4px}
 table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
 table.trades td a:hover{text-decoration:underline}
-@media print{#eq{height:300px}#dd,#op{height:120px}}
+@media print{#eq{height:300px}#dd,#ddc,#op{height:120px}}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -574,6 +624,8 @@ __RULES__
   <div class="panelbl">Equity</div><div id="eq"></div>
   <div class="panelbl">Drawdown &middot; worst reached each day</div>
   <div id="dd"></div>
+  <div class="panelbl">Drawdown &middot; on daily closes</div>
+  <div id="ddc"></div>
   <div class="panelbl">Open positions</div><div id="op"></div>
 </div>
 <div class="note">__NOTE__</div>
@@ -649,7 +701,7 @@ def build(data=None, out=None, variant=None):
     published = data["portfolio"]
 
     money_of, eod, final, max_dd = replay(trades)
-    days, eq, dd, openpos = daily_series(trades, eod)
+    days, eq, dd, ddc, openpos = daily_series(trades, eod)
     if abs(final - published["final"]) > 0.01:
         print(f"WARNING: replay final ${final:,.2f} against run_1m's "
               f"${published['final']:,.2f}")
@@ -811,6 +863,7 @@ def build(data=None, out=None, variant=None):
             .replace("__JS__", PAGE_JS
                      .replace("__EQ__", ser(eq))
                      .replace("__DD__", ser(dd))
+                     .replace("__DDC__", ser(ddc))
                      .replace("__OP__", ser(openpos))))
     out.write_text(html, encoding="utf-8")
     print(f"report: {len(trades)} trades, final ${final:,.2f}, max drawdown "

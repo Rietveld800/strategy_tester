@@ -29,6 +29,7 @@ figures run_1m wrote and warns on drift.
 """
 
 import json
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -637,8 +638,10 @@ def build(data=None, out=None, variant=None):
     names one, written beside it under its own filename."""
     if variant:
         data = variant_payload(variant)
-        out = OUT_HTML.with_name(
-            f"{OUT_HTML.stem}_{variant.replace('+', '_')}.html")
+        # Variant names are prose ("hybrid stop", "lockout 1"), so slug the
+        # lot rather than special-casing one separator into a filename.
+        slug = re.sub(r"[^a-z0-9]+", "_", variant.lower()).strip("_")
+        out = OUT_HTML.with_name(f"{OUT_HTML.stem}_{slug}.html")
     data = data or json.loads(IN_JSON.read_text(encoding="utf-8"))
     out = out or OUT_HTML
     trades = data["trades"]
@@ -817,7 +820,7 @@ def build(data=None, out=None, variant=None):
 
 if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
-    # python build_1m_report.py --variant hold+hybrid   one matrix cell
+    # python build_1m_report.py --variant "hybrid stop"   one matrix cell
     args = sys.argv[1:]
     if args and args[0] == "--variant":
         build(variant=args[1])

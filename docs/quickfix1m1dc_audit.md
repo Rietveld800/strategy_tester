@@ -297,7 +297,7 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
-## 14. Path analysis of the baseline: where the win rate does NOT live (2026-08-09)
+## 14. Path analysis of the baseline, and the two quality filters (2026-08-09)
 
 An observational round over the 137-trade baseline (40.9% wr, +52.31R): every
 trade's minute-by-minute path recomputed from the on-book bars - MAE/MFE in R,
@@ -329,24 +329,88 @@ minutes). A third of the stop class is formerly-winning trades, worth eyes
 during the manual review - but per the above, the mechanical protections
 measurably fail; anything that ever addresses this class must be structural.
 
-**One entry-time separator found - and it is section 8's own candidate.**
-Risk distance (first reversal to ladder stop) against the prior-24h range:
+**Ladder geometry against recent range: BOTH TAILS ARE BAD, FOR OPPOSITE
+REASONS.** The measure is `rpu / prior-24h range`: the price distance of 1R
+(first reversal to ladder stop) over the high-low of the 24 wall-clock hours
+before entry. Dimensionless, knowable at entry, no look-ahead.
 
-| rpu / prior-24h range | trades | wr | net R |
-|---|---|---|---|
-| < 0.15 | 7 | **0%** | -8.96 |
-| 0.15-0.50 | 74 | ~43% | +59.6 |
-| > 0.50 | 55 | 41.8% | -0.8 |
+| rpu / prior-24h range | n | wr | avg winner | best win | avg loser | net R | slippage as % of R |
+|---|---|---|---|---|---|---|---|
+| < 0.15 | 7 | **0%** | - | - | -1.28 | -8.96 | **13.96%** |
+| 0.15-0.30 | 36 | 33.3% | **+4.94R** | +13.41R | -1.04 | +34.33 | 4.47% |
+| 0.30-0.50 | 38 | 52.6% | +2.24R | +5.75R | -1.08 | +25.29 | 5.63% |
+| > 0.50 | 55 | 41.8% | **+1.10R** | +5.14R | -0.82 | -0.82 | 2.05% |
 
-The seven sub-0.15 trades all stopped: ZB 02-13, USO 03-04, USO 03-31,
-6J 05-01, YM 05-06, and BOTH halves of the worst portfolio day, ZW+ZC 07-23.
-The story is principled rather than fitted: a ladder compressed inside ~15%
-of a normal day's range puts the stop inside ordinary noise - there is no
-real invalidation to trade against. Knowable at entry time. Seven trades is
-lockout-grade sample size; the candidate experiment is an entry-filter dial
-(block when rpu < k x prior-24h range, k swept ~0.10-0.20), equity-vs-equity.
-The > 0.50 flatness is the hybrid-stop lesson again (fewer R per move), not
-a filter candidate.
+The seven sub-0.15 trades, all shorts, all stopped: USO 03-04 (8.4%), YM
+05-06 (10.2%), 6J 05-01 (10.5%), ZW 07-23 (11.9%), USO 03-31 (13.3%), ZC
+07-23 (14.1%), ZB 02-13 (14.9%). SIX OF THE SEVEN WERE UP >= +1.4R FIRST, so
+the mechanism is not "wrong from the start, chopped at the entry" - the
+trades worked, and a normal pullback of the winning move reached a stop
+sitting only 8-15% of a day's travel away.
+
+**LODE'S VERDICT (2026-08-09), and the data backs it: do NOT filter the
+compact end.** Reviewing YM 1, 6J 2, ZW 9 and USO 7 on the trade study he
+would eliminate none of them - they are correct setups, and USO 7 is the
+archetype: an unlucky stop on a trade whose upside was large. The economics
+say the same thing. A small $R is exactly what makes a win lucrative:
+average winner +4.94R at 15-30% against +1.10R above 50%, and 29% of the
+sub-15% trades reached +2R at some point against 9% of the wide ones. The
+wide end is the real profitability problem - it wins 41.8% of the time,
+about the portfolio average, and earns nothing, because a fat R denominator
+books few R per move (the hybrid-stop lesson of section 10, arrived at from
+the other direction). So the class is not "bad setups": it is HIGH-VARIANCE,
+HIGH-PAYOFF, EXECUTION-CRITICAL setups on which we hold 0 for 7 - at that
+sample size, near-zero information. **The filter dial proposed here on
+2026-08-09 is withdrawn.**
+
+One cost correction (Lode's intuition ran the other way and the number
+settles it): slippage is a fixed number of TICKS, so a small $R means those
+ticks eat a bigger share of R - 14% of R in the sub-0.15 class against 2%
+above 0.50. The compact setups are not cost-disadvantaged relative to their
+upside; they are the most execution-sensitive trades in the book, which is
+section 8's "two ticks were worth ~12R" concentrated in the highest-payoff
+class. An argument for the IB streaming entry path, not for a filter.
+
+**What cannot be unseen, and what it is not:** on this series the money sits
+between 15% and 50% (74 trades, +59.6R) and both tails are dead. Coincidence
+or not, it is in the record. It is NOT yet a rule: the buckets were drawn
+after seeing the outcomes, and 7 and 55 trades of a seven-month sample decide
+the two edges. Reading a band off that table is precisely the curve-fitting
+this project removed rule 3 for. A geometry requirement has to be DEFINED
+first - from the rules and from looking at charts - and only then measured.
+If the definition needs the outcome table to justify it, it is not a
+definition.
+
+**THE AGREED DIRECTION (Lode, 2026-08-09): two quality filters, both parked
+until the trade review is complete.**
+
+1. **Reversal quality** - what makes a ladder a good setup, as a property of
+   the levels themselves. Geometry against recent range is ONE slice of it,
+   and the open question is which way it points: compact clusters carry the
+   payoff, wide ones carry the survivability, and "it could even be the WIDE
+   clusters we are after" is explicitly still on the table. Vocabulary not
+   yet built: spacing regularity, ladder depth, whether the cluster has been
+   tested and held before, where price sits inside the ladder at entry.
+2. **Instrument quality** - price-data quality per market, bar density being
+   one component. Lode: some markets in the report are visibly not tradeable
+   the moment their 1m chart is opened. Expected low-hanging fruit, and
+   independent of (1); the two share nothing but their purpose.
+
+Both wait for the full manual review, because the review is what builds the
+vocabulary for defining them without leaning on the backtest outcome.
+
+**A MEASUREMENT ERROR TO NOT REPEAT (2026-08-09).** A first pass at instrument
+quality counted the 1-minute bars falling inside each trade's 24h lookback and
+read the low numbers as thin data. It was wrong, caught by Lode against the
+charts. That count measures SESSION LENGTH and WEEKEND OVERLAP far more than
+liquidity: URA's "21 bars" was a Monday 13:51 entry whose previous 24 hours
+were Sunday plus 21 minutes of Monday - URA trades a normal 389 bars/day; LE's
+"275" IS its ~4.5h session, identical on all nine of its trades. Measured
+correctly as median bars per TRADING day, only two markets are genuinely thin:
+**WEAT at 120** (of a ~390-minute session, 31% coverage) and **BTC at 180**
+(of ~1380, 13%). Any instrument-quality metric must normalise by the market's
+own session, and must never be computed from a window that can straddle a
+weekend.
 
 **Late entries do not lower the win rate - they shrink the winners.** First
 6h after activation: 64 trades, 40.6% wr, +44.2R. Later: 61 trades, 41.0%

@@ -75,6 +75,30 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
   still costs the same 1% either way. After a same-day re-entry the
   two extreme modes price the new stop off the now-further extreme,
   which is v1's anti-whipsaw property returning.
+- LADDER GEOMETRY IS A DIAL (`min_rpu_range_ratio` /
+  `max_rpu_range_ratio`, both None = off, 2026-08-10). Refuse an entry
+  whose risk distance (level-to-stop) is smaller / larger than the given
+  fraction of the market's trailing 24-hour high-low range. EXPLORATORY,
+  at Lode's request and with his own warning attached: the audit's s.14
+  measurement says the > 0.50 class pays 143% of its gross edge in
+  transaction costs and nets nothing, while the < 0.15 class carries the
+  biggest per-win payoff in the book - but the band was read off a table
+  of outcomes, which is the curve-fitting this project removed rule 3
+  for. Nothing here is a rule until it can be DEFINED without the
+  outcome table. Mechanics, so the number is reproducible:
+  * The window is the trailing RANGE_WINDOW of wall clock,
+    holding the bars strictly BEFORE the candidate minute - the same
+    definition s.14 measured, so its buckets and this dial agree.
+  * It RESETS AT A CONTRACT ROLL: prices either side of a splice are not
+    comparable, so a window may not span one.
+  * With fewer than MIN_RANGE_BARS in the window the filter cannot
+    judge and DOES NOT REFUSE (a short window would otherwise read as a
+    tiny range, i.e. a huge ratio, and reject the day after every roll).
+    Those cases are counted as `range_unjudged` rather than hidden.
+  * A refused entry does NOT spend the session-lockout allowance - no
+    entry happened - so a later minute may trigger instead. The trade
+    list therefore SHIFTS rather than shrinks, which is exactly why this
+    is an engine dial and not a post-filter over the blotter.
 
 Rules recap (short side; long is the mirror):
 - Every minute, rules 1 and 3 evaluate fresh against the ACTIVE levels
@@ -103,9 +127,15 @@ Rules recap (short side; long is the mirror):
   ladder stop does not widen - only rule 3's growing base gates it).
 """
 
+from collections import deque
 from dataclasses import dataclass
+from datetime import timedelta
 
 MIN_REVERSALS = 3         # tested reversals required (rule 1)
+# Trailing window for the geometry dial. A timedelta, not seconds: bar
+# timestamps arrive as pandas Timestamps and this module stays pandas-free.
+RANGE_WINDOW = timedelta(hours=24)
+MIN_RANGE_BARS = 60      # below this the geometry dial abstains (see above)
 MIN_LADDER = 4            # levels the ladder must carry (stop anchor)
 ENTRY_SLIP_TICKS = 2      # market-order entry slippage, in the PRICE
                           # (4 -> 2, Lode 2026-08-06)
@@ -197,12 +227,14 @@ STOP_MODES = ("ladder", "ladder_or_extreme", "extreme")
 def run_market(days, files, tick, risk_pct=RISK_PCT,
                start_capital=STARTING_CAPITAL, tighten=True,
                allow_pre_activation=True, confirm=True, stop_mode="ladder",
-               max_entries_per_session=1):
+               max_entries_per_session=1, min_rpu_range_ratio=None,
+               max_rpu_range_ratio=None):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
-    `tighten`, `allow_pre_activation`, `confirm` and `stop_mode` are the
-    dials; see the module docstring for what each one means.
+    `tighten`, `allow_pre_activation`, `confirm`, `stop_mode` and the two
+    `*_rpu_range_ratio` bounds are the dials; see the module docstring for
+    what each one means.
     """
     if stop_mode not in STOP_MODES:
         raise ValueError(f"stop_mode must be one of {STOP_MODES}")
@@ -211,6 +243,13 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     pos = None
     zero_dist_entries = 0
     prev_trading_date = None
+    # Trailing high-low window for the geometry dial: bars strictly before
+    # the candidate minute, never spanning a contract splice.
+    geometry_on = (min_rpu_range_ratio is not None
+                   or max_rpu_range_ratio is not None)
+    win = deque()
+    win_contract = None
+    refused_tight = refused_wide = range_unjudged = 0
 
     def book(pos, exit_ts, exit_price, reason):
         nonlocal cash
@@ -238,6 +277,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             # Should be unreachable given roll-boundary entry exclusions.
             raise RuntimeError(
                 f"position in {pos.contract} carried into {day.contract} day")
+        if day.contract != win_contract:      # a splice is not a price move
+            win.clear()
+            win_contract = day.contract
 
         run_high = run_low = None
         prev_c = None
@@ -297,6 +339,13 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             if not settled and bts >= day.settle_ts:
                 pos = settle(pos)
                 settled = True
+
+            # Prune the trailing window to the bars strictly before this
+            # minute (it is appended to at the bottom of the loop).
+            if geometry_on:
+                cutoff = bts - RANGE_WINDOW
+                while win and win[0][0] < cutoff:
+                    win.popleft()
 
             prev_high, prev_low = run_high, run_low
             run_high = h if run_high is None else max(run_high, h)
@@ -379,6 +428,25 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                             "ladder_or_extreme" else ext
                     rpu = first - stop
                     entry_price = entry_base + ENTRY_SLIP_TICKS * tick
+                # Ladder geometry against the trailing range. Abstain when
+                # the window is too short to judge; refusing does not spend
+                # the lockout allowance, so a later minute may trigger.
+                if geometry_on:
+                    if len(win) < MIN_RANGE_BARS:
+                        range_unjudged += 1
+                    else:
+                        rng = (max(x[1] for x in win)
+                               - min(x[2] for x in win))
+                        ratio = rpu / rng if rng > 0 else None
+                        if ratio is not None:
+                            if (max_rpu_range_ratio is not None
+                                    and ratio > max_rpu_range_ratio):
+                                refused_wide += 1
+                                continue
+                            if (min_rpu_range_ratio is not None
+                                    and ratio < min_rpu_range_ratio):
+                                refused_tight += 1
+                                continue
                 risk_usd = cash * risk_pct / 100.0
                 pos = _Position(side=side, contract=day.contract,
                                 entry_date=day.date, entry_ts=bts,
@@ -388,6 +456,8 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 entries_today += 1
                 break
             prev_c = c
+            if geometry_on:
+                win.append((bts, h, l))
 
         if not settled:
             pos = settle(pos)
@@ -408,5 +478,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
         zero_dist_entries=zero_dist_entries,
         reasons={r: sum(1 for t in trades if t["reason"] == r)
                  for r in ("stop", "no_confirm", "close1", "data_end")},
+        # Geometry dial bookkeeping: zero on every run with the dial off.
+        refused_wide=refused_wide,
+        refused_tight=refused_tight,
+        range_unjudged=range_unjudged,
     )
     return trades, summary

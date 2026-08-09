@@ -297,6 +297,88 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 15. The wide-cluster cell, measured (2026-08-10)
+
+Lode asked for the variant s.14 describes, in his own words "really a gamble
+... basically for the fun, and yet we're going to learn something", expecting
+the drawdown to get WORSE. It got better, and the sweep says something more
+useful than the single cell did.
+
+Built as an ENGINE DIAL (`max_rpu_range_ratio` / `min_rpu_range_ratio`,
+engine_1m), not a blotter filter, because a refused entry does not spend the
+session-lockout allowance and a later minute may trigger instead. It rides in
+run_1m_matrix.py as the cell `no wide clusters` so it is re-measured on every
+pass rather than ageing in a page of its own (the s.10 lesson). Mechanics and
+their justifications are in the engine docstring: trailing 24h wall-clock
+window of bars strictly before the candidate minute, reset at a contract
+splice, abstaining below MIN_RANGE_BARS (60) rather than refusing on a short
+window.
+
+| | baseline | no wide clusters (> 0.50) |
+|---|---|---|
+| trades | 137 | **89** |
+| win rate | 40.9% | 41.6% |
+| net R | +52.31 | **+60.61** |
+| longest losing streak | 7 | 7 |
+| max DD | 11.20% | **8.21%** |
+| final | $160,979 | **$174,938** |
+
+Checks that the project's own standards demand, all three passed or reported:
+
+- **NOT one market.** Deltas spread across the book - ZB +3.43R, NG +2.13R,
+  SI +2.00R, HG +1.90R, GC +1.38R - with real losses beside them (LE -2.63R,
+  ZW -2.20R). Unlike the lockout, whose entire gain traced to wheat.
+- **Almost no cascade.** Only 2 new trades appear (+2.83R); 50 are removed,
+  netting -5.47R, and **20 of those 50 were winners**. So the mechanism is
+  s.14's, exactly: not removing losers, removing a class whose winners are
+  too small to pay for its losers.
+- **`refused_wide` counts TRIGGER EVENTS, not trades** (1098 of them): the
+  same level re-prints many times in a session. The trade-count effect is the
+  48 net. `range_unjudged` was 7 in the whole sample, so the abstain path is
+  rare.
+
+**THE THRESHOLD SWEEP IS THE REAL RESULT.** 0.50 was read off a table of
+outcomes, so some improvement was guaranteed by construction; the question is
+whether the effect is smooth or a knife-edge at the chosen number:
+
+| cut | trades | wr% | netR | streak | maxDD% | final |
+|---|---|---|---|---|---|---|
+| off | 137 | 40.9 | +52.31 | 7 | 11.20 | $160,979 |
+| 1.50 | 136 | 40.4 | +52.30 | 7 | 11.20 | $160,966 |
+| 1.00 | 125 | 40.8 | +53.98 | 7 | 10.28 | $163,602 |
+| 0.75 | 115 | 40.9 | +57.43 | 7 | 10.88 | $168,885 |
+| **0.60** | 103 | **41.7** | +60.46 | 7 | 8.93 | $174,136 |
+| **0.50** | 89 | 41.6 | **+60.61** | 7 | 8.21 | $174,938 |
+| 0.40 | 72 | 37.5 | +48.38 | 5 | 6.22 | $155,240 |
+| 0.35 | 65 | 33.8 | +38.16 | 5 | 6.22 | $141,176 |
+| 0.30 | 55 | 32.7 | +36.00 | 5 | 5.89 | $138,441 |
+
+A PLATEAU, not a spike: monotone improvement from 1.50 down to 0.50-0.60,
+graceful decay upward toward "off", and a hard collapse below 0.40 - which is
+s.14's 15-50% band defending itself, since cutting into it destroys the edge.
+The plateau is what a real property looks like; the exact peak is still
+sample-chosen and 0.60 keeps 14 more trades for the same net R.
+
+**THREE CAUTIONS, and they matter more than the plateau.**
+
+1. **It does not fix the win rate.** The best cell anywhere in the sweep is
+   41.7% against 40.9%. Not one threshold moves the stated target by a point.
+   Whatever this dial is, it is not a win-rate mechanism, and the win rate is
+   the thing s.8 says must rise.
+2. **Lower drawdown is partly just less trading.** DD keeps falling to 5.89%
+   at cut 0.30, where net R has collapsed to +36R. Drawdown alone proves
+   nothing here; only cells where net R ALSO rises carry information.
+3. **The losing streak never moves** - 7 across the whole plateau, dropping
+   to 5 only where the edge dies. Lode's drawdown concern is specifically
+   long losing streaks, and this dial does not shorten them; it makes the
+   losses inside them smaller.
+
+Status: MEASURED, NOT ADOPTED. The threshold still comes from an outcome
+table, which is the rule-3 trap, and s.14's parked order stands - define
+reversal quality from the rules and the charts first, then see whether
+anything like this falls out of the definition. What the cell has earned is a
+permanent seat in the matrix.
+
 ## 14. Path analysis of the baseline, and the two quality filters (2026-08-09)
 
 An observational round over the 137-trade baseline (40.9% wr, +52.31R): every

@@ -53,10 +53,24 @@ VARIANTS = [
     # report nobody re-runs (Lode, 2026-08-08).
     ("hybrid stop", dict(BASE, stop_mode="ladder_or_extreme",
                          max_entries_per_session=1)),
+    # Also off the lockout axis, and EXPLORATORY (Lode, 2026-08-10, in his
+    # own words "really a gamble ... basically for the fun, and yet we're
+    # going to learn something"). Audit s.14 measured the trades whose
+    # level-to-stop distance exceeds half the trailing 24h range at 55
+    # trades, 41.8% wr, a +1.92R GROSS edge and 2.74R of transaction costs
+    # - net -0.82R, costs at 143% of gross. This cell refuses them at the
+    # ENGINE, so the freed lockout allowance can hand the slot to a later
+    # trigger; the per-trade estimate could not see that. Read the drawdown
+    # first: removing near-zero-net trades that are spread across the
+    # sample can easily make the curve WORSE, which is Lode's own
+    # expectation and the reason this is a cell and not a rule.
+    ("no wide clusters", dict(BASE, max_entries_per_session=1,
+                              max_rpu_range_ratio=0.50)),
 ]
 BASELINE_NAME = "lockout 1"               # the published run, for reference
 COLORS = {"lockout 1": "#1B9E4B", "lockout 2": "#E8A33D",
-          "no lockout": "#D64545", "hybrid stop": "#3D7FE8"}
+          "no lockout": "#D64545", "hybrid stop": "#3D7FE8",
+          "no wide clusters": "#8E44AD"}
 
 
 def entry_order_metrics(trades):
@@ -139,8 +153,14 @@ def main():
             mix[r] = dict(n=len(sub),
                           wins=sum(1 for t in sub if t["net_r"] > 0),
                           net_r=round(sum(t["net_r"] for t in sub), 2))
+        # Geometry-dial bookkeeping, summed over markets: how many entries
+        # the dial refused and how often it had to abstain for want of a
+        # window. Zero on every cell that leaves the dial off.
+        geom = {k: sum(r.get(k, 0) for r in results[name]["rows"])
+                for k in ("refused_wide", "refused_tight", "range_unjudged")}
         report[name] = dict(
             dials=dials,
+            geometry=geom,
             trades=len(trades),
             win_rate=round(100 * wins / len(trades), 1) if trades else None,
             net_r=round(sum(t["net_r"] for t in trades), 2),
@@ -185,6 +205,10 @@ def main():
         f"{r['exit_mix']['close1']['n'] - r['exit_mix']['close1']['wins']} / "
         f"{r['exit_mix']['stop']['n']} / "
         f"{r['exit_mix']['no_confirm']['n']}</td>"
+        f"<td>{(str(r['geometry']['refused_wide'] + r['geometry']['refused_tight'])
+                + ' / ' + str(r['geometry']['range_unjudged']))
+               if (r['geometry']['refused_wide'] + r['geometry']['refused_tight'])
+               else ''}</td>"
         f"<td><i style='background:{COLORS[n]}'></i></td></tr>"
         for n, r in report.items())
     series = "\n".join(
@@ -212,13 +236,20 @@ the level-to-stop distance, no tightening, overnight window blocked, no
 confirmation clause, ladder stop.
 <b>lockout N</b> = at most N ENTRIES per market per session, expiring at
 the session boundary; a position carried in from the previous session
-and stopped intraday does not spend the allowance. Read the losing
-streak and the drawdown first.</span>
+and stopped intraday does not spend the allowance.
+<b>no wide clusters</b> = EXPLORATORY (audit s.14): refuse an entry whose
+level-to-stop distance exceeds half the trailing 24h high-low range. Not
+a rule - the threshold was read off a table of outcomes, and the class it
+removes nets about zero, so it can easily make the CURVE worse while
+improving the totals.
+Read the losing streak and the drawdown first.</span>
 <div id="chart"></div>
 <table><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
 <th>longest losing streak</th><th>max DD (R)</th><th>max DD %</th>
 <th>max DD close %</th><th>final</th>
-<th>day-2 win / day-2 loss / stop / abort</th><th></th></tr>{head}</table>
+<th>day-2 win / day-2 loss / stop / abort</th>
+<th title="entries the geometry dial refused / times it abstained for want of a 24h window">geom refused / unjudged</th>
+<th></th></tr>{head}</table>
 <script>{lib}</script><script>
 const chart = LightweightCharts.createChart(
   document.getElementById('chart'),

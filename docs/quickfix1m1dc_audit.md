@@ -363,13 +363,37 @@ HIGH-PAYOFF, EXECUTION-CRITICAL setups on which we hold 0 for 7 - at that
 sample size, near-zero information. **The filter dial proposed here on
 2026-08-09 is withdrawn.**
 
-One cost correction (Lode's intuition ran the other way and the number
-settles it): slippage is a fixed number of TICKS, so a small $R means those
-ticks eat a bigger share of R - 14% of R in the sub-0.15 class against 2%
-above 0.50. The compact setups are not cost-disadvantaged relative to their
-upside; they are the most execution-sensitive trades in the book, which is
-section 8's "two ticks were worth ~12R" concentrated in the highest-payoff
-class. An argument for the IB streaming entry path, not for a filter.
+**TRANSACTION COSTS: LODE WAS RIGHT, AND THE FIRST ANSWER HERE WAS THE WRONG
+DENOMINATOR.** This section first reported slippage as a share of 1R - 14% in
+the sub-0.15 class against 2% above 0.50 - and concluded that costs pressed
+hardest on the compact trades. Lode: the slippage is paid either way, so what
+matters is its share of the PROFIT the class actually produces; at a huge $R,
+a $1 round trip against a $1 win is 100% of the profit. That is the right
+denominator, and it inverts the conclusion. Full cost per trade = entry slip
+(charged in the price, so buried inside gross R: `|entry - entry_first| /
+rpu`) plus `cost_r` (the exit slip, charged in R):
+
+| rpu / prior-24h range | n | cost/trade | total cost | gross R | net R | cost as % of GROSS |
+|---|---|---|---|---|---|---|
+| < 0.15 | 7 | 0.279R | 1.95R | -7.00 | -8.96 | n/a (no gross edge) |
+| 0.15-0.30 | 36 | 0.110R | 3.95R | +38.29 | +34.33 | **10%** |
+| 0.30-0.50 | 38 | 0.132R | 5.00R | +30.29 | +25.29 | **17%** |
+| > 0.50 | 55 | 0.050R | 2.74R | +1.92 | -0.82 | **143%** |
+
+Both measures are true and they answer different questions: cost per unit of
+RISK is worst in the compact class (0.279R/trade, the biggest per-trade drag
+in the book), cost per unit of PROFIT PRODUCED is fatal in the wide class,
+where 2.74R of costs consume a 1.92R gross edge. On winners alone the share
+is 2.7-3.5% in every bucket, which is why the effect is invisible per trade
+and only appears at class level - and why the "% of net" instinct found it
+where "% of R" did not.
+
+The refinement that matters for the argument: the wide class's gross edge is
+only **+1.92R over 55 trades** (+0.035R/trade BEFORE costs). So execution did
+not ruin a good class - the class has almost no gross edge to begin with, and
+costs then push it under. That is a stronger case against wide clusters than
+the net figure alone, and unlike the net figure it does not depend on the
+slippage assumptions being exactly right.
 
 **What cannot be unseen, and what it is not:** on this series the money sits
 between 15% and 50% (74 trades, +59.6R) and both tails are dead. Coincidence

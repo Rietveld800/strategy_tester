@@ -22,8 +22,9 @@ anchor} removed the confirmation clause and kept the ladder stop
 (section 10).
 
 Metrics per variant, portfolio level (Lode's priority order): longest
-losing streak (entry order, net R), max shared-account drawdown, net R,
-win rate, trade count, final cash at 1% risk. Output:
+losing streak (entry order, net R), max shared-account drawdown (worst
+reached, and on daily closes beside it, the same pair the main report
+shows), net R, win rate, trade count, final cash at 1% risk. Output:
 output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
@@ -74,6 +75,21 @@ def entry_order_metrics(trades):
         peak = max(peak, cum)
         max_dd_r = max(max_dd_r, peak - cum)
     return longest, round(max_dd_r, 2)
+
+
+def close_dd_pct(curve, start_capital=100_000.0):
+    """Max drawdown on daily CLOSING balances, peak and trough both read
+    at the bell: the gentler figure the main report shows next to the
+    worst-reached one. The curve is per-exit, so the last point of each
+    UTC day is that day's close."""
+    eod = {}
+    for ts, v in curve:
+        eod[ts // 86400] = v
+    peak, worst = start_capital, 0.0
+    for day in sorted(eod):
+        peak = max(peak, eod[day])
+        worst = max(worst, (peak - eod[day]) / peak * 100.0)
+    return round(worst, 2)
 
 
 def main():
@@ -132,6 +148,7 @@ def main():
             max_dd_r=max_dd_r,
             final_cash=round(final, 2),
             max_dd_pct=round(max_dd, 2),
+            max_dd_close_pct=close_dd_pct(curve),
             exit_mix=mix,
             curve=curve,
         )
@@ -140,7 +157,8 @@ def main():
               f"net {report[name]['net_r']}R, "
               f"longest losing streak {streak}, "
               f"max DD {report[name]['max_dd_pct']}% "
-              f"(${report[name]['final_cash']:,.0f})", flush=True)
+              f"(closes {report[name]['max_dd_close_pct']}%, "
+              f"${report[name]['final_cash']:,.0f})", flush=True)
 
     OUT_JSON.parent.mkdir(exist_ok=True)
     OUT_JSON.write_text(json.dumps(dict(
@@ -161,10 +179,12 @@ def main():
         f"<tr><td>{n}</td><td>{r['trades']}</td><td>{r['win_rate']}</td>"
         f"<td>{r['net_r']}</td><td><b>{r['longest_losing_streak']}</b></td>"
         f"<td>{r['max_dd_r']}</td><td>{r['max_dd_pct']}%</td>"
+        f"<td>{r['max_dd_close_pct']}%</td>"
         f"<td>${r['final_cash']:,.0f}</td>"
-        f"<td>{r['exit_mix']['stop']['n']} / "
-        f"{r['exit_mix']['no_confirm']['n']} / "
-        f"{r['exit_mix']['close1']['n']}</td>"
+        f"<td>{r['exit_mix']['close1']['wins']} / "
+        f"{r['exit_mix']['close1']['n'] - r['exit_mix']['close1']['wins']} / "
+        f"{r['exit_mix']['stop']['n']} / "
+        f"{r['exit_mix']['no_confirm']['n']}</td>"
         f"<td><i style='background:{COLORS[n]}'></i></td></tr>"
         for n, r in report.items())
     series = "\n".join(
@@ -197,7 +217,8 @@ streak and the drawdown first.</span>
 <div id="chart"></div>
 <table><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
 <th>longest losing streak</th><th>max DD (R)</th><th>max DD %</th>
-<th>final</th><th>stop / abort / day-2</th><th></th></tr>{head}</table>
+<th>max DD close %</th><th>final</th>
+<th>day-2 win / day-2 loss / stop / abort</th><th></th></tr>{head}</table>
 <script>{lib}</script><script>
 const chart = LightweightCharts.createChart(
   document.getElementById('chart'),

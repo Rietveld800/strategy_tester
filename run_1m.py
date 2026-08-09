@@ -434,6 +434,9 @@ def main():
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report
     build_1m_report.build()
+    # The active-list build reads the JSON just written, so it stays in
+    # step with the baseline on every refresh.
+    build_1m_report.build25()
     print(f"wrote {OUT_JSON.name}")
 
 

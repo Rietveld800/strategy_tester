@@ -639,7 +639,7 @@ PAGE_JS = r"""<script>
 
 PAGE = r"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>quickfix1m1dc &mdash; 1-minute report</title>
+<title>__NAME__ &mdash; 1-minute report</title>
 __CSS__
 <style>
 /* the three panes; the daily reports draw their own SVG, this page uses
@@ -655,7 +655,7 @@ table.trades td a:hover{text-decoration:underline}
 <div class="wrap">
 <header>
   <div class="eyebrow">1-minute workstream</div>
-  <h1>quickfix1m1dc</h1>
+  <h1>__NAME__</h1>
   <p class="lede">__LEDE__</p>
 </header>
 __RULES__
@@ -697,6 +697,60 @@ __CALENDAR__
 <script>__LIB__</script>
 __JS__
 </body></html>"""
+
+
+def active25_payload():
+    """quickfix1m1dc25: the published run restricted to the ACTIVE list.
+
+    The Socrates list numbers 25 markets, and data_center's mapping
+    carries exactly those; the obsolete part of the 1m universe (frozen
+    softs, delisted ETFs, Binance pairs) lives outside it. Every trade is
+    capital-independent in R, so this is NOT a new backtest: the same
+    trades on the same time base, minus the obsolete markets, replayed
+    into a shared account of their own. Two actives cannot trade and are
+    surfaced under Not tested: SR3 is outside the verified 1-minute
+    universe, and the Japanese 10-year has no data source at all.
+    """
+    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+    active = {m["key"] for m in run_1m.MAPPING["markets"] if m.get("key")}
+    trades = [t for t in data["trades"] if t["market"] in active]
+    universe = (set(run_1m.ELIGIBLE_FUTURES) | set(run_1m.ETFS)
+                | set(run_1m.BINANCE))
+    excluded = [e for e in data.get("excluded", [])
+                if e.get("market") in active]
+    for m in run_1m.MAPPING["markets"]:
+        if not m.get("covered", True):
+            excluded.append(dict(
+                market=m["socrates_name"].replace("_", " "),
+                reason="coverage gap: no 1-minute data source"))
+        elif m["key"] not in universe:
+            excluded.append(dict(
+                market=m["key"],
+                reason="in the active Socrates list but not part of the "
+                       "1-minute universe"))
+    _, _, final, max_dd = replay(trades)
+    wins = sum(1 for t in trades if t["net_r"] > 0)
+    return dict(
+        strategy="quickfix1m1dc25",
+        params=data["params"],
+        portfolio=dict(final=round(final, 2), max_dd_pct=round(max_dd, 2),
+                       trades=len(trades),
+                       win_rate=round(100 * wins / len(trades), 1),
+                       net_r=round(sum(t["net_r"] for t in trades), 2)),
+        markets=[r for r in data["markets"] if r["market"] in active],
+        excluded=excluded,
+        trades=trades,
+        universe_note=(
+            " <b>This build trades the active Socrates list only</b>: the "
+            "25 numbered markets, with the obsolete softs, ETFs and "
+            "Binance pairs left out. Same time base, rules and dials as "
+            "the published baseline; the two actives without 1-minute "
+            "data are under Not tested."))
+
+
+def build25():
+    build(data=active25_payload(),
+          out=OUT_HTML.with_name("quickfix1m1dc25_report.html"))
 
 
 def variant_payload(name):
@@ -842,7 +896,8 @@ def build(data=None, out=None, variant=None):
         f"evaluated minute by minute; the trade is entered with a market "
         f"order and marked out at the settlement of the day after entry. "
         f"This page is the blotter: every one of the {len(trades)} trades is "
-        f"listed, and each row opens that trade in charter's 1-minute study.")
+        f"listed, and each row opens that trade in charter's 1-minute study."
+        + data.get("universe_note", ""))
     note = (
         "<b>Read the execution assumptions before reading the result.</b> "
         f"Entries are market orders charged {engine_1m.ENTRY_SLIP_TICKS} ticks "
@@ -876,6 +931,7 @@ def build(data=None, out=None, variant=None):
         f"registry, so it has no cap dial, no risk dial and no variant grid.")
 
     html = (PAGE
+            .replace("__NAME__", esc(data.get("strategy", "quickfix1m1dc")))
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(p))
@@ -907,8 +963,11 @@ def build(data=None, out=None, variant=None):
 if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
     # python build_1m_report.py --variant "hybrid stop"   one matrix cell
+    # python build_1m_report.py --active25          the active-list build
     args = sys.argv[1:]
     if args and args[0] == "--variant":
         build(variant=args[1])
+    elif args and args[0] == "--active25":
+        build25()
     else:
         build()

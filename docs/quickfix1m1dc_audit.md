@@ -297,6 +297,68 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 14. Path analysis of the baseline: where the win rate does NOT live (2026-08-09)
+
+An observational round over the 137-trade baseline (40.9% wr, +52.31R): every
+trade's minute-by-minute path recomputed from the on-book bars - MAE/MFE in R,
+time to each, entry-hour, and risk distance against the prior 24h range.
+**Everything here is a per-trade estimate, not an engine rerun**; an earlier
+exit frees a market slot and the lockout counts entries, so only a rerun can
+price any of it. The estimates are for choosing which reruns are worth doing.
+
+**Exit-before-stop is a NEGATIVE result, and it closes that branch.** Section
+8 named "exit-before-stop logic" as a candidate; the paths say no mechanical
+form of it pays:
+
+- Abort at -X R: at every X in 0.3-0.8 the killed winners cost more than the
+  saved stops (best case ~-15R). The survivors chop deep before winning: 33
+  of 72 close1 trades went >= 0.5R adverse first and netted +65R together;
+  even the >= 0.9R-MAE band (a hair from the stop) is net positive (9 trades,
+  5 wins, +5.4R).
+- Breakeven stop once the trade reaches +Y R: negative in every cell of
+  {Y: 0.5-1.5} x {stop at 0 / -0.25 / -0.5R}; best cell still -6.2R, because
+  20 close1 winners also revisit entry after being +1R up and then win.
+
+Chop through the entry zone is intrinsic to entering at a reversal that gets
+retested. Same verdict as section 10 reached for stop anchors, now from the
+trade paths: the win rate has to come from ENTRY SELECTION.
+
+**The give-back class, quantified:** 19 of 65 stops were up >= +1R before
+dying (ZC 04-30 short: +3.25R, stopped 32h later; ZW 07-23: +2.15R in 24
+minutes). A third of the stop class is formerly-winning trades, worth eyes
+during the manual review - but per the above, the mechanical protections
+measurably fail; anything that ever addresses this class must be structural.
+
+**One entry-time separator found - and it is section 8's own candidate.**
+Risk distance (first reversal to ladder stop) against the prior-24h range:
+
+| rpu / prior-24h range | trades | wr | net R |
+|---|---|---|---|
+| < 0.15 | 7 | **0%** | -8.96 |
+| 0.15-0.50 | 74 | ~43% | +59.6 |
+| > 0.50 | 55 | 41.8% | -0.8 |
+
+The seven sub-0.15 trades all stopped: ZB 02-13, USO 03-04, USO 03-31,
+6J 05-01, YM 05-06, and BOTH halves of the worst portfolio day, ZW+ZC 07-23.
+The story is principled rather than fitted: a ladder compressed inside ~15%
+of a normal day's range puts the stop inside ordinary noise - there is no
+real invalidation to trade against. Knowable at entry time. Seven trades is
+lockout-grade sample size; the candidate experiment is an entry-filter dial
+(block when rpu < k x prior-24h range, k swept ~0.10-0.20), equity-vs-equity.
+The > 0.50 flatness is the hybrid-stop lesson again (fewer R per move), not
+a filter candidate.
+
+**Late entries do not lower the win rate - they shrink the winners.** First
+6h after activation: 64 trades, 40.6% wr, +44.2R. Later: 61 trades, 41.0%
+wr, +6.6R. Same wr, a third of the R - so not a wr lever and not a filter
+candidate under this project's framing, but the edge concentrates in the
+fresh window, which weighs on the IB streaming path's priority.
+
+**Portfolio note:** the worst days are now -2 to -3R pairs (the lockout
+capped the intraday tail; streak 7 accumulates ACROSS days). On 06-22 the
+pair was DX short + 6E short - near-mirror instruments, one macro bet in two
+slots.
+
 ## 13. The window reaches 2026-08-06 (2026-08-08)
 
 The data had been standing still without anyone noticing. data_center's

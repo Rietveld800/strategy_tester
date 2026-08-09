@@ -113,12 +113,12 @@ def held(minutes):
 
 # ------------------------------------------------------------------- numbers
 
-def replay(trades):
+def replay(trades, risk_pct=RISK_PCT):
     """run_1m.portfolio_replay, keeping each trade's own money.
 
     Same event order (exits before entries at an equal timestamp) and the
-    same sizing rule (RISK_PCT of equity at entry), so the final capital
-    is the figure run_1m published.
+    same sizing rule (risk_pct of equity at entry), so at the default the
+    final capital is the figure run_1m published.
     """
     events = []
     for i, t in enumerate(trades):
@@ -130,9 +130,9 @@ def replay(trades):
     open_risk, money_of, eod = {}, {}, {}
     for ts, kind, i in events:
         if kind == 1:
-            open_risk[i] = equity * RISK_PCT / 100.0
+            open_risk[i] = equity * risk_pct / 100.0
         else:
-            risk = open_risk.pop(i, equity * RISK_PCT / 100.0)
+            risk = open_risk.pop(i, equity * risk_pct / 100.0)
             pnl = trades[i]["net_r"] * risk
             equity += pnl
             peak = max(peak, equity)
@@ -147,6 +147,31 @@ def replay(trades):
                         (peak - equity) / peak * 100.0)
             eod[ts.date()] = (equity, peak, worst)
     return money_of, eod, equity, max_dd
+
+
+def solve_risk_pct(trades, target_dd):
+    """The risk per trade that puts the replay at target_dd worst-reached.
+
+    solve_risk.py's bisection, on THIS module's replay rather than a
+    second copy of the money management, for the same reason it insists
+    on run_portfolio's own account(): a drifted copy would hand back a
+    risk that does not actually produce the target.
+    """
+    def dd(r):
+        return replay(trades, r)[3]
+
+    lo, hi = 0.0, 8.0
+    while dd(hi) < target_dd:
+        hi *= 2
+        if hi > 100:
+            return None
+    while hi - lo > 0.0005:
+        mid = (lo + hi) / 2
+        if dd(mid) < target_dd:
+            lo = mid
+        else:
+            hi = mid
+    return round((lo + hi) / 2, 3)
 
 
 def daily_series(trades, eod):
@@ -753,6 +778,27 @@ def build25():
           out=OUT_HTML.with_name("quickfix1m1dc25_report.html"))
 
 
+def build25_6pct():
+    """The active-list build sized to a drawdown budget: risk per trade
+    solved so the worst-reached drawdown is 6%, the same TARGET_DD the
+    daily project solves its published risks to. Re-solved on every
+    build, and the page states the number it landed on."""
+    data = active25_payload()
+    risk = solve_risk_pct(data["trades"], 6.0)
+    _, _, final, max_dd = replay(data["trades"], risk)
+    data["strategy"] = "quickfix1m1dc25-6pct"
+    data["risk_pct"] = risk
+    data["params"] = dict(data["params"], risk_pct=risk)
+    data["portfolio"].update(final=round(final, 2),
+                             max_dd_pct=round(max_dd, 2))
+    data["universe_note"] += (
+        f" <b>And it is sized to a drawdown budget</b>: risk per trade is "
+        f"solved to <b>{risk:g}%</b> so the worst drawdown reached "
+        f"intraday is 6%, the daily project's target.")
+    build(data=data,
+          out=OUT_HTML.with_name("quickfix1m1dc25-6pct_report.html"))
+
+
 def variant_payload(name):
     """A blotter-shaped payload for one cell of run_1m_matrix.py.
 
@@ -794,7 +840,8 @@ def build(data=None, out=None, variant=None):
     p = data["params"]
     published = data["portfolio"]
 
-    money_of, eod, final, max_dd = replay(trades)
+    risk = data.get("risk_pct", RISK_PCT)
+    money_of, eod, final, max_dd = replay(trades, risk)
     days, eq, dd, ddc, openpos = daily_series(trades, eod)
     if abs(final - published["final"]) > 0.01:
         print(f"WARNING: replay final ${final:,.2f} against run_1m's "
@@ -853,7 +900,7 @@ def build(data=None, out=None, variant=None):
         kpi("Final capital", money(final),
             f"from {money(START_CAPITAL)}", cls(final - START_CAPITAL)),
         kpi("Return", signed(100 * (final / START_CAPITAL - 1), 2) + "%",
-            f"at {RISK_PCT}% risk per trade",
+            f"at {risk}% risk per trade",
             cls(final - START_CAPITAL)),
         kpi("Max drawdown", f"{max_dd:.2f}%", "worst reached intraday"),
         kpi("Max drawdown on closes", f"{max(ddc):.2f}%",
@@ -892,7 +939,7 @@ def build(data=None, out=None, variant=None):
         f"One shared account of {money(START_CAPITAL)} across "
         f"{len(data['markets'])} tested markets, {traded} of which traded, "
         f"{days[0]} to {days[-1]}, at "
-        f"{RISK_PCT}% risk per trade. Rules 1 and 2 are the daily project's, "
+        f"{risk}% risk per trade. Rules 1 and 2 are the daily project's, "
         f"evaluated minute by minute; the trade is entered with a market "
         f"order and marked out at the settlement of the day after entry. "
         f"This page is the blotter: every one of the {len(trades)} trades is "
@@ -915,12 +962,15 @@ def build(data=None, out=None, variant=None):
         f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
         "P&amp;L is this trade's share of the shared account.")
     mktnote = (
-        "Each market's own figures at the same 1% risk, on a fresh "
-        f"{money(START_CAPITAL)} rather than the shared account, so the "
-        "returns do not add up to the headline. <b>Aborts</b> are the "
-        "no-confirmation exits, <b>settlement</b> the day-2 rule exits.")
+        "Each market's own figures at "
+        + ("the same 1% risk" if risk == RISK_PCT else
+           "the engine's 1% risk, not this page's solved risk")
+        + f", on a fresh {money(START_CAPITAL)} rather than the shared "
+        "account, so the returns do not add up to the headline. "
+        "<b>Aborts</b> are the no-confirmation exits, <b>settlement</b> "
+        "the day-2 rule exits.")
     chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
-                f"{RISK_PCT}% risk per trade")
+                f"{risk}% risk per trade")
     footer = (
         f"quickfix1m1dc, built from output/{IN_JSON.name} at the published "
         f"baseline (tighten "
@@ -964,10 +1014,13 @@ if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
     # python build_1m_report.py --variant "hybrid stop"   one matrix cell
     # python build_1m_report.py --active25          the active-list build
+    # python build_1m_report.py --active25-6pct     same, at the 6% solve
     args = sys.argv[1:]
     if args and args[0] == "--variant":
         build(variant=args[1])
     elif args and args[0] == "--active25":
         build25()
+    elif args and args[0] == "--active25-6pct":
+        build25_6pct()
     else:
         build()

@@ -434,9 +434,11 @@ def main():
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report
     build_1m_report.build()
-    # The active-list build reads the JSON just written, so it stays in
-    # step with the baseline on every refresh.
+    # The active-list builds read the JSON just written, so they stay in
+    # step with the baseline on every refresh; the 6pct page re-solves
+    # its risk against the fresh data and prints what it landed on.
     build_1m_report.build25()
+    build_1m_report.build25_6pct()
     print(f"wrote {OUT_JSON.name}")
 
 

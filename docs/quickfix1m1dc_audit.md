@@ -408,11 +408,75 @@ drawdown.
    strongest thing in favour of the deep end, and it arrives together with
    the worst win rates.
 
-Status: MEASURED, NOT ADOPTED. The threshold still comes from an outcome
-table, which is the rule-3 trap, and s.14's parked order stands - define
-reversal quality from the rules and the charts first, then see whether
-anything like this falls out of the definition. What the cell has earned is a
-permanent seat in the matrix.
+### 15a. What was actually found: profit factor, not win rate (Lode, 2026-08-10)
+
+Lode's reading, and it is the right one: *"We were looking to increase the win
+rate in order to get a softer DD. But what we stumbled on is that we have
+possibly solved the problem in one go. We do have the softer DD, and it's not
+with getting the win rate up but with filtering the too wide R's out. And it
+makes perfect sense; when the R is too wide in $ then there's simply not
+enough projected $ profit to make it worth the trade. So we're probably
+looking at a higher profit factor."*
+
+Measured, and the hypothesis holds:
+
+| variant | n | wr% | gross win R | gross loss R | profit factor | avg win | avg loss | expectancy |
+|---|---|---|---|---|---|---|---|---|
+| baseline | 137 | 40.9 | 131.84 | 79.53 | **1.66** | +2.35 | -0.98 | +0.382 |
+| no wide clusters | 89 | 41.6 | 117.34 | 56.74 | **2.07** | **+3.17** | -1.09 | **+0.681** |
+| hybrid stop | 133 | 43.6 | 109.82 | 71.48 | 1.54 | +1.89 | -0.95 | +0.288 |
+| no lockout | 156 | 37.8 | 144.92 | 100.46 | 1.44 | +2.46 | -1.04 | +0.285 |
+
+Profit factor 1.66 -> 2.07 and expectancy per trade nearly DOUBLES, 0.382R ->
+0.681R, while the win rate moves 0.7 of a point. The whole gain is average
+WINNER SIZE (2.35R -> 3.17R); the average loss even worsens slightly.
+
+**THIS CORRECTS SECTION 8.** That section concluded "so 'better win rate'
+concretely means: fewer entries that reach the ladder stop ... NOT squeezing
+more out of the winners". The available lever turned out to be the winners
+after all - not by squeezing them, but by declining trades that STRUCTURALLY
+CANNOT produce a fat one. The softer drawdown followed from that, without the
+win rate ever rising. Note also the hybrid-stop cell in the same table: the
+best win rate in the grid (43.6%) and the WORST profit factor of the three
+lockout-1 cells, which is the same lesson from the other side.
+
+### 15b. The first-principles version, which is what could make it a RULE
+
+The measured threshold still comes from an outcome table. But Lode's economic
+argument has a form that does NOT: **this strategy has a FIXED TIME EXIT** (the
+next day's settlement), so the R-multiple it can possibly earn is bounded by
+how far price travels in the holding window divided by R. That is arithmetic,
+available before any P&L:
+
+| 1R as a fraction of a day's travel | a full day's move is worth |
+|---|---|
+| 0.20 | 5R |
+| 0.33 | 3R |
+| 0.50 | 2R |
+| 1.00 | 1R, before slippage |
+| 1.50 | 0.67R - 1R is UNREACHABLE on a perfect day |
+
+So a wide ladder does not have a lower PROBABILITY of paying; it has a
+mathematically CAPPED payoff under this exit rule, while its downside stays a
+full -1R. That is exactly the asymmetry the numbers show: wide trades keep a
+normal win rate, because the far stop is rarely hit, and produce tiny winners
+(band avg R 0.2-0.4 above 0.60 against 1.0-1.2 below 0.30, s.14).
+
+Stated as a requirement it reads: **the ladder must leave at least N R of room
+inside one day's normal travel.** Demanding 2R lands on 0.50, 3R on 0.33, 1.5R
+on 0.67 - so the arithmetic supplies a REASON for a threshold in that region
+without proving any particular number. That is the footing rule 3 never had,
+and it is derived from the strategy's own exit rather than from its results.
+Choosing N is the open decision; it should be argued from the exit rule and
+the traded range, never fitted to the curve.
+
+Status: MEASURED, NOT ADOPTED, but the case has changed shape. The measurement
+is still a 137-trade sample whose net R is 49% one market (ZW - visible on
+every cell of the R-cut report), the equal-pain view rewards variants with
+fewer observations (caution 2 above), and 15b is an argument, not yet a
+definition with an N behind it. s.14's parked order stands - the trade review
+builds the vocabulary - but the geometry ratio has gone from "a filter read off
+a table" to "a candidate with a derivation", which is a different thing.
 
 ## 14. Path analysis of the baseline, and the two quality filters (2026-08-09)
 

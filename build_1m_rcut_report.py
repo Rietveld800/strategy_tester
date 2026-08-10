@@ -74,19 +74,24 @@ BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
 REFINE_LOWER = (0.10, 0.30)
 REFINE_UPPER = (0.40, 0.70)
 
-# VIRIDIS, to match hyperliquid_bot's Monte-Carlo equity heatmaps (Lode,
-# 2026-08-10) - dark purple at the low end, bright yellow at the high one.
-# It is a multi-hue ramp, which is normally the rainbow anti-pattern, but
-# viridis is the documented exception: perceptually uniform, colourblind-safe,
-# and STRICTLY MONOTONE IN LIGHTNESS (OKLab 0.285 -> 0.918, verified), which
-# is the correctness test for a sequential ramp. It ships with a scale legend
-# here, as that exception requires. Re-verify monotonicity if these change.
-RAMP = ["#440154", "#443983", "#31688e", "#21918c",
-        "#35b779", "#90d743", "#fde725"]
-# Ink per step, picked on measured contrast against that step: white while the
-# ramp is dark (15.2 / 9.7 / 6.0), dark ink once it brightens (5.2 -> 15.6).
-INK_ON_RAMP = ["#ffffff", "#ffffff", "#ffffff", "#0b0b0b",
-               "#0b0b0b", "#0b0b0b", "#0b0b0b"]
+# DIVERGING AT BREAK-EVEN (Lode, 2026-08-10): red and orange where the account
+# ENDS BELOW ITS STARTING CAPITAL, greens above it, deepest green at the best.
+# The pivot is a real number, not a visual midpoint - $100,000 is where the
+# strategy made nothing - which is what earns a diverging scale here.
+# 15 classes, finer than the 7 it replaces, because Lode wanted smaller money
+# steps between colours.
+# Red/green is the classic colour-vision trap, so it is NEVER the only channel:
+# every cell prints its value, and the legend labels the pivot.
+# Both arms verified strictly monotone in lightness (OKLab: red arm
+# 0.375 -> 0.812 rising, green arm 0.985 -> 0.338 falling), and each step
+# carries >= 4.5:1 against its chosen ink.
+HEAT_PIVOT = 100_000.0
+NEG_RAMP = ["#7f0000", "#b2182b", "#d6604d", "#f4a582", "#fdae61"]
+NEG_INK = ["#ffffff", "#ffffff", "#0b0b0b", "#0b0b0b", "#0b0b0b"]
+POS_RAMP = ["#f7fcf5", "#e5f5e0", "#ccebc5", "#addd8e", "#8fce7f",
+            "#66bd63", "#41ab5d", "#238b45", "#00702f", "#00441b"]
+POS_INK = ["#0b0b0b", "#0b0b0b", "#0b0b0b", "#0b0b0b", "#0b0b0b",
+           "#0b0b0b", "#0b0b0b", "#0b0b0b", "#ffffff", "#ffffff"]
 C_BAND, C_REF = "#1b7f45", "#898781"      # band green; muted ink for the reference
 C_DD, C_POS = "#e34948", "#2a78d6"        # slot 8 red; slot 1 blue for exposure
 PANE_H = (360, 150, 130)                  # equity, drawdown, open positions
@@ -330,8 +335,8 @@ def main():
 def page(p):
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
     data = json.dumps(p)
-    ramp = json.dumps(RAMP)
-    ink = json.dumps(INK_ON_RAMP)
+    heat = json.dumps(dict(pivot=HEAT_PIVOT, neg=NEG_RAMP, negInk=NEG_INK,
+                           pos=POS_RAMP, posInk=POS_INK))
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc - R cut</title><style>
 :root {{
@@ -409,8 +414,8 @@ comparing at one bet size flatters whichever band dug the deepest hole.</span>
 <div id="panes">
   <div id="vline"></div>
   <div class="legend"><span><i style="background:var(--band)"></i>selected
-  band</span><span><i style="background:var(--ref)"></i>all trades</span>
-  <span class="note">equity at the levered bet size</span></div>
+  band</span><span class="note">equity at the levered bet size - the
+  all-trades comparison is in the table, not as a second curve</span></div>
   <div class="pane" id="chart"></div>
   <div class="legend"><span><i style="background:var(--dd)"></i>drawdown %
   below peak</span></div>
@@ -440,7 +445,7 @@ share</b>: the BASELINE's own net R is 49% one market. The best region is a
 one-step ridge, not a smooth optimum. Audit s.15.</p>
 
 <script>{lib}</script><script>
-const P = {data}, RAMP = {ramp}, INK = {ink};
+const P = {data}, H = {heat};
 
 /* Three panes, one measure each: a dual-axis plot invents correlations that
    are not in the data, so equity, drawdown and exposure never share a scale.
@@ -481,8 +486,12 @@ const cEq = mkChart(elEq, {PANE_H[0]}, false),
 const PANES = [cEq, cDD, cPos];
 const sBand = cEq.addLineSeries({{ color:'{C_BAND}', lineWidth:2,
   priceLineVisible:false, lastValueVisible:false }});
-const sRef = cEq.addLineSeries({{ color:'{C_REF}', lineWidth:1,
-  priceLineVisible:false, lastValueVisible:false }});
+/* NO REFERENCE CURVE. The "all trades" line used to sit here in grey and it
+   was actively misleading: it is a DIFFERENT cut of the grid, so it rises
+   while the selected band falls, which reads as the equity going up while the
+   drawdown pane deepens (Lode, 2026-08-10 - the numbers were always
+   consistent, the second curve was not). The comparison lives in the metrics
+   table, where the two columns cannot be mistaken for one series. */
 /* Drawdown as a BASELINE series anchored at zero, not an area series: an area
    fills from the line to the bottom of the pane, so a SHALLOW drawdown drew
    the biggest block of colour - inverted, exactly as Lode read it. A baseline
@@ -497,7 +506,6 @@ const sDD = cDD.addBaselineSeries({{
 // Open positions as BARS, like the other variant reports (Lode).
 const sPos = cPos.addHistogramSeries({{ color:'{C_POS}', base:0,
   priceLineVisible:false, lastValueVisible:false }});
-sRef.setData(P.baseline.curve.map(c => ({{time:c[0], value:c[1]}})));
 
 /* Keep the three time scales in step BY TIME, not by logical index. The panes
    hold different numbers of points - equity and drawdown change only at exits,
@@ -591,13 +599,26 @@ function rows(m, b) {{
         + '</td></tr>').join('');
 }}
 
-/* ---- heatmap: sequential ONE hue, light->dark, with the value printed in
-   every cell (the light steps sit under 3:1, so the number is the relief) and
-   a scale legend. ---- */
+/* ---- heatmap: DIVERGING at break-even. Below the starting capital the cell
+   is red through orange, above it green, deepest green at the best. Each arm
+   is scaled to its own span, because the losing side is a few thousand
+   dollars wide and the winning side is ninety - a symmetric scale would spend
+   half its colours on almost nothing. The value is printed in every cell, so
+   colour is never the only channel. ---- */
 const vals = Object.values(P.cells).filter(Boolean).map(m => m.final_6pct);
 const vMin = Math.min(...vals), vMax = Math.max(...vals);
-const binOf = v => Math.min(RAMP.length - 1,
-  Math.max(0, Math.floor((v - vMin) / (vMax - vMin) * RAMP.length)));
+function colorFor(v) {{
+  if (v < H.pivot) {{
+    const span = Math.max(H.pivot - vMin, 1e-9);
+    const i = Math.min(H.neg.length - 1,
+      Math.max(0, Math.floor((v - vMin) / span * H.neg.length)));
+    return [H.neg[i], H.negInk[i]];
+  }}
+  const span = Math.max(vMax - H.pivot, 1e-9);
+  const i = Math.min(H.pos.length - 1,
+    Math.max(0, Math.floor((v - H.pivot) / span * H.pos.length)));
+  return [H.pos[i], H.posInk[i]];
+}}
 
 function drawHeat() {{
   const ups = P.edges.map(e => e.toFixed(2)).concat(['inf']);
@@ -610,16 +631,20 @@ function drawHeat() {{
       const k = l.toFixed(2) + '|' + u;
       const m = P.cells[k];
       if (!m) {{ h += '<td class="empty"></td>'; continue; }}
-      const b = binOf(m.final_6pct);
-      h += '<td data-k="' + k + '" style="background:' + RAMP[b]
-        + ';color:' + INK[b] + '">'
+      const [bg, fg] = colorFor(m.final_6pct);
+      h += '<td data-k="' + k + '" style="background:' + bg
+        + ';color:' + fg + '">'
         + Math.round(m.final_6pct / 1000) + 'k</td>';
     }}
     h += '</tr>';
   }}
   document.getElementById('hm').innerHTML = h + '</table>';
   let lg = '<span style="margin-right:6px">' + money(vMin) + '</span>';
-  RAMP.forEach(c => {{ lg += '<span class="sw" style="background:' + c
+  H.neg.forEach(c => {{ lg += '<span class="sw" style="background:' + c
+    + '"></span>'; }});
+  lg += '<span style="margin:0 6px">' + money(H.pivot)
+    + ' break-even</span>';
+  H.pos.forEach(c => {{ lg += '<span class="sw" style="background:' + c
     + '"></span>'; }});
   lg += '<span style="margin-left:6px">' + money(vMax)
     + '</span><span style="margin-left:14px">all trades: '

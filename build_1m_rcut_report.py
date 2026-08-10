@@ -74,17 +74,19 @@ BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
 REFINE_LOWER = (0.10, 0.30)
 REFINE_UPPER = (0.40, 0.70)
 
-# Sequential ramp for the heatmap: ONE hue, light -> dark, intense at the high
-# end (Lode's ask, 2026-08-10; a rainbow ramp on magnitude is an anti-pattern).
-# Green, seven steps, lightness verified strictly monotone in OKLab
-# (0.960 -> 0.419) - monotonicity IS the correctness test for a sequential
-# ramp, so re-check it if these values ever change.
-RAMP = ["#e8f6ec", "#c2e8cf", "#94d6ab", "#5cbd82",
-        "#2f9f5e", "#1b7f45", "#0e5c30"]
-# Ink per step, chosen on measured contrast against that step (>= 4.5:1): dark
-# holds to step 5 (5.85:1), white takes over at step 6 (5.04:1).
-INK_ON_RAMP = ["#0b0b0b", "#0b0b0b", "#0b0b0b", "#0b0b0b",
-               "#0b0b0b", "#ffffff", "#ffffff"]
+# VIRIDIS, to match hyperliquid_bot's Monte-Carlo equity heatmaps (Lode,
+# 2026-08-10) - dark purple at the low end, bright yellow at the high one.
+# It is a multi-hue ramp, which is normally the rainbow anti-pattern, but
+# viridis is the documented exception: perceptually uniform, colourblind-safe,
+# and STRICTLY MONOTONE IN LIGHTNESS (OKLab 0.285 -> 0.918, verified), which
+# is the correctness test for a sequential ramp. It ships with a scale legend
+# here, as that exception requires. Re-verify monotonicity if these change.
+RAMP = ["#440154", "#443983", "#31688e", "#21918c",
+        "#35b779", "#90d743", "#fde725"]
+# Ink per step, picked on measured contrast against that step: white while the
+# ramp is dark (15.2 / 9.7 / 6.0), dark ink once it brightens (5.2 -> 15.6).
+INK_ON_RAMP = ["#ffffff", "#ffffff", "#ffffff", "#0b0b0b",
+               "#0b0b0b", "#0b0b0b", "#0b0b0b"]
 C_BAND, C_REF = "#1b7f45", "#898781"      # band green; muted ink for the reference
 C_DD, C_POS = "#e34948", "#2a78d6"        # slot 8 red; slot 1 blue for exposure
 PANE_H = (360, 150, 130)                  # equity, drawdown, open positions
@@ -348,6 +350,11 @@ b.k {{ font-weight:600; }}
    height includes its own time-axis band - a fixed height that excludes the
    axis is what clipped the labels here on 2026-08-10. */
 .pane {{ margin-top:6px; }}
+/* The three panes live in one positioned box so a single hand-drawn vertical
+   line can span all of them (see the crosshair note in the script). */
+#panes {{ position:relative; }}
+#vline {{ position:absolute; top:0; bottom:0; width:0;
+border-left:1px dashed #52514e; display:none; pointer-events:none; z-index:4; }}
 #chart {{ height:{PANE_H[0]}px; }} #chartDD {{ height:{PANE_H[1]}px; }}
 #chartPos {{ height:{PANE_H[2]}px; }}
 #bar {{ display:flex; gap:18px; align-items:center; flex-wrap:wrap;
@@ -399,20 +406,20 @@ comparing at one bet size flatters whichever band dug the deepest hole.</span>
   <label>upper cut <select id="hi"></select></label>
   <span id="risk" class="note"></span>
 </div>
-<div class="legend"><span><i style="background:var(--band)"></i>selected
-band</span><span><i style="background:var(--ref)"></i>all trades</span>
-<span class="note">equity at the levered bet size</span></div>
-<div class="pane" id="chart"></div>
-<div class="legend"><span><i style="background:var(--dd)"></i>drawdown %
-below peak</span></div>
-<div class="pane" id="chartDD"></div>
-<div class="legend"><span><i style="background:var(--pos)"></i>open positions
-(concurrent)</span><span class="note">at 1% risk each, N open = N% at
-risk</span></div>
-<div class="pane" id="chartPos"></div>
-
-<h3>Metrics</h3>
-<table id="tbl"></table>
+<div id="panes">
+  <div id="vline"></div>
+  <div class="legend"><span><i style="background:var(--band)"></i>selected
+  band</span><span><i style="background:var(--ref)"></i>all trades</span>
+  <span class="note">equity at the levered bet size</span></div>
+  <div class="pane" id="chart"></div>
+  <div class="legend"><span><i style="background:var(--dd)"></i>drawdown %
+  below peak</span></div>
+  <div class="pane" id="chartDD"></div>
+  <div class="legend"><span><i style="background:var(--pos)"></i>open
+  positions (concurrent)</span><span class="note">at 1% risk each, N open =
+  N% at risk</span></div>
+  <div class="pane" id="chartPos"></div>
+</div>
 
 <h3>Final equity at {p['target_dd']}% drawdown - the whole grid</h3>
 <div class="note">Rows are the lower cut, columns the upper. Click a cell to
@@ -420,6 +427,9 @@ load it. Blank = the upper cut is not above the lower.</div>
 <div id="hm"></div>
 <div id="hmlegend"></div>
 <div id="tip"></div>
+
+<h3>Metrics for the selected band</h3>
+<table id="tbl"></table>
 
 <p class="note warn" style="max-width:1150px"><b>Read the R columns, not the
 money.</b> A narrow band holds a few dozen trades: its win rate is noisy and
@@ -505,35 +515,29 @@ PANES.forEach(src => {{
     syncing = false;
   }});
 }});
-// One crosshair across all three panes: hovering any pane draws the vertical
-// line on the other two at the same time.
-const XHAIR_SRC = [[cEq, sBand], [cDD, sDD], [cPos, sPos]];
-let xhair = false;
-XHAIR_SRC.forEach(([src]) => {{
-  src.subscribeCrosshairMove(param => {{
-    if (xhair) return;
-    xhair = true;
-    try {{
-      XHAIR_SRC.forEach(([dst, series]) => {{
-        if (dst === src) return;
-        /* MIRROR ONLY ONTO A SERIES THAT HAS DATA. setData itself fires this
-           callback, and on a cold load the first setData runs while the other
-           two series are still empty - setCrosshairPosition on an empty series
-           throws "Value is null", and that exception propagated back OUT of
-           setData and killed the whole of show(), leaving every pane blank
-           (2026-08-10). The guard is the fix; the try/catch is the belt. */
-        if (!param.time || !series.data().length) {{
-          dst.clearCrosshairPosition();
-          return;
-        }}
-        const v = param.seriesData.get(series);
-        dst.setCrosshairPosition(v ? (v.value ?? 0) : 0, param.time, series);
-      }});
-    }} catch (e) {{
-      /* never let a decoration break the page */
-    }} finally {{ xhair = false; }}
-  }});
+/* ONE VERTICAL LINE ACROSS ALL THREE PANES, drawn by hand.
+   The library's own setCrosshairPosition was mirroring the line onto the other
+   panes ~150px away from the cursor (Lode's report3.png), and it also threw
+   during a cold load's first setData. Both problems vanish with a plain
+   overlay: the panes now share an identical width and price-scale width, so
+   THE SAME X IS THE SAME MOMENT IN ALL THREE by construction - no time
+   lookup, nothing to drift. lwc keeps its own crosshair inside whichever pane
+   is hovered, which is what draws the price and date labels. */
+const panesBox = document.getElementById('panes');
+const vline = document.getElementById('vline');
+panesBox.addEventListener('mousemove', e => {{
+  const r = panesBox.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  // Stay out of the price-scale gutter, where there is no plot to point at.
+  if (x < 0 || x > r.width - {PRICE_SCALE_W}) {{
+    vline.style.display = 'none';
+    return;
+  }}
+  vline.style.left = x + 'px';
+  vline.style.display = 'block';
 }});
+panesBox.addEventListener('mouseleave',
+  () => {{ vline.style.display = 'none'; }});
 window.addEventListener('resize', () => {{
   cEq.resize(elEq.clientWidth, {PANE_H[0]});
   cDD.resize(elDD.clientWidth, {PANE_H[1]});

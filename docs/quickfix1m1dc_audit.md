@@ -359,19 +359,54 @@ s.14's 15-50% band defending itself, since cutting into it destroys the edge.
 The plateau is what a real property looks like; the exact peak is still
 sample-chosen and 0.60 keeps 14 more trades for the same net R.
 
-**THREE CAUTIONS, and they matter more than the plateau.**
+**THE SAME SWEEP AT A CONSTANT 6% DRAWDOWN** (Lode asked for it immediately,
+and he was right to: comparing at a flat 1% flatters whichever variant was
+allowed to dig the deepest hole, because a shallower curve can simply be bet
+bigger. solve_risk.py's argument and its method - DD rises monotonically with
+risk, so bisect - applied to run_1m.portfolio_replay.)
 
-1. **It does not fix the win rate.** The best cell anywhere in the sweep is
-   41.7% against 40.9%. Not one threshold moves the stated target by a point.
-   Whatever this dial is, it is not a win-rate mechanism, and the win rate is
-   the thing s.8 says must rise.
-2. **Lower drawdown is partly just less trading.** DD keeps falling to 5.89%
-   at cut 0.30, where net R has collapsed to +36R. Drawdown alone proves
-   nothing here; only cells where net R ALSO rises carry information.
-3. **The losing streak never moves** - 7 across the whole plateau, dropping
-   to 5 only where the edge dies. Lode's drawdown concern is specifically
-   long losing streaks, and this dial does not shorten them; it makes the
-   losses inside them smaller.
+| cut | trades | wr% | netR | streak | DD@1% | final@1% | risk for 6% | final@6%DD |
+|---|---|---|---|---|---|---|---|---|
+| off | 137 | 40.9 | +52.31 | 7 | 11.20% | $160,979 | 0.535% | **$130,445** |
+| 1.50 | 136 | 40.4 | +52.30 | 7 | 11.20% | $160,966 | 0.535% | $130,437 |
+| 1.00 | 125 | 40.8 | +53.98 | 7 | 10.28% | $163,602 | 0.585% | $134,850 |
+| 0.75 | 115 | 40.9 | +57.43 | 7 | 10.88% | $168,885 | 0.551% | $135,095 |
+| 0.60 | 103 | 41.7 | +60.46 | 7 | 8.93% | $174,136 | 0.676% | $146,994 |
+| 0.50 | 89 | 41.6 | +60.61 | 7 | 8.21% | $174,938 | 0.725% | $151,300 |
+| **0.40** | 72 | **37.5** | +48.38 | **5** | 6.22% | $155,240 | 0.964% | **$153,040** |
+| 0.35 | 65 | 33.8 | +38.16 | 5 | 6.22% | $139,616 | 0.964% | $139,616 |
+| 0.30 | 55 | 32.7 | +36.00 | 5 | 5.89% | $138,441 | 1.020% | $139,234 |
+
+**THE RANKING FLIPS.** 0.40 looked like a failure at flat 1% (+48.38R against
++52.31R) and wins at equal pain, because a 6.22% drawdown can be bet nearly
+twice as large as an 11.20% one. The whole 0.40-0.60 region lands at
+$147-153k against the baseline's $130k - about 15% more money for the same
+drawdown.
+
+**FOUR CAUTIONS, and they matter more than the ranking.**
+
+1. **It does not fix the win rate, and the equal-pain winner makes it
+   WORSE.** No cut anywhere beats 41.7% at 1% risk, and 0.40 - the best cell
+   at 6% - runs 37.5% against the baseline's 40.9%. This dial trades win rate
+   for curve smoothness, which is a different bargain from the one s.8 asked
+   for.
+2. **THE EQUAL-PAIN METHOD REWARDS HAVING FEWER OBSERVATIONS.** Levering to a
+   MEASURED drawdown bets bigger precisely where the estimate is thinnest:
+   0.30's 5.89% comes from 55 trades against the baseline's 11.20% from 137,
+   and the method answers by roughly doubling the stake on the weaker
+   evidence. The daily project's own caveat - max drawdown is "the most
+   sample-dependent statistic in the project" - applies here with a leverage
+   multiplier sitting on top of it. The $153,040 is honest arithmetic on this
+   sample and is the first number that would break out of sample.
+3. **The spread inside 0.40-0.60 is not resolvable.** $147k to $153k is ~4%
+   on 137 trades over seven months. A broad region beats the baseline at
+   equal pain; where the optimum sits inside it, this sample cannot say.
+4. **Correction to an earlier claim in this section:** the losing streak does
+   NOT stay at 7 everywhere. It holds across the 0.50-0.75 plateau and drops
+   to **5** at 0.40 and below - so the deeper cuts do shorten the streak,
+   which is the drawdown mechanism Lode actually cares about. That is the
+   strongest thing in favour of the deep end, and it arrives together with
+   the worst win rates.
 
 Status: MEASURED, NOT ADOPTED. The threshold still comes from an outcome
 table, which is the rule-3 trap, and s.14's parked order stands - define

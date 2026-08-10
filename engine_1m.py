@@ -187,6 +187,8 @@ class _Position:
     risk_usd: float
     confirmed: bool = False
     stop_tightened: float = None  # set at entry-day close when tighten=True
+    rpu_range_ratio: float = None  # rpu / trailing 24h range at entry;
+                                   # None while the window is too short
 
 
 def _active_file(files, ts):
@@ -246,8 +248,11 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     pos = None
     zero_dist_entries = 0
     prev_trading_date = None
-    # Trailing high-low window for the geometry dial: bars strictly before
-    # the candidate minute, never spanning a contract splice.
+    # Trailing high-low window for the geometry ratio: bars strictly before
+    # the candidate minute, never spanning a contract splice. Maintained on
+    # EVERY run, not only when the dial is set (2026-08-11): the ratio is
+    # recorded on each trade so the charts can show it, and a variant with
+    # the dial off still owes its trades the number.
     geometry_on = (min_rpu_range_ratio is not None
                    or max_rpu_range_ratio is not None)
     win = deque()
@@ -269,6 +274,8 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             entry=pos.entry, stop=pos.stop_entry, rpu=pos.rpu,
             entry_first=pos.entry_first,
             stop_tightened=pos.stop_tightened,
+            rpu_range_ratio=(round(pos.rpu_range_ratio, 4)
+                             if pos.rpu_range_ratio is not None else None),
             exit_ts=str(exit_ts), exit=exit_price, reason=reason,
             gross_r=round(gross_r, 4), cost_r=round(cost_r, 4),
             net_r=round(net_r, 4), risk_usd=round(pos.risk_usd, 2),
@@ -345,10 +352,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
 
             # Prune the trailing window to the bars strictly before this
             # minute (it is appended to at the bottom of the loop).
-            if geometry_on:
-                cutoff = bts - RANGE_WINDOW
-                while win and win[0][0] < cutoff:
-                    win.popleft()
+            cutoff = bts - RANGE_WINDOW
+            while win and win[0][0] < cutoff:
+                win.popleft()
 
             prev_high, prev_low = run_high, run_low
             run_high = h if run_high is None else max(run_high, h)
@@ -431,36 +437,39 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                             "ladder_or_extreme" else ext
                     rpu = first - stop
                     entry_price = entry_base + ENTRY_SLIP_TICKS * tick
-                # Ladder geometry against the trailing range. Abstain when
-                # the window is too short to judge; refusing does not spend
-                # the lockout allowance, so a later minute may trigger.
+                # The geometry ratio: rpu against the trailing range. It is
+                # computed for every candidate (the trade records it); the
+                # DIAL only acts on it when set. Abstain when the window is
+                # too short to judge; refusing does not spend the lockout
+                # allowance, so a later minute may trigger.
+                ratio = None
+                if len(win) >= MIN_RANGE_BARS:
+                    rng = (max(x[1] for x in win)
+                           - min(x[2] for x in win))
+                    if rng > 0:
+                        ratio = rpu / rng
                 if geometry_on:
                     if len(win) < MIN_RANGE_BARS:
                         range_unjudged += 1
-                    else:
-                        rng = (max(x[1] for x in win)
-                               - min(x[2] for x in win))
-                        ratio = rpu / rng if rng > 0 else None
-                        if ratio is not None:
-                            if (max_rpu_range_ratio is not None
-                                    and ratio > max_rpu_range_ratio):
-                                refused_wide += 1
-                                continue
-                            if (min_rpu_range_ratio is not None
-                                    and ratio < min_rpu_range_ratio):
-                                refused_tight += 1
-                                continue
+                    elif ratio is not None:
+                        if (max_rpu_range_ratio is not None
+                                and ratio > max_rpu_range_ratio):
+                            refused_wide += 1
+                            continue
+                        if (min_rpu_range_ratio is not None
+                                and ratio < min_rpu_range_ratio):
+                            refused_tight += 1
+                            continue
                 risk_usd = cash * risk_pct / 100.0
                 pos = _Position(side=side, contract=day.contract,
                                 entry_date=day.date, entry_ts=bts,
                                 entry=entry_price, stop=stop, stop_entry=stop,
                                 rpu=rpu, entry_first=first,
-                                risk_usd=risk_usd)
+                                risk_usd=risk_usd, rpu_range_ratio=ratio)
                 entries_today += 1
                 break
             prev_c = c
-            if geometry_on:
-                win.append((bts, h, l))
+            win.append((bts, h, l))
 
         if not settled:
             pos = settle(pos)

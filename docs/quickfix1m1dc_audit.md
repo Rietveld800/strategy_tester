@@ -470,6 +470,69 @@ and it is derived from the strategy's own exit rather than from its results.
 Choosing N is the open decision; it should be argued from the exit rule and
 the traded range, never fitted to the curve.
 
+### 15c. The R-cut report, and why the LOWER cut matters (2026-08-10)
+
+`build_1m_rcut_report.py` -> `output/quickfix1m1dcRcut.{json,html}`: pick a
+lower and an upper cut in 0.10 steps, see that band's equity curve and metrics
+against all trades. 136 combinations, one engine pass each (56 min; a band is
+its own run, see the top of s.15), every cell levered to 6%.
+
+**Every one of the ten best cells has a LOWER cut of 0.20**, which no
+one-sided sweep could have shown. The neighbourhood, final at 6% DD:
+
+| lower \ upper | 0.30 | 0.40 | 0.50 | 0.60 | 0.70 | 0.80 | none |
+|---|---|---|---|---|---|---|---|
+| 0.00 | 139k | 153k | 151k | 147k | 140k | 135k | **130k** |
+| 0.10 | 139k | 153k | 151k | 147k | 140k | 135k | 130k |
+| **0.20** | 174k | **193k** | **195k** | 169k | 166k | 155k | 156k |
+| 0.30 | thin | 106k | 119k | 118k | 117k | 115k | 110k |
+| 0.40 | thin | thin | 139k | 128k | 125k | 118k | 113k |
+
+The leading cell **0.20-0.50**: 75 trades, **48.0% win rate** (baseline 40.9),
++66.23R, avg +0.88R, DD 5.65%, streak 5, $194,633 at equal 6% pain - and the
+top market falls to **DX at 21%** against the baseline's **ZW at 49%**. The
+whole 0.20 row shows that dilution (21-25%), which is the most encouraging
+statistic in the exercise: the edge stops being one market's.
+
+**The win rate finally moves here.** No one-sided cut beat 41.7%; the band
+reaches 48.0%, and 0.40-0.50 reaches 54.5% on 33 trades. So the original target
+IS reachable - through both cuts together, not either alone.
+
+**WHY the lower cut works, verified rather than assumed - and it is NOT that
+those trades lose.** Comparing 0.00-0.50 against 0.20-0.50 trade by trade: the
+19 removed sub-0.20 trades made **+22.49R**, and their removal unlocked **5 new
+trades worth +28.11R** (DX +10.07, USO +7.97, YM +5.98, ZW +5.18, one -1.09
+stop). Five trades out-earned nineteen. The sub-0.20 setups were not bad
+trades - **they were spending the one-entry-per-session allowance before a
+better-proportioned setup appeared in the same session.** Lode's defence of the
+compact clusters was right; the reason to decline them is not quality but
+OPPORTUNITY COST.
+
+That makes the lower cut a SLOT-ALLOCATION policy, not a quality filter, and it
+completes a coherent two-sided story in which both ends follow from the rules
+rather than the curve:
+- **below ~0.20**: the payoff ceiling is high (a day's travel is worth >5R) but
+  the stop sits inside ordinary noise, so the ceiling is rarely reached - and
+  under the lockout the attempt costs the session's only entry.
+- **~0.20 to ~0.50**: ceiling 2-5R AND a stop outside routine noise.
+- **above ~0.50**: the stop is safe but the payoff is capped under 2R by the
+  fixed exit (s.15b).
+
+**AND THE HONEST LIMITS, which are heavier here than anywhere above.**
+1. **The lower cut is a RIDGE, not an optimum.** Rows 0.00 and 0.10 are
+   IDENTICAL on every metric (the sub-0.10 trades never win a slot anyway), and
+   row 0.30 COLLAPSES to 106-119k. The result depends on the 0.20-0.30 band
+   being included and the 0.10-0.20 band excluded - a one-step discontinuity,
+   not a smooth region.
+2. **Five trades carry the mechanism.** +28.11R rests on four winners, one
+   trade per market. The MECHANISM (slot pre-emption) is logic and is durable;
+   the MAGNITUDE is noise.
+3. **Two fitted parameters now, not one.** Picking both cuts off this grid
+   doubles the rule-3 exposure of s.15's single threshold.
+4. **The lower cut exists only BECAUSE of the session lockout.** Remove
+   `max_entries_per_session=1` and slot scarcity disappears with it, so these
+   two rules interact - neither can be judged alone.
+
 Status: MEASURED, NOT ADOPTED, but the case has changed shape. The measurement
 is still a 137-trade sample whose net R is 49% one market (ZW - visible on
 every cell of the R-cut report), the equal-pain view rewards variants with

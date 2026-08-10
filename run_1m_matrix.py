@@ -220,12 +220,17 @@ def main():
 <title>quickfix1m1dc v2 - dial matrix</title><style>
 body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
 sans-serif; margin:0; padding:14px; }}
-#chart {{ height:430px; }} table {{ border-collapse:collapse;
-margin-top:14px; }}
-td, th {{ padding:4px 10px; border-bottom:1px solid #ddd;
+#chart {{ height:470px; }}
+/* SCOPED TO #tbl. A bare `table` rule also hits the <table> that
+   lightweight-charts builds inside the chart container, and a margin-top on
+   it pushes the whole chart down so the time axis hangs out of its box and
+   the date labels are cut in half (found on the R-cut page, 2026-08-10, and
+   this page had it too). */
+#tbl {{ border-collapse:collapse; margin-top:14px; }}
+#tbl td, #tbl th {{ padding:4px 10px; border-bottom:1px solid #ddd;
 text-align:right; }}
-td:first-child, th:first-child {{ text-align:left; }}
-td i {{ display:inline-block; width:22px; height:10px; }}
+#tbl td:first-child, #tbl th:first-child {{ text-align:left; }}
+#tbl td i {{ display:inline-block; width:22px; height:10px; }}
 </style></head><body>
 <b>quickfix1m1dc v2 - the session lockout</b>
 <span style="color:#666"> market-order entries,
@@ -244,7 +249,7 @@ removes nets about zero, so it can easily make the CURVE worse while
 improving the totals.
 Read the losing streak and the drawdown first.</span>
 <div id="chart"></div>
-<table><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
+<table id="tbl"><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
 <th>longest losing streak</th><th>max DD (R)</th><th>max DD %</th>
 <th>max DD close %</th><th>final</th>
 <th>day-2 win / day-2 loss / stop / abort</th>

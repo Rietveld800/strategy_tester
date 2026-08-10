@@ -1,20 +1,23 @@
 """The dial matrix for quickfix1m1dc v2: one pass over the data (each
 market's days/files load once), every variant run on the same inputs.
 
-GRID IN FORCE (Lode, 2026-08-07): the SESSION LOCKOUT at 1, 2 and off,
-everything else at the published baseline (no tightening, overnight
-window blocked, no confirmation clause, ladder stop). It asks what a
-market that has already traded today is worth: research_1m_levels.py
+GRID IN FORCE (Lode, 2026-08-07; geometry cut adopted into the base
+2026-08-10): the SESSION LOCKOUT at 1, 2 and off, everything else at the
+published baseline (no tightening, overnight window blocked, no
+confirmation clause, ladder stop, geometry cut 0.00/0.50). It asks what
+a market that has already traded today is worth: research_1m_levels.py
 measured the 1st trade of a market-day at 39.4% and +42.51R against the
 2nd at 21.4% and -10.39R, and the lockout is the rule that follows from
 it. Read the LOSING STREAK and the drawdown first here: the net-R gain
 is concentrated in wheat, so the case for the rule rests on the shape of
 the equity curve rather than on the total.
 
-A fourth cell rides along, off that axis: the HYBRID STOP at the
-published lockout. It is the dial left open when the confirmation clause
-went (section 10), and it belongs in the grid so it is re-measured with
-everything else instead of ageing in a report of its own.
+Three cells ride along, off that axis: the HYBRID STOP at the published
+lockout (the dial left open when the confirmation clause went, section
+10), NO GEOMETRY CUT (the off state of the adopted cut, so its case is
+re-measured on every pass rather than resting on the sample it was
+adopted on), and BAND 0.20-0.50 (the researched optimum of s.15c/15d,
+under investigation and not adopted - its lower cut is a one-step ridge).
 
 Earlier grids, all in git and written up in the audit: {tighten} x
 {window} picked the baseline (sections 6 and 7), {confirm} x {stop
@@ -41,8 +44,12 @@ OUT_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_matrix.html"
 
 # Everything sits on the published baseline; only the dial under test moves.
+# Since 2026-08-10 (audit s.15e) the baseline carries the ADOPTED geometry
+# cut, 0.00 / 0.50, so every cell here inherits it and each cell is still a
+# one-dial deviation from what is actually published.
 BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
-            stop_mode="ladder")
+            stop_mode="ladder",
+            min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50)
 VARIANTS = [
     ("lockout 1", dict(BASE, max_entries_per_session=1)),
     ("lockout 2", dict(BASE, max_entries_per_session=2)),
@@ -53,24 +60,25 @@ VARIANTS = [
     # report nobody re-runs (Lode, 2026-08-08).
     ("hybrid stop", dict(BASE, stop_mode="ladder_or_extreme",
                          max_entries_per_session=1)),
-    # Also off the lockout axis, and EXPLORATORY (Lode, 2026-08-10, in his
-    # own words "really a gamble ... basically for the fun, and yet we're
-    # going to learn something"). Audit s.14 measured the trades whose
-    # level-to-stop distance exceeds half the trailing 24h range at 55
-    # trades, 41.8% wr, a +1.92R GROSS edge and 2.74R of transaction costs
-    # - net -0.82R, costs at 143% of gross. This cell refuses them at the
-    # ENGINE, so the freed lockout allowance can hand the slot to a later
-    # trigger; the per-trade estimate could not see that. Read the drawdown
-    # first: removing near-zero-net trades that are spread across the
-    # sample can easily make the curve WORSE, which is Lode's own
-    # expectation and the reason this is a cell and not a rule.
-    ("no wide clusters", dict(BASE, max_entries_per_session=1,
-                              max_rpu_range_ratio=0.50)),
+    # The OFF state of the adopted geometry cut - what "no wide clusters"
+    # was before the cut moved into the baseline (s.15e). It stays a cell
+    # so the case for the cut is re-measured on every pass instead of
+    # resting on the sample it was adopted on.
+    ("no geometry cut", dict(BASE, max_entries_per_session=1,
+                             min_rpu_range_ratio=None,
+                             max_rpu_range_ratio=None)),
+    # UNDER INVESTIGATION, NOT ADOPTED (s.15c/15d): the researched optimum
+    # band. Its lower cut is a one-step ridge carried by five trades, which
+    # is why the baseline keeps lower 0.00; riding here keeps the ridge
+    # visible as the window grows, ahead of the parked sub-0.20 work.
+    ("band 0.20-0.50", dict(BASE, max_entries_per_session=1,
+                            min_rpu_range_ratio=0.20,
+                            max_rpu_range_ratio=0.50)),
 ]
 BASELINE_NAME = "lockout 1"               # the published run, for reference
 COLORS = {"lockout 1": "#1B9E4B", "lockout 2": "#E8A33D",
           "no lockout": "#D64545", "hybrid stop": "#3D7FE8",
-          "no wide clusters": "#8E44AD"}
+          "no geometry cut": "#8E44AD", "band 0.20-0.50": "#C2185B"}
 
 
 def entry_order_metrics(trades):
@@ -242,11 +250,14 @@ confirmation clause, ladder stop.
 <b>lockout N</b> = at most N ENTRIES per market per session, expiring at
 the session boundary; a position carried in from the previous session
 and stopped intraday does not spend the allowance.
-<b>no wide clusters</b> = EXPLORATORY (audit s.14): refuse an entry whose
-level-to-stop distance exceeds half the trailing 24h high-low range. Not
-a rule - the threshold was read off a table of outcomes, and the class it
-removes nets about zero, so it can easily make the CURVE worse while
-improving the totals.
+Every cell carries the ADOPTED geometry cut (0.00/0.50, audit s.15e):
+refuse an entry whose level-to-stop distance exceeds half the trailing
+24h high-low range.
+<b>no geometry cut</b> = that dial off, the pre-adoption baseline, kept
+so the case for the cut is re-measured on every pass.
+<b>band 0.20-0.50</b> = the researched optimum (s.15c/15d), UNDER
+INVESTIGATION and not adopted: its lower cut is a one-step ridge carried
+by five trades.
 Read the losing streak and the drawdown first.</span>
 <div id="chart"></div>
 <table id="tbl"><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>

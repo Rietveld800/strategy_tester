@@ -566,13 +566,52 @@ the hybrid-stop cell lost on in s.10 - but that was measured across ALL
 geometries, never on this class alone. Worth its own run: `stop_mode` or a
 stop multiplier, applied only where the geometry ratio is below ~0.15.
 
-Status: MEASURED, NOT ADOPTED, but the case has changed shape. The measurement
+Status at the time of 15d: MEASURED, NOT ADOPTED, but the case has changed
+shape. The measurement
 is still a 137-trade sample whose net R is 49% one market (ZW - visible on
 every cell of the R-cut report), the equal-pain view rewards variants with
 fewer observations (caution 2 above), and 15b is an argument, not yet a
 definition with an N behind it. s.14's parked order stands - the trade review
 builds the vocabulary - but the geometry ratio has gone from "a filter read off
 a table" to "a candidate with a derivation", which is a different thing.
+SUPERSEDED the same day by 15e below: the UPPER cut is adopted, the lower is
+not.
+
+### 15e. ADOPTED: lower 0.00, upper 0.50 (Lode, 2026-08-10)
+
+The geometry cut moves from measured to ADOPTED, into the published baseline
+(`run_1m.BASELINE`: `min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50`).
+Lode's reading of the R-cut grid, and the decision that follows from it:
+
+- **The upper cut is capped on hard evidence.** When 1R is too large a
+  fraction of the 24h range there is not enough potential profit left inside
+  the fixed settlement exit to be worth the risk, so the setup is skipped
+  entirely and the session screens for the next one. That is s.15b's
+  derivation (payoff capped below 2R above 0.50, downside a full -1R), and
+  the sweep agrees from the other side: shifting the band toward high
+  lower/upper values finds no profit, decay is monotone above the plateau,
+  and the plateau itself (0.40-0.55, s.15d) means nothing hangs on the exact
+  number.
+- **Very low values are also costly** - the 0.20 row of the grid beats the
+  0.00 row on every metric, and s.15c showed why (slot pre-emption under the
+  session lockout, not trade quality). The optimal band on this sample is
+  0.20-0.50.
+- **The lower cut stays 0.00 anyway.** The 0.20 ridge is a one-step
+  discontinuity carried by five trades (s.15c honest limits 1-2), and the
+  sub-0.20 class carries the highest payoff ceiling in the book. That region
+  deserves its own investigation - the parked wider-stop run of s.15d -
+  before any lower cut is adopted. Adopting only the defensible half keeps
+  the fitted-parameter count at one.
+
+What adoption changes, everywhere at once: the published baseline
+(`quickfix1m1dc_all.json`), the report the baseline builds, charter's 1m
+trade study (fewer trades, renumbered blotter links), and the dial matrix,
+whose cells all sit on the new baseline - with two watch-cells riding along,
+`no geometry cut` (the pre-adoption engine, so the case for the cut is
+re-measured on every pass instead of resting on the sample it was adopted
+on) and `band 0.20-0.50` (the researched optimum, under investigation, not
+adopted). The R-cut report stays the research record; its header carries the
+adopt decision and it opens on the adopted cell.
 
 ## 14. Path analysis of the baseline, and the two quality filters (2026-08-09)
 

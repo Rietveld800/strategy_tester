@@ -297,6 +297,39 @@ STOP_TEXT = {
 }
 
 
+def geometry_foot(p):
+    """The geometry-cut paragraph, generated from the payload's own dials so
+    a variant page states its own model rather than the baseline's."""
+    lo = p.get("min_rpu_range_ratio")
+    hi = p.get("max_rpu_range_ratio")
+    if lo is None and hi is None:
+        return ('<div class="rulefoot"><b>The geometry cut</b> is <b>off</b> '
+                'on this page: every setup is taken whatever its '
+                'level-to-stop distance measures against the trailing '
+                '24-hour range. The published baseline carries the cut at '
+                '0.00 / 0.50 (adopted 2026-08-10, audit s.15e).</div>')
+    band = (f"{lo:.2f} to {hi:.2f}" if lo and hi is not None
+            else f"at most {hi:.2f}" if hi is not None
+            else f"at least {lo:.2f}")
+    return (
+        '<div class="rulefoot"><b>The geometry cut</b> (adopted 2026-08-10, '
+        'audit s.15e): an entry is refused unless its <b>level-to-stop '
+        f'distance</b> is <b>{band}</b> of the market\'s trailing 24-hour '
+        'high-low range. Under the fixed settlement exit a wider ladder has '
+        'a mathematically capped payoff against a full -1R downside, so '
+        'this follows from the exit rule, not from the outcome table; the '
+        'upper cut sits on a measured plateau (0.40-0.55). A refused entry '
+        'does not spend the session-lockout allowance, so a later minute '
+        'may trigger instead. With fewer than '
+        f'{engine_1m.MIN_RANGE_BARS} bars of trailing window the cut '
+        'abstains rather than refuses.'
+        + ('' if (lo or 0) > 0 else ' The lower cut is deliberately '
+           '<b>0.00</b>, i.e. no lower cut: the researched 0.20 ridge is a '
+           'one-step discontinuity, and the sub-0.20 region has its own '
+           'investigation parked.')
+        + '</div>')
+
+
 def rules_html(p):
     slip = (f'{engine_1m.ENTRY_SLIP_TICKS} ticks on entry, '
             f'{engine_1m.SLIP_STOP_TICKS} on a stop, '
@@ -358,6 +391,7 @@ def rules_html(p):
   carried in from the previous session and stopped intraday does not spend
   the allowance. Measured before it was built: the 1st trade of a market-day
   won 39.4% for +42.51R, the 2nd won 21.4% for -10.39R.</div>
+  {geometry_foot(p)}
   <div class="rulefoot"><b>Dials</b>, at the setting this page is built at:
   the <b>confirmation clause</b> is
   <b>{'on' if confirm else 'off'}</b>, stop tightening at the entry-day

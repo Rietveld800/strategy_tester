@@ -55,9 +55,18 @@ ACTIVATION_UTC = "07:35"
 # second matrix: dropping it improved net R, win rate AND drawdown on an
 # identical set of 153 entries). The stop stays ladder-anchored; the
 # hybrid is a live dial, not retired. run_1m_matrix.py runs the grid.
+# THE GEOMETRY CUT IS ADOPTED (Lode, 2026-08-10, audit s.15e): refuse an
+# entry whose level-to-stop distance exceeds 0.50 of the trailing 24h
+# range - under the fixed settlement exit a wider ladder has a
+# mathematically capped payoff against a full -1R downside (s.15b), and
+# the upper cut is a measured plateau (0.40-0.55), not a fitted point.
+# The LOWER cut is deliberately 0.00 = no lower cut: the 0.20 ridge is a
+# one-step discontinuity and the sub-0.20 region has its own
+# investigation parked (s.15d). Do not raise it without that work.
 BASELINE = dict(tighten=False, allow_pre_activation=False,
                 confirm=False, stop_mode="ladder",
-                max_entries_per_session=1)
+                max_entries_per_session=1,
+                min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50)
 STAT_SETTLEMENT = 3
 FILES_FROM = date(2025, 12, 20)
 ETF_MATCH_MIN = 0.90

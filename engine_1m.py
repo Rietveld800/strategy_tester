@@ -78,14 +78,17 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
 - LADDER GEOMETRY IS A DIAL (`min_rpu_range_ratio` /
   `max_rpu_range_ratio`, both None = off, 2026-08-10). Refuse an entry
   whose risk distance (level-to-stop) is smaller / larger than the given
-  fraction of the market's trailing 24-hour high-low range. EXPLORATORY,
-  at Lode's request and with his own warning attached: the audit's s.14
-  measurement says the > 0.50 class pays 143% of its gross edge in
-  transaction costs and nets nothing, while the < 0.15 class carries the
-  biggest per-win payoff in the book - but the band was read off a table
-  of outcomes, which is the curve-fitting this project removed rule 3
-  for. Nothing here is a rule until it can be DEFINED without the
-  outcome table. Mechanics, so the number is reproducible:
+  fraction of the market's trailing 24-hour high-low range. ADOPTED into
+  the published baseline at 0.00 / 0.50 (Lode, 2026-08-10, audit s.15e).
+  The upper cut has a derivation, not just a table: under the fixed
+  settlement exit a ladder wider than half a day's travel has a payoff
+  capped below 2R against a full -1R downside (s.15b), and the sweep
+  shows a plateau at 0.40-0.55, not a fitted point. The LOWER cut is
+  deliberately 0.00 = no lower cut: the researched 0.20 ridge is a
+  one-step discontinuity carried by five trades, and the sub-0.20 region
+  (compact ladders, possibly with a wider stop) has its own
+  investigation parked (s.15d). Mechanics, so the number is
+  reproducible:
   * The window is the trailing RANGE_WINDOW of wall clock,
     holding the bars strictly BEFORE the candidate minute - the same
     definition s.14 measured, so its buckets and this dial agree.

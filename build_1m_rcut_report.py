@@ -473,7 +473,13 @@ market's trailing 24-hour high-low range. Every band is its OWN engine run - a
 refused entry does not spend the session-lockout allowance, so a band takes
 trades the baseline never reached and is not a slice of it. Each cell is
 levered to a constant <b class="k">{p['target_dd']}% max drawdown</b>, because
-comparing at one bet size flatters whichever band dug the deepest hole.</span>
+comparing at one bet size flatters whichever band dug the deepest hole.
+<b class="k">ADOPTED 2026-08-10 (Lode): lower 0.00, upper 0.50</b> is the
+published baseline (audit s.15e). The upper cut is capped on hard evidence -
+a plateau at 0.40-0.55 plus the fixed-exit payoff argument; the lower cut
+stays 0.00 because the 0.20 ridge is a one-step discontinuity and the low
+band has its own investigation parked. "All trades" on this page is the
+PRE-ADOPTION engine, no cuts.</span>
 </div>
 <div id="bar">
   <label>lower cut <select id="lo"></select></label>
@@ -815,7 +821,8 @@ function nearest(sel, want) {{
 }}
 function init() {{
   drawHeat();
-  lo.value = nearest(lo, 0.20);
+  // Open on the ADOPTED cell (0.00/0.50, s.15e), not the researched ridge.
+  lo.value = nearest(lo, 0.00);
   hi.value = nearest(hi, 0.50);
   if (parseFloat(hi.value) <= parseFloat(lo.value)) hi.value = 'inf';
   show();

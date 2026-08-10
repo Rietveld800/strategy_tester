@@ -409,10 +409,10 @@ def rules_html(p):
 
 
 def blotter_html(trades, money_of, links):
-    cols = [("Market", "l", 10), ("Side", "l", 5), ("In (UTC)", "l", 13),
-            ("Out (UTC)", "l", 13), ("Held", "", 6), ("In", "", 8.5),
-            ("Out", "", 8.5), ("Stop", "", 8.5), ("R", "", 5.5),
-            ("P&amp;L $", "", 8), ("Reason", "l", 14)]
+    cols = [("Market", "l", 10), ("Side", "l", 5), ("In (UTC)", "l", 12.5),
+            ("Out (UTC)", "l", 12.5), ("Held", "", 5.5), ("In", "", 8),
+            ("Out", "", 8), ("Stop", "", 8), ("R/24h", "", 6),
+            ("R", "", 5.5), ("P&amp;L $", "", 7.5), ("Reason", "l", 11.5)]
     head = "".join(
         f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
         f'<span class="ar"></span></th>'
@@ -425,6 +425,10 @@ def blotter_html(trades, money_of, links):
                 .total_seconds() / 60.0)
         link = links.get(tr["market"])
         name = esc(tr["market"])
+        # The geometry ratio the adopted cut decides on; a trade whose 24h
+        # window was too short to judge has none and sorts below the rest.
+        ratio = tr.get("rpu_range_ratio")
+        ratio_txt = f"{ratio:.2f}" if ratio is not None else "&mdash;"
         cell = (f'<a href="{link[0]}&amp;t={link[1][t]}" target="_blank" '
                 f'title="{esc(link[2])}, trade {link[1][t]} in the 1m study">'
                 f'{name}</a>') if link else name
@@ -440,6 +444,8 @@ def blotter_html(trades, money_of, links):
             f'<td class="mono" data-s="{tr["entry"]}">{price(tr["entry"])}</td>'
             f'<td class="mono" data-s="{tr["exit"]}">{price(tr["exit"])}</td>'
             f'<td class="mono" data-s="{tr["stop"]}">{price(tr["stop"])}</td>'
+            f'<td class="mono" data-s="{ratio if ratio is not None else -1}">'
+            f'{ratio_txt}</td>'
             f'<td class="mono {cls(tr["net_r"])}" data-s="{tr["net_r"]}">'
             f'{signed(tr["net_r"])}</td>'
             f'<td class="mono {cls(m["pnl_usd"])}" data-s="{m["pnl_usd"]:.2f}">'

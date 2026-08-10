@@ -533,6 +533,39 @@ rather than the curve:
    `max_entries_per_session=1` and slot scarcity disappears with it, so these
    two rules interact - neither can be judged alone.
 
+### 15d. The refined grid, and what is parked for next time (2026-08-10)
+
+The R-cut report was refined to 0.05 steps where the grid turns (lower
+0.10-0.30, upper 0.40-0.70): 21 edges, 231 combinations, every cell levered to
+6%. `build_1m_rcut_report.py` -> `output/quickfix1m1dcRcut.{json,html}`.
+
+Best cells, minimum 30 trades, at equal 6% pain:
+
+| band | n | wr% | netR | PF | W/L streak | max pos | top market | final@6% |
+|---|---|---|---|---|---|---|---|---|
+| **0.20-0.55** | 80 | 47.5 | +66.54 | 2.50 | 5W/5L | 4 | DX 20% | **$194,769** |
+| 0.20-0.50 | 75 | 48.0 | +66.23 | 2.58 | 5W/5L | 3 | DX 21% | $194,633 |
+| 0.20-0.40 | 58 | 44.8 | +54.00 | 2.51 | 3W/4L | 3 | DX 25% | $193,039 |
+| 0.20-0.45 | 73 | 46.6 | +62.85 | 2.50 | 4W/5L | 3 | DX 22% | $187,908 |
+| all trades | 137 | 40.9 | +52.31 | 1.66 | 6W/7L | 5 | ZW 49% | $130,445 |
+
+The half-steps earned their runtime by showing that **the upper cut is a
+PLATEAU, not a point**: 0.40 through 0.55 all land within a few thousand
+dollars, so nothing hangs on the exact value. The lower cut at 0.20 stays the
+sharp RIDGE of s.15c. Concurrent exposure also falls from 5 positions to 3-4,
+so the better cells put less on the table at once - something the equity curve
+alone never showed.
+
+**PARKED FOR NEXT TIME (Lode, 2026-08-10): the lower cut's 0.00-0.15 region,
+with a slightly WIDER STOP.** Those are the compact ladders whose stop sits
+inside ordinary noise (s.14) and which spend the session's only entry before a
+better setup appears (s.15c) - but they carry the highest payoff ceiling in the
+book, since a day's travel is worth more than 5R there (s.15b). A wider stop
+would buy survivability at the cost of R per move, which is exactly the trade
+the hybrid-stop cell lost on in s.10 - but that was measured across ALL
+geometries, never on this class alone. Worth its own run: `stop_mode` or a
+stop multiplier, applied only where the geometry ratio is below ~0.15.
+
 Status: MEASURED, NOT ADOPTED, but the case has changed shape. The measurement
 is still a 137-trade sample whose net R is 49% one market (ZW - visible on
 every cell of the R-cut report), the equal-pain view rewards variants with

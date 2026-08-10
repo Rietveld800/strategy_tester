@@ -86,6 +86,11 @@ REFINE_UPPER = (0.40, 0.70)
 # 0.375 -> 0.812 rising, green arm 0.985 -> 0.338 falling), and each step
 # carries >= 4.5:1 against its chosen ink.
 HEAT_PIVOT = 100_000.0
+# The red arm runs from a FIXED floor, not from the observed minimum (Lode,
+# 2026-08-10). Anchoring it to the worst cell made a $96.6k result the
+# darkest red the scale can show, which reads as a catastrophe when it is a
+# 3% loss; from $90,000 the colours sit where the money actually is.
+HEAT_MIN = 90_000.0
 NEG_RAMP = ["#7f0000", "#b2182b", "#d6604d", "#f4a582", "#fdae61"]
 NEG_INK = ["#ffffff", "#ffffff", "#0b0b0b", "#0b0b0b", "#0b0b0b"]
 POS_RAMP = ["#f7fcf5", "#e5f5e0", "#ccebc5", "#addd8e", "#8fce7f",
@@ -163,13 +168,54 @@ def exposure(trades):
     return series, peak, (round(area / span, 2) if span else 0.0)
 
 
-def drawdown_series(curve, start_capital=100_000.0):
-    """Percent below the running peak, at each point of the equity curve.
-    Plotted NEGATIVE so the pane reads downward from zero."""
-    out, peak = [], start_capital
+DAY = 86400
+
+
+def daily_equity(curve, start_capital=100_000.0):
+    """The equity curve resampled to ONE POINT PER CALENDAR DAY, carried
+    forward across days with no exit.
+
+    WHY, and it is not cosmetic (Lode, 2026-08-10): lightweight-charts spaces
+    points by INDEX, not by time. Fed the raw per-exit curve it gave a busy
+    month more width than a quiet one - "months like feb and mei tend to take
+    longer" - so the axis was not a time axis at all and dates repeated. One
+    point per day makes index spacing and time spacing the same thing, which
+    is also what lets the three panes be read against each other."""
+    if not curve:
+        return []
+    by_day = {}
     for ts, eq in curve:
-        peak = max(peak, eq)
+        by_day[ts // DAY] = eq          # last equity of that day wins
+    lo, hi = min(by_day), max(by_day)
+    out, last = [((lo - 1) * DAY, start_capital)], start_capital
+    for d in range(lo, hi + 1):
+        last = by_day.get(d, last)
+        out.append((d * DAY, round(last, 2)))
+    return out
+
+
+def drawdown_series(daily):
+    """Percent below the running peak, on the DAILY closes plotted beside it.
+    Negative, so the pane reads downward from zero."""
+    out, peak = [], None
+    for ts, eq in daily:
+        peak = eq if peak is None else max(peak, eq)
         out.append((ts, -round((peak - eq) / peak * 100.0, 3)))
+    return out
+
+
+def daily_exposure(pos_series, daily):
+    """Concurrent open positions, as the DAY'S MAXIMUM - the peak amount of
+    the account on the table that day, on the same daily grid as the rest."""
+    per_day = {}
+    for ts, n in pos_series:
+        d = ts // DAY
+        per_day[d] = max(per_day.get(d, 0), n)
+    out, last = [], 0
+    for ts, _ in daily:
+        d = ts // DAY
+        last = per_day.get(d, 0)
+        out.append((ts, last))
     return out
 
 
@@ -191,6 +237,16 @@ def measure(trades):
     else:
         final6, dd6, curve6 = final1, dd1, curve1
     pos_series, pos_max, pos_mean = exposure(trades)
+    # Display grids: one point per calendar day, so the axis is a time axis.
+    d_curve = daily_equity(curve6)
+    d_dd = drawdown_series(d_curve)
+    d_pos = daily_exposure(pos_series, d_curve)
+    # The daily-close figure for the TABLE is taken at 1% risk, so it sits
+    # beside the intraday one on the same basis. Reading it off the levered
+    # curve instead just restates the 6% target, which every cell hits by
+    # construction and which tells the reader nothing.
+    dd_close = -min((v for _, v in drawdown_series(daily_equity(curve1))),
+                    default=0.0)
     per_market = {}
     for t in trades:
         per_market[t["market"]] = per_market.get(t["market"], 0.0) + t["net_r"]
@@ -203,6 +259,9 @@ def measure(trades):
         avg_loss=round(-gross_l / len(losses), 2) if losses else None,
         longest_losing_streak=lose_streak, longest_winning_streak=win_streak,
         max_dd_r=dd_r, max_dd_pct=round(dd1, 2), final_1pct=round(final1, 2),
+        # The pane draws daily closes, so the depth it SHOWS gets its own row -
+        # the worst-reached figure above is deeper by construction.
+        max_dd_close_pct=round(dd_close, 2),
         risk_6pct=round(risk6, 3) if risk6 else None,
         final_6pct=round(final6, 2), max_dd_6pct=round(dd6, 2),
         pos_max=pos_max, pos_mean=pos_mean,
@@ -210,8 +269,9 @@ def measure(trades):
         top_market_share=round(100 * top_r / netr, 0) if netr > 0 else None,
         exit_mix={r: sum(1 for t in trades if t["reason"] == r)
                   for r in ("stop", "close1", "no_confirm", "data_end")},
-        # Curves are the LEVERED ones: equal pain is the comparison asked for.
-        curve=curve6, dd=drawdown_series(curve6), pos=pos_series,
+        # Curves are the LEVERED ones (equal pain is the comparison asked
+        # for), on the daily grid the panes need.
+        curve=d_curve, dd=d_dd, pos=d_pos,
         levered=bool(risk6),
     )
 
@@ -256,22 +316,30 @@ def main():
             pass
 
     t0 = time.time()
+    # LAZY: loading every market costs ~100s, and a rebuild that only changes
+    # how the metrics are computed needs no market data at all - the trades
+    # are already cached. Load on the first cache miss, not before.
     loaded = []
-    for key in run_1m.ELIGIBLE_FUTURES + run_1m.ETFS:
-        try:
-            inputs, excluded = run_1m.market_inputs(key)
-        except Exception as exc:
-            print(f"{key}: ERROR {type(exc).__name__}: {exc}", flush=True)
-            continue
-        if inputs is not None:
-            loaded.append((key, inputs))
-    print(f"loaded {len(loaded)} markets in {time.time() - t0:.0f}s",
-          flush=True)
+
+    def markets():
+        if not loaded:
+            for key in run_1m.ELIGIBLE_FUTURES + run_1m.ETFS:
+                try:
+                    inputs, excluded = run_1m.market_inputs(key)
+                except Exception as exc:
+                    print(f"{key}: ERROR {type(exc).__name__}: {exc}",
+                          flush=True)
+                    continue
+                if inputs is not None:
+                    loaded.append((key, inputs))
+            print(f"loaded {len(loaded)} markets in {time.time() - t0:.0f}s",
+                  flush=True)
+        return loaded
 
     def run(lo, hi):
         dials = dict(BASE, min_rpu_range_ratio=lo, max_rpu_range_ratio=hi)
         trades = []
-        for key, (days, files, tick, note) in loaded:
+        for key, (days, files, tick, note) in markets():
             tr, _ = run_1m.engine_1m.run_market(days, files, tick, **dials)
             for t in tr:
                 t["market"] = key
@@ -335,7 +403,8 @@ def main():
 def page(p):
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
     data = json.dumps(p)
-    heat = json.dumps(dict(pivot=HEAT_PIVOT, neg=NEG_RAMP, negInk=NEG_INK,
+    heat = json.dumps(dict(pivot=HEAT_PIVOT, floor=HEAT_MIN,
+                           neg=NEG_RAMP, negInk=NEG_INK,
                            pos=POS_RAMP, posInk=POS_INK))
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc - R cut</title><style>
@@ -418,7 +487,8 @@ comparing at one bet size flatters whichever band dug the deepest hole.</span>
   all-trades comparison is in the table, not as a second curve</span></div>
   <div class="pane" id="chart"></div>
   <div class="legend"><span><i style="background:var(--dd)"></i>drawdown %
-  below peak</span></div>
+  below peak</span><span class="note">on daily closes; the worst intraday
+  figure is in the table</span></div>
   <div class="pane" id="chartDD"></div>
   <div class="legend"><span><i style="background:var(--pos)"></i>open
   positions (concurrent)</span><span class="note">at 1% risk each, N open =
@@ -578,6 +648,8 @@ function rows(m, b) {{
     ['avg open positions', m.pos_mean, b.pos_mean],
     ['max DD (R)', m.max_dd_r, b.max_dd_r],
     ['max DD % at 1% risk', m.max_dd_pct + '%', b.max_dd_pct + '%'],
+    ['max DD % on daily closes, 1% risk',
+     m.max_dd_close_pct + '%', b.max_dd_close_pct + '%'],
     ['final at 1% risk', money(m.final_1pct), money(b.final_1pct)],
     ['risk for ' + P.target_dd + '% DD',
      m.risk_6pct ? m.risk_6pct + '%' : 'never reaches it',
@@ -609,9 +681,10 @@ const vals = Object.values(P.cells).filter(Boolean).map(m => m.final_6pct);
 const vMin = Math.min(...vals), vMax = Math.max(...vals);
 function colorFor(v) {{
   if (v < H.pivot) {{
-    const span = Math.max(H.pivot - vMin, 1e-9);
+    // From a FIXED floor, so the reds mean the same money on every rebuild.
+    const span = Math.max(H.pivot - H.floor, 1e-9);
     const i = Math.min(H.neg.length - 1,
-      Math.max(0, Math.floor((v - vMin) / span * H.neg.length)));
+      Math.max(0, Math.floor((v - H.floor) / span * H.neg.length)));
     return [H.neg[i], H.negInk[i]];
   }}
   const span = Math.max(vMax - H.pivot, 1e-9);
@@ -639,7 +712,7 @@ function drawHeat() {{
     h += '</tr>';
   }}
   document.getElementById('hm').innerHTML = h + '</table>';
-  let lg = '<span style="margin-right:6px">' + money(vMin) + '</span>';
+  let lg = '<span style="margin-right:6px">' + money(H.floor) + '</span>';
   H.neg.forEach(c => {{ lg += '<span class="sw" style="background:' + c
     + '"></span>'; }});
   lg += '<span style="margin:0 6px">' + money(H.pivot)

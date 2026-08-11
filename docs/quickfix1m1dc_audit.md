@@ -319,11 +319,45 @@ index/future split is deliberate: NQ and ES pass while the NASDAQ100 and
 SPX500 cash indexes fail, and the CME Bitcoin future is out along with the
 Binance pair.
 
-Two cells ride in the matrix so the filter is re-measured on every pass:
+Two cells rode in the matrix so the filter was re-measured on every pass:
 **market filter** (the published dials on the approved markets) and
 **market filter band 0.20-0.50** (the same markets with the researched
-band of s.15c/15d on top). Status: a MEASURED view, not an adopted change
-to the published baseline - the baseline still runs the whole universe.
+band of s.15c/15d on top). Status at the time of writing: a MEASURED view,
+not an adopted change. SUPERSEDED the same day by s.17: both are adopted.
+
+## 17. ADOPTED: the market filter, the 0.20-0.50 band, and the 6% sizing (Lode, 2026-08-11)
+
+Three decisions in one move, taken off the matrix of s.16:
+
+1. **The human market filter is the published universe.** `run_1m.py`
+   trades `HUMAN_APPROVED` (22 markets, s.16) and nothing else; the
+   rejected markets appear in the report's exclusions with that reason.
+   Explicit command-line keys bypass the filter, so a single-market debug
+   run of a rejected market stays possible.
+2. **The geometry band's lower cut rises from 0.00 to 0.20.** This adopts
+   the researched optimum of s.15c/15d and REVERSES s.15e's deliberate
+   choice to hold the lower cut at 0.00. The caution that drove s.15e is
+   not withdrawn, it is accepted: the 0.20 edge is a one-step ridge whose
+   measured gain rests on five trades, and the sub-0.20 wider-stop
+   investigation stays parked (s.15d). The matrix carries `band
+   0.00-0.50` as the previous state, so what the ridge is worth keeps
+   being re-measured as the window grows.
+3. **The published report is sized to the 6% drawdown budget.** The page
+   no longer shows 1%: `build_baseline()` solves risk per trade by
+   bisection so the worst drawdown reached intraday is 6.0% - the same
+   TARGET_DD the daily project publishes at - and states the number. The
+   trade list is untouched; risk moves only the money columns.
+
+The matrix rebased to match (every cell now inherits the band and the
+filter), and each adopted rule keeps its off/previous state as a
+watch-cell: `no geometry cut`, `band 0.00-0.50`, `no market filter`.
+The adopted baseline on the current window (to 2026-08-07), at 1%:
+**59 trades, 49.2% wr, +57.88R, streak 4, max DD 4.68%, $173,846** -
+against the pre-adoption 89 trades / 41.6% / +60.61R / streak 7 / 8.21% /
+$174,938. The filter and the lower cut together give up a little total R
+for the flattest curve in the book, which is the drawdown-first framing
+this project set in its opening lines. The R-cut page remains the
+research record and its grid still runs the whole universe with no cuts.
 
 ## 15. The wide-cluster cell, measured (2026-08-10)
 

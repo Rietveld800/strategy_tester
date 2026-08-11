@@ -55,18 +55,18 @@ ACTIVATION_UTC = "07:35"
 # second matrix: dropping it improved net R, win rate AND drawdown on an
 # identical set of 153 entries). The stop stays ladder-anchored; the
 # hybrid is a live dial, not retired. run_1m_matrix.py runs the grid.
-# THE GEOMETRY CUT IS ADOPTED (Lode, 2026-08-10, audit s.15e): refuse an
-# entry whose level-to-stop distance exceeds 0.50 of the trailing 24h
-# range - under the fixed settlement exit a wider ladder has a
-# mathematically capped payoff against a full -1R downside (s.15b), and
-# the upper cut is a measured plateau (0.40-0.55), not a fitted point.
-# The LOWER cut is deliberately 0.00 = no lower cut: the 0.20 ridge is a
-# one-step discontinuity and the sub-0.20 region has its own
-# investigation parked (s.15d). Do not raise it without that work.
+# THE GEOMETRY CUT IS ADOPTED (upper 0.50 on 2026-08-10, audit s.15e;
+# lower raised to 0.20 on 2026-08-11, s.17): refuse an entry whose
+# level-to-stop distance is above 0.50 or below 0.20 of the trailing 24h
+# range. The upper cut has a derivation (payoff capped under the fixed
+# exit, s.15b) and sits on a measured plateau; the LOWER cut is the
+# researched band's edge, adopted at Lode's decision WITH the s.15c
+# caution on record - it is a one-step ridge carried by five trades, and
+# the sub-0.20 wider-stop investigation stays parked (s.15d).
 BASELINE = dict(tighten=False, allow_pre_activation=False,
                 confirm=False, stop_mode="ladder",
                 max_entries_per_session=1,
-                min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50)
+                min_rpu_range_ratio=0.20, max_rpu_range_ratio=0.50)
 STAT_SETTLEMENT = 3
 FILES_FROM = date(2025, 12, 20)
 ETF_MATCH_MIN = 0.90
@@ -94,6 +94,22 @@ ETFS = ["URA", "VIXY",
 # shows integer-rounded UTC-day bars; inline gate verifies that.
 BINANCE = {"BTCB": ("Bitcoin_Per_USD_Binance", "BTCUSDT"),
            "ETHB": ("Ethereum_Per_USD_Binance", "ETHUSDT")}
+
+# THE HUMAN MARKET FILTER, ADOPTED into the baseline (Lode, reviewed
+# 2026-08-11 audit s.16, adopted s.17): every market with 1m data was
+# inspected by eye on the 1m study and judged on its price-bar and
+# reversal structure and dimensions - never on that market's backtest
+# result (BTC CME made money and is out; UDOW lost and is in). The
+# published run trades these and nothing else; the markets it removes
+# are listed in the report under the exclusions with this reason.
+# Explicit keys on the command line bypass it (a single-market debug run
+# of a rejected market must stay possible).
+HUMAN_APPROVED = frozenset([
+    "GC", "ZW", "YM", "6E", "6J", "LE", "HG", "CL", "NG", "PA", "PL",
+    "NQ", "ES", "SI", "DX", "CC", "KC",
+    "URA", "VIXY", "USO", "UNG", "UDOW"])
+FILTER_REASON = ("human market filter: failed the chart-structure "
+                 "inspection (audit s.16)")
 
 OBSOLETE_INFO = {
     "UDOW": "ProShares_UltraPro_Dow",
@@ -395,8 +411,15 @@ def portfolio_replay(all_trades, start_capital=100_000.0, risk_pct=1.0):
 
 
 def main():
-    keys = sys.argv[1:] or (ELIGIBLE_FUTURES + ETFS + list(BINANCE))
+    keys = sys.argv[1:]
     all_trades, rows, skipped = [], [], []
+    if not keys:
+        universe = ELIGIBLE_FUTURES + ETFS + list(BINANCE)
+        keys = [k for k in universe if k in HUMAN_APPROVED]
+        for k in universe:
+            if k not in HUMAN_APPROVED:
+                skipped.append({"market": k, "reason": FILTER_REASON})
+                print(f"{k}: EXCLUDED - {FILTER_REASON}", flush=True)
     for key in keys:
         try:
             trades, summary = run_market(key, **BASELINE)
@@ -442,7 +465,9 @@ def main():
         markets=rows, excluded=skipped, trades=all_trades),
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report
-    build_1m_report.build()
+    # The published page is sized to the 6% drawdown budget (Lode,
+    # 2026-08-11): risk per trade solved on every refresh, page states it.
+    build_1m_report.build_baseline()
     # The active-list builds read the JSON just written, so they stay in
     # step with the baseline on every refresh; the 6pct page re-solves
     # its risk against the fresh data and prints what it landed on.

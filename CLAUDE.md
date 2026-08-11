@@ -554,20 +554,26 @@ tick beyond the 5th reversal, 4th when only four; ladder must carry 4),
 R denominated level-to-stop, exit at next-day settlement. Baseline dials
 (run_1m.BASELINE): no tightening, no pre-activation entries, **no
 confirmation clause**, ladder stop, **session lockout at 1**, and the
-**GEOMETRY CUT at 0.00 / 0.50** (ADOPTED, Lode 2026-08-10, audit s.15e):
-an entry is refused when its level-to-stop distance exceeds 0.50 of the
-trailing 24h high-low range - under the fixed settlement exit that
-ladder's payoff is mathematically capped against a full -1R downside
-(s.15b), and the upper cut sits on a measured plateau (0.40-0.55). The
-LOWER cut is deliberately 0.00 = off: the researched 0.20-0.50 optimum
-band's lower edge is a one-step ridge carried by five trades, and the
-sub-0.20 region (compact ladders, possibly with a wider stop) has its
-own investigation PARKED (s.15d) - do not raise the lower cut without
-that work. A refused entry does not spend the lockout allowance, so a
-band SHIFTS the trade list rather than slicing it; that is why every
-band in `build_1m_rcut_report.py` is its own engine run. The matrix
-carries `no geometry cut` (the pre-adoption engine) and `band 0.20-0.50`
-(under investigation) as watch-cells.
+**GEOMETRY BAND at 0.20 / 0.50** (upper adopted 2026-08-10 s.15e, lower
+raised from 0.00 on 2026-08-11 s.17): an entry is refused when its
+level-to-stop distance is above 0.50 or below 0.20 of the trailing 24h
+high-low range. The upper cut has a derivation (payoff capped under the
+fixed exit, s.15b, plateau 0.40-0.55); the lower cut is the researched
+band's edge, adopted WITH the s.15c caution on record (a one-step ridge
+carried by five trades; the sub-0.20 wider-stop investigation stays
+PARKED, s.15d). The published universe is the **HUMAN MARKET FILTER**
+(`run_1m.HUMAN_APPROVED`, 22 markets, s.16): Lode's eye inspection of
+chart structure, never a market's backtest result; explicit CLI keys
+bypass it for debug runs. The published report page is **sized to the 6%
+drawdown budget** (s.17): `build_baseline()` solves risk per trade by
+bisection to a 6.0% worst-reached drawdown and states the number - the
+JSON and matrix stay at 1%, since R is risk-independent. A refused entry
+does not spend the lockout allowance, so a band SHIFTS the trade list
+rather than slicing it; that is why every band in
+`build_1m_rcut_report.py` is its own engine run (that grid stays
+whole-universe, no cuts - the research record). Every adopted rule keeps
+its off/previous state as a matrix watch-cell: `no geometry cut`, `band
+0.00-0.50`, `no market filter`.
 **THE SESSION LOCKOUT** (`max_entries_per_session`, default 1, Lode
 2026-08-07, audit section 11): at most one ENTRY per market per session,
 expiring at the session boundary. NOT part of rules 1-3 by explicit choice --
@@ -609,13 +615,16 @@ WINDOW_END had been frozen at the pilot's purchase window, silently capping
 the chain, and with it fixed 20 markets carry 1m bars six days further. The
 rerun is PURELY ADDITIVE (6 trades added, 0 removed, no pre-existing R moved,
 no data_end exits). The daily refresh has carried the window on to
-2026-08-07, and since the GEOMETRY-CUT ADOPTION (2026-08-10, s.15e) the live
-baseline is **89 trades, 41.6% wr, +60.61R, 8.21% max DD, $174,938**. The
-pre-adoption engine stays visible as the matrix's `no geometry cut` cell
-(137 trades, +52.31R, 11.20% DD, $160,979 on the same window). Figures
-quoted from before 2026-08-07 are pre-correction; the shape of the arguments
-survived, the numbers did not. Expect the live line to move with every
-refresh: the dated tables in the audit are records, not current claims.
+2026-08-07, and since the 2026-08-11 ADOPTIONS (market filter + band
+0.20/0.50 + 6% sizing, s.17) the live baseline is **59 trades, 49.2% wr,
++57.88R, streak 4, 4.68% max DD, $173,846 at 1%**; the published page shows
+the 6%-solved sizing (**1.289% risk per trade, $202,126, 6.00% DD** on this
+window). The whole-universe and previous-band states stay visible as the
+matrix's `no market filter`, `band 0.00-0.50` and `no geometry cut` cells.
+Figures quoted from before 2026-08-07 are pre-correction; the shape of the
+arguments survived, the numbers did not. Expect the live line to move with
+every refresh: the dated tables in the audit are records, not current
+claims.
 **THE CONFIRMATION CLAUSE WENT ON 2026-08-06** (Lode), and it is the
 MIRROR of rule 3: rule 3 was unprincipled and profitable and went anyway;
 the clause was PRINCIPLED (the intraday stand-in for the daily engine's

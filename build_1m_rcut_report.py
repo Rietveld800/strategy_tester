@@ -474,12 +474,13 @@ refused entry does not spend the session-lockout allowance, so a band takes
 trades the baseline never reached and is not a slice of it. Each cell is
 levered to a constant <b class="k">{p['target_dd']}% max drawdown</b>, because
 comparing at one bet size flatters whichever band dug the deepest hole.
-<b class="k">ADOPTED 2026-08-10 (Lode): lower 0.00, upper 0.50</b> is the
-published baseline (audit s.15e). The upper cut is capped on hard evidence -
-a plateau at 0.40-0.55 plus the fixed-exit payoff argument; the lower cut
-stays 0.00 because the 0.20 ridge is a one-step discontinuity and the low
-band has its own investigation parked. "All trades" on this page is the
-PRE-ADOPTION engine, no cuts.</span>
+<b class="k">ADOPTED (Lode): lower 0.20, upper 0.50</b> is the published
+band (upper adopted 2026-08-10, audit s.15e; lower raised from 0.00 on
+2026-08-11, s.17, with the s.15c ridge caution on record). The published
+baseline also carries the human MARKET FILTER (s.16), which this grid does
+NOT: every cell here runs the whole universe, and "all trades" is the
+pre-adoption engine with no cuts, so this page stays the research record
+the band was read from.</span>
 </div>
 <div id="bar">
   <label>lower cut <select id="lo"></select></label>
@@ -821,8 +822,8 @@ function nearest(sel, want) {{
 }}
 function init() {{
   drawHeat();
-  // Open on the ADOPTED cell (0.00/0.50, s.15e), not the researched ridge.
-  lo.value = nearest(lo, 0.00);
+  // Open on the ADOPTED band (0.20/0.50, s.15e + s.17).
+  lo.value = nearest(lo, 0.20);
   hi.value = nearest(hi, 0.50);
   if (parseFloat(hi.value) <= parseFloat(lo.value)) hi.value = 'inf';
   show();

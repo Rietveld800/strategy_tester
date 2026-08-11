@@ -79,16 +79,16 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
   `max_rpu_range_ratio`, both None = off, 2026-08-10). Refuse an entry
   whose risk distance (level-to-stop) is smaller / larger than the given
   fraction of the market's trailing 24-hour high-low range. ADOPTED into
-  the published baseline at 0.00 / 0.50 (Lode, 2026-08-10, audit s.15e).
-  The upper cut has a derivation, not just a table: under the fixed
-  settlement exit a ladder wider than half a day's travel has a payoff
-  capped below 2R against a full -1R downside (s.15b), and the sweep
-  shows a plateau at 0.40-0.55, not a fitted point. The LOWER cut is
-  deliberately 0.00 = no lower cut: the researched 0.20 ridge is a
-  one-step discontinuity carried by five trades, and the sub-0.20 region
-  (compact ladders, possibly with a wider stop) has its own
-  investigation parked (s.15d). Mechanics, so the number is
-  reproducible:
+  the published baseline: upper 0.50 on 2026-08-10 (audit s.15e), lower
+  raised to 0.20 on 2026-08-11 (s.17). The upper cut has a derivation,
+  not just a table: under the fixed settlement exit a ladder wider than
+  half a day's travel has a payoff capped below 2R against a full -1R
+  downside (s.15b), and the sweep shows a plateau at 0.40-0.55, not a
+  fitted point. The LOWER cut is the researched band's edge, adopted at
+  Lode's decision with the s.15c caution ON RECORD: it is a one-step
+  ridge carried by five trades, and the sub-0.20 region (compact
+  ladders, possibly with a wider stop) keeps its parked investigation
+  (s.15d). Mechanics, so the number is reproducible:
   * The window is the trailing RANGE_WINDOW of wall clock,
     holding the bars strictly BEFORE the candidate minute - the same
     definition s.14 measured, so its buckets and this dial agree.

@@ -306,27 +306,26 @@ def geometry_foot(p):
         return ('<div class="rulefoot"><b>The geometry cut</b> is <b>off</b> '
                 'on this page: every setup is taken whatever its '
                 'level-to-stop distance measures against the trailing '
-                '24-hour range. The published baseline carries the cut at '
-                '0.00 / 0.50 (adopted 2026-08-10, audit s.15e).</div>')
+                '24-hour range. The published baseline carries the band at '
+                '0.20 / 0.50 (adopted, audit s.15e and s.17).</div>')
     band = (f"{lo:.2f} to {hi:.2f}" if lo and hi is not None
             else f"at most {hi:.2f}" if hi is not None
             else f"at least {lo:.2f}")
     return (
-        '<div class="rulefoot"><b>The geometry cut</b> (adopted 2026-08-10, '
-        'audit s.15e): an entry is refused unless its <b>level-to-stop '
+        '<div class="rulefoot"><b>The geometry cut</b> (adopted, audit '
+        's.15e and s.17): an entry is refused unless its <b>level-to-stop '
         f'distance</b> is <b>{band}</b> of the market\'s trailing 24-hour '
         'high-low range. Under the fixed settlement exit a wider ladder has '
         'a mathematically capped payoff against a full -1R downside, so '
-        'this follows from the exit rule, not from the outcome table; the '
-        'upper cut sits on a measured plateau (0.40-0.55). A refused entry '
-        'does not spend the session-lockout allowance, so a later minute '
-        'may trigger instead. With fewer than '
+        'the upper cut follows from the exit rule and sits on a measured '
+        'plateau (0.40-0.55); the lower cut declines the compact ladders '
+        'that spend the session lockout before a better-proportioned setup '
+        'appears. A refused entry does not spend the session-lockout '
+        'allowance, so a later minute may trigger instead. With fewer than '
         f'{engine_1m.MIN_RANGE_BARS} bars of trailing window the cut '
         'abstains rather than refuses.'
-        + ('' if (lo or 0) > 0 else ' The lower cut is deliberately '
-           '<b>0.00</b>, i.e. no lower cut: the researched 0.20 ridge is a '
-           'one-step discontinuity, and the sub-0.20 region has its own '
-           'investigation parked.')
+        + ('' if (lo or 0) > 0 else ' This page runs <b>no lower cut</b>; '
+           'the published baseline carries 0.20 (s.17).')
         + '</div>')
 
 
@@ -813,6 +812,30 @@ def active25_payload():
             "data are under Not tested."))
 
 
+def build_baseline():
+    """The published baseline page, sized to a drawdown budget (Lode,
+    2026-08-11, audit s.17): risk per trade is SOLVED by bisection so the
+    worst drawdown reached intraday is 6%, the same TARGET_DD the daily
+    project publishes at. Re-solved on every build; the page states the
+    number. The trade list itself is untouched - risk moves only the
+    money columns, never the R columns."""
+    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+    risk = solve_risk_pct(data["trades"], 6.0)
+    _, _, final, max_dd = replay(data["trades"], risk)
+    data["risk_pct"] = risk
+    data["params"] = dict(data["params"], risk_pct=risk)
+    data["portfolio"].update(final=round(final, 2),
+                             max_dd_pct=round(max_dd, 2))
+    data["universe_note"] = (
+        " <b>This baseline trades the human market filter</b>: the "
+        "markets that passed the chart-structure inspection (audit s.16); "
+        "the rejected ones are under Not tested with that reason. <b>And "
+        "it is sized to a drawdown budget</b>: risk per trade is solved "
+        f"to <b>{risk:g}%</b> so the worst drawdown reached intraday is "
+        "6%, the daily project's target.")
+    build(data=data)
+
+
 def build25():
     build(data=active25_payload(),
           out=OUT_HTML.with_name("quickfix1m1dc25_report.html"))
@@ -1052,6 +1075,7 @@ def build(data=None, out=None, variant=None):
 
 if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
+    #                                               (at the solved 6% risk)
     # python build_1m_report.py --variant "hybrid stop"   one matrix cell
     # python build_1m_report.py --active25          the active-list build
     # python build_1m_report.py --active25-6pct     same, at the 6% solve
@@ -1063,4 +1087,4 @@ if __name__ == "__main__":
     elif args and args[0] == "--active25-6pct":
         build25_6pct()
     else:
-        build()
+        build_baseline()

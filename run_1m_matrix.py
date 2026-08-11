@@ -12,12 +12,17 @@ it. Read the LOSING STREAK and the drawdown first here: the net-R gain
 is concentrated in wheat, so the case for the rule rests on the shape of
 the equity curve rather than on the total.
 
-Three cells ride along, off that axis: the HYBRID STOP at the published
+Five cells ride along, off that axis: the HYBRID STOP at the published
 lockout (the dial left open when the confirmation clause went, section
 10), NO GEOMETRY CUT (the off state of the adopted cut, so its case is
 re-measured on every pass rather than resting on the sample it was
-adopted on), and BAND 0.20-0.50 (the researched optimum of s.15c/15d,
-under investigation and not adopted - its lower cut is a one-step ridge).
+adopted on), BAND 0.20-0.50 (the researched optimum of s.15c/15d,
+under investigation and not adopted - its lower cut is a one-step ridge),
+and the two HUMAN MARKET FILTER cells (Lode, 2026-08-11, audit s.16):
+the published dials restricted to the markets that passed his eye
+inspection of the 1m study, alone and with the researched band on top.
+The inspection judged price-bar and reversal structure and dimensions,
+never a market's backtest result.
 
 Earlier grids, all in git and written up in the audit: {tighten} x
 {window} picked the baseline (sections 6 and 7), {confirm} x {stop
@@ -50,35 +55,58 @@ OUT_HTML = HERE / "output" / "quickfix1m1dc_matrix.html"
 BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
             stop_mode="ladder",
             min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50)
+
+# THE HUMAN MARKET FILTER (Lode, 2026-08-11, audit s.16): every market we
+# currently hold 1m data for was reviewed BY EYE on the 1m study, judged on
+# its price-bar and reversal structure and dimensions - NOTHING to do with
+# that market's backtest result - and these are the ones that passed. Both
+# Bitcoins are out (the CME quarterly too, not only the Binance pair), the
+# obsolete softs and three of the obsolete ETFs are in.
+HUMAN_APPROVED = frozenset([
+    "GC", "ZW", "YM", "6E", "6J", "LE", "HG", "CL", "NG", "PA", "PL",
+    "NQ", "ES", "SI", "DX", "CC", "KC",
+    "URA", "VIXY", "USO", "UNG", "UDOW"])
+
+# (name, dials, markets) - markets None = the whole universe, else only
+# keys in the set are run for that cell.
 VARIANTS = [
-    ("lockout 1", dict(BASE, max_entries_per_session=1)),
-    ("lockout 2", dict(BASE, max_entries_per_session=2)),
-    ("no lockout", dict(BASE, max_entries_per_session=None)),
+    ("lockout 1", dict(BASE, max_entries_per_session=1), None),
+    ("lockout 2", dict(BASE, max_entries_per_session=2), None),
+    ("no lockout", dict(BASE, max_entries_per_session=None), None),
     # Not part of the lockout axis. The hybrid stop stayed an open dial
     # when the confirmation clause was removed (section 10), so it is
     # carried here against the published baseline rather than left in a
     # report nobody re-runs (Lode, 2026-08-08).
     ("hybrid stop", dict(BASE, stop_mode="ladder_or_extreme",
-                         max_entries_per_session=1)),
+                         max_entries_per_session=1), None),
     # The OFF state of the adopted geometry cut - what "no wide clusters"
     # was before the cut moved into the baseline (s.15e). It stays a cell
     # so the case for the cut is re-measured on every pass instead of
     # resting on the sample it was adopted on.
     ("no geometry cut", dict(BASE, max_entries_per_session=1,
                              min_rpu_range_ratio=None,
-                             max_rpu_range_ratio=None)),
+                             max_rpu_range_ratio=None), None),
     # UNDER INVESTIGATION, NOT ADOPTED (s.15c/15d): the researched optimum
     # band. Its lower cut is a one-step ridge carried by five trades, which
     # is why the baseline keeps lower 0.00; riding here keeps the ridge
     # visible as the window grows, ahead of the parked sub-0.20 work.
     ("band 0.20-0.50", dict(BASE, max_entries_per_session=1,
                             min_rpu_range_ratio=0.20,
-                            max_rpu_range_ratio=0.50)),
+                            max_rpu_range_ratio=0.50), None),
+    # The human market filter, at the published dials, and once more with
+    # the researched band on top (Lode, 2026-08-11).
+    ("market filter", dict(BASE, max_entries_per_session=1),
+     HUMAN_APPROVED),
+    ("market filter band 0.20-0.50",
+     dict(BASE, max_entries_per_session=1,
+          min_rpu_range_ratio=0.20, max_rpu_range_ratio=0.50),
+     HUMAN_APPROVED),
 ]
 BASELINE_NAME = "lockout 1"               # the published run, for reference
 COLORS = {"lockout 1": "#1B9E4B", "lockout 2": "#E8A33D",
           "no lockout": "#D64545", "hybrid stop": "#3D7FE8",
-          "no geometry cut": "#8E44AD", "band 0.20-0.50": "#C2185B"}
+          "no geometry cut": "#8E44AD", "band 0.20-0.50": "#C2185B",
+          "market filter": "#0D9488", "market filter band 0.20-0.50": "#6D4C41"}
 
 
 def entry_order_metrics(trades):
@@ -117,7 +145,7 @@ def close_dd_pct(curve, start_capital=100_000.0):
 def main():
     keys = sys.argv[1:] or (run_1m.ELIGIBLE_FUTURES + run_1m.ETFS
                             + list(run_1m.BINANCE))
-    results = {name: {"trades": [], "rows": []} for name, _ in VARIANTS}
+    results = {name: {"trades": [], "rows": []} for name, _, _ in VARIANTS}
     skipped = []
     for key in keys:
         try:
@@ -133,7 +161,10 @@ def main():
             continue
         days, files, tick, note = inputs
         line = [key]
-        for name, dials in VARIANTS:
+        for name, dials, markets in VARIANTS:
+            if markets is not None and key not in markets:
+                line.append(f"{name} -")
+                continue
             trades, summary = run_1m.engine_1m.run_market(
                 days, files, tick, **dials)
             for t in trades:
@@ -146,7 +177,7 @@ def main():
         print("  |  ".join(line), flush=True)
 
     report = {}
-    for name, dials in VARIANTS:
+    for name, dials, markets in VARIANTS:
         trades = sorted(results[name]["trades"],
                         key=lambda t: t["entry_ts"])
         final, max_dd, curve = run_1m.portfolio_replay(trades)
@@ -168,6 +199,7 @@ def main():
                 for k in ("refused_wide", "refused_tight", "range_unjudged")}
         report[name] = dict(
             dials=dials,
+            markets=sorted(markets) if markets is not None else None,
             geometry=geom,
             trades=len(trades),
             win_rate=round(100 * wins / len(trades), 1) if trades else None,
@@ -198,8 +230,8 @@ def main():
                     min_tested=run_1m.engine_1m.MIN_REVERSALS),
         variants={n: {k: v for k, v in r.items() if k != "curve"}
                   for n, r in report.items()},
-        per_market={n: results[n]["rows"] for n, _ in VARIANTS},
-        trades={n: results[n]["trades"] for n, _ in VARIANTS},
+        per_market={n: results[n]["rows"] for n, _, _ in VARIANTS},
+        trades={n: results[n]["trades"] for n, _, _ in VARIANTS},
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
@@ -223,7 +255,7 @@ def main():
         f"chart.addLineSeries({{color:'{COLORS[n]}', lineWidth:2, "
         f"priceLineVisible:false, lastValueVisible:false}})"
         f".setData({json.dumps([{'time': t, 'value': v} for t, v in report[n]['curve']])});"
-        for n, _ in VARIANTS)
+        for n, _, _ in VARIANTS)
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc v2 - dial matrix</title><style>
 body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
@@ -258,6 +290,11 @@ so the case for the cut is re-measured on every pass.
 <b>band 0.20-0.50</b> = the researched optimum (s.15c/15d), UNDER
 INVESTIGATION and not adopted: its lower cut is a one-step ridge carried
 by five trades.
+<b>market filter</b> = the published dials on the {len(HUMAN_APPROVED)}
+markets that passed Lode's inspection of the 1m study (price-bar and
+reversal structure and dimensions, NOT that market's backtest result;
+audit s.16), and <b>market filter band 0.20-0.50</b> = the same markets
+with the researched band on top.
 Read the losing streak and the drawdown first.</span>
 <div id="chart"></div>
 <table id="tbl"><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>

@@ -297,6 +297,34 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 16. The human market filter (Lode, 2026-08-11)
+
+Lode reviewed every market we currently hold 1m data for, by eye on the 1m
+trade study, and passed or failed each on its **price-bar and reversal
+structure and dimensions**. Explicitly NOT a judgment on any market's
+backtest result - a market that made money can fail (BTC CME, +5.93R in the
+baseline, is out) and a market that lost can pass (UDOW, -2.15R, is in).
+That independence is the point: the filter encodes what the charts look
+like, so it cannot be curve-fitting.
+
+**Passed (22, `HUMAN_APPROVED` in run_1m_matrix.py):** GC, ZW, YM, 6E, 6J,
+LE, HG, CL, NG, PA, PL, NQ, ES, SI, DX, CC, KC, URA, VIXY, USO, UNG, UDOW.
+
+**Failed (removed from the run):** ZC, ZN, ZB, SB, FGBL, BTC (CME), GLD,
+SLV, WEAT, and both Binance pairs (already excluded by the data gate).
+Also on Lode's rejected list but not in the 1m universe at all, so nothing
+to remove: SR3, the Japanese 10y, and the cash indexes and crosses
+(EUROSTOXX50, NIKKEI, NASDAQ100, SPX500, USD/EUR, JPY/EUR). Note the
+index/future split is deliberate: NQ and ES pass while the NASDAQ100 and
+SPX500 cash indexes fail, and the CME Bitcoin future is out along with the
+Binance pair.
+
+Two cells ride in the matrix so the filter is re-measured on every pass:
+**market filter** (the published dials on the approved markets) and
+**market filter band 0.20-0.50** (the same markets with the researched
+band of s.15c/15d on top). Status: a MEASURED view, not an adopted change
+to the published baseline - the baseline still runs the whole universe.
+
 ## 15. The wide-cluster cell, measured (2026-08-10)
 
 Lode asked for the variant s.14 describes, in his own words "really a gamble

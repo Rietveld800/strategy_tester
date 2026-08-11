@@ -351,6 +351,12 @@ Three decisions in one move, taken off the matrix of s.16:
 The matrix rebased to match (every cell now inherits the band and the
 filter), and each adopted rule keeps its off/previous state as a
 watch-cell: `no geometry cut`, `band 0.00-0.50`, `no market filter`.
+Its chart draws every cell's curve LEVERED to the same 6% drawdown (risk
+solved per cell, shown in the table beside the 1% figures) on a
+window-height plot - at one shared bet size the tallest curve was partly
+just the deepest hole that cell was allowed to dig. On the current
+window that view puts the baseline first at $202k, the hybrid stop and
+the unfiltered universe within ~4% of it, and no-lockout last at $132k.
 The adopted baseline on the current window (to 2026-08-07), at 1%:
 **59 trades, 49.2% wr, +57.88R, streak 4, max DD 4.68%, $173,846** -
 against the pre-adoption 89 trades / 41.6% / +60.61R / streak 7 / 8.21% /

@@ -573,7 +573,10 @@ rather than slicing it; that is why every band in
 `build_1m_rcut_report.py` is its own engine run (that grid stays
 whole-universe, no cuts - the research record). Every adopted rule keeps
 its off/previous state as a matrix watch-cell: `no geometry cut`, `band
-0.00-0.50`, `no market filter`.
+0.00-0.50`, `no market filter`. The matrix chart draws every cell's
+curve LEVERED to a constant 6% drawdown (risk solved per cell, table
+carries both bases) on a window-height plot - comparing curves at one
+bet size hands the deepest hole the tallest line (Lode, 2026-08-11).
 **THE SESSION LOCKOUT** (`max_entries_per_session`, default 1, Lode
 2026-08-07, audit section 11): at most one ENTRY per market per session,
 expiring at the session boundary. NOT part of rules 1-3 by explicit choice --

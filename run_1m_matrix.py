@@ -30,7 +30,11 @@ anchor} removed the confirmation clause and kept the ladder stop
 Metrics per variant, portfolio level (Lode's priority order): longest
 losing streak (entry order, net R), max shared-account drawdown (worst
 reached, and on daily closes beside it, the same pair the main report
-shows), net R, win rate, trade count, final cash at 1% risk. Output:
+shows), net R, win rate, trade count, final cash at 1% risk, and the 6%
+solve (risk per trade + final). THE PLOTTED CURVES ARE THE LEVERED ONES
+(Lode, 2026-08-11): every cell at a constant 6% max drawdown, risk
+solved per cell by bisection, because at one bet size the tallest curve
+is partly just the deepest hole that cell was allowed to dig. Output:
 output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
@@ -112,6 +116,30 @@ def entry_order_metrics(trades):
     return longest, round(max_dd_r, 2)
 
 
+def solve_risk(trades, target=6.0, tol=0.0005):
+    """The risk % that puts this trade list at `target` max drawdown -
+    the same bisection the report and the R-cut page use (drawdown rises
+    monotonically with risk). Here so the CHART can draw every cell at
+    equal pain: at one bet size the tallest curve is partly just the
+    deepest hole that cell was allowed to dig (Lode, 2026-08-11)."""
+    if not trades:
+        return None
+    def dd(risk):
+        return run_1m.portfolio_replay(trades, risk_pct=risk)[1]
+    lo, hi = 0.0, 8.0
+    while dd(hi) < target:
+        hi *= 2
+        if hi > 64:
+            return None
+    while hi - lo > tol:
+        mid = (lo + hi) / 2
+        if dd(mid) < target:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
 def close_dd_pct(curve, start_capital=100_000.0):
     """Max drawdown on daily CLOSING balances, peak and trough both read
     at the bell: the gentler figure the main report shows next to the
@@ -166,6 +194,16 @@ def main():
         trades = sorted(results[name]["trades"],
                         key=lambda t: t["entry_ts"])
         final, max_dd, curve = run_1m.portfolio_replay(trades)
+        # The plotted curve is the LEVERED one - every cell at the same 6%
+        # max drawdown, risk solved per cell - so the chart compares equal
+        # pain instead of handing the deepest hole the tallest line. The
+        # table keeps the 1% figures beside the solved ones.
+        risk6 = solve_risk(trades)
+        if risk6:
+            final6, _, curve6 = run_1m.portfolio_replay(trades,
+                                                        risk_pct=risk6)
+        else:
+            final6, curve6 = final, curve
         streak, max_dd_r = entry_order_metrics(trades)
         wins = sum(1 for t in trades if t["net_r"] > 0)
         # The exit mix is what this grid is actually about: the clause
@@ -194,8 +232,10 @@ def main():
             final_cash=round(final, 2),
             max_dd_pct=round(max_dd, 2),
             max_dd_close_pct=close_dd_pct(curve),
+            risk_6pct=round(risk6, 3) if risk6 else None,
+            final_6pct=round(final6, 2),
             exit_mix=mix,
-            curve=curve,
+            curve=curve6,
         )
         print(f"\n{name}: {report[name]['trades']} trades, "
               f"wr {report[name]['win_rate']}%, "
@@ -203,7 +243,9 @@ def main():
               f"longest losing streak {streak}, "
               f"max DD {report[name]['max_dd_pct']}% "
               f"(closes {report[name]['max_dd_close_pct']}%, "
-              f"${report[name]['final_cash']:,.0f})", flush=True)
+              f"${report[name]['final_cash']:,.0f}) "
+              f"-> at 6% DD: {report[name]['risk_6pct']}% risk, "
+              f"${report[name]['final_6pct']:,.0f}", flush=True)
 
     OUT_JSON.parent.mkdir(exist_ok=True)
     OUT_JSON.write_text(json.dumps(dict(
@@ -226,6 +268,8 @@ def main():
         f"<td>{r['max_dd_r']}</td><td>{r['max_dd_pct']}%</td>"
         f"<td>{r['max_dd_close_pct']}%</td>"
         f"<td>${r['final_cash']:,.0f}</td>"
+        f"<td>{r['risk_6pct']}%</td>"
+        f"<td><b>${r['final_6pct']:,.0f}</b></td>"
         f"<td>{r['exit_mix']['close1']['wins']} / "
         f"{r['exit_mix']['close1']['n'] - r['exit_mix']['close1']['wins']} / "
         f"{r['exit_mix']['stop']['n']} / "
@@ -245,7 +289,10 @@ def main():
 <title>quickfix1m1dc v2 - dial matrix</title><style>
 body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
 sans-serif; margin:0; padding:14px; }}
-#chart {{ height:470px; }}
+/* Fill the window's height with the chart (Lode, 2026-08-11: a taller
+   plot spreads the y axis, so the lines separate and the scale reads).
+   autoSize on the chart tracks this through window resizes. */
+#chart {{ height:calc(100vh - 330px); min-height:480px; }}
 /* SCOPED TO #tbl. A bare `table` rule also hits the <table> that
    lightweight-charts builds inside the chart container, and a margin-top on
    it pushes the whole chart down so the time axis hangs out of its box and
@@ -278,17 +325,25 @@ Each adopted rule keeps its off/previous state as a cell:
 published until 2026-08-11; the 0.20 edge is a one-step ridge, s.15c)
 and <b>no market filter</b> (the whole universe).
 Read the losing streak and the drawdown first.</span>
+<div style="color:#666; margin-top:8px"><b style="color:#222">The curves
+are drawn at a constant 6% max drawdown</b> - risk per trade solved per
+cell by bisection (the table's <b>risk @6% DD</b> column), because at one
+shared bet size the tallest curve is partly just the deepest hole that
+cell was allowed to dig. The 1% figures stay in the table beside the
+solved ones.</div>
 <div id="chart"></div>
 <table id="tbl"><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
 <th>longest losing streak</th><th>max DD (R)</th><th>max DD %</th>
-<th>max DD close %</th><th>final</th>
+<th>max DD close %</th><th>final @1%</th>
+<th>risk @6% DD</th><th>final @6% DD</th>
 <th>day-2 win / day-2 loss / stop / abort</th>
 <th title="entries the geometry dial refused / times it abstained for want of a 24h window">geom refused / unjudged</th>
 <th></th></tr>{head}</table>
 <script>{lib}</script><script>
 const chart = LightweightCharts.createChart(
   document.getElementById('chart'),
-  {{ layout: {{ background: {{ color: '#ffffff' }}, textColor: '#333',
+  {{ autoSize: true,
+     layout: {{ background: {{ color: '#ffffff' }}, textColor: '#333',
      attributionLogo: false }},
      grid: {{ vertLines: {{ visible: false }},
               horzLines: {{ visible: false }} }},

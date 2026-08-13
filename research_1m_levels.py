@@ -587,8 +587,8 @@ All times UTC.</footer>
 
 if __name__ == "__main__":
     # research_1m_levels.py                          the published baseline
-    # research_1m_levels.py --variant "no lockout"   one matrix cell
-    # research_1m_levels.py --page ["no lockout"]    page only, no bar scan
+    # research_1m_levels.py --variant "variant 20"   one matrix cell
+    # research_1m_levels.py --page ["variant 20"]    page only, no bar scan
     args = sys.argv[1:]
     if args and args[0] == "--variant":
         main(variant=args[1])

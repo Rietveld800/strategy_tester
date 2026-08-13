@@ -1003,7 +1003,7 @@ def build(data=None, out=None, variant=None):
 if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
     #                                               (at the solved 6% risk)
-    # python build_1m_report.py --variant "hybrid stop"   one matrix cell
+    # python build_1m_report.py --variant "variant 5"    one matrix cell
     #
     # There were two more builds until 2026-08-12, --active25 and
     # --active25-6pct: the baseline restricted to the 25 numbered Socrates

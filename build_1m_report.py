@@ -763,55 +763,6 @@ __JS__
 </body></html>"""
 
 
-def active25_payload():
-    """quickfix1m1dc25: the published run restricted to the ACTIVE list.
-
-    The Socrates list numbers 25 markets, and data_center's mapping
-    carries exactly those; the obsolete part of the 1m universe (frozen
-    softs, delisted ETFs, Binance pairs) lives outside it. Every trade is
-    capital-independent in R, so this is NOT a new backtest: the same
-    trades on the same time base, minus the obsolete markets, replayed
-    into a shared account of their own. Two actives cannot trade and are
-    surfaced under Not tested: SR3 is outside the verified 1-minute
-    universe, and the Japanese 10-year has no data source at all.
-    """
-    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
-    active = {m["key"] for m in run_1m.MAPPING["markets"] if m.get("key")}
-    trades = [t for t in data["trades"] if t["market"] in active]
-    universe = (set(run_1m.ELIGIBLE_FUTURES) | set(run_1m.ETFS)
-                | set(run_1m.BINANCE))
-    excluded = [e for e in data.get("excluded", [])
-                if e.get("market") in active]
-    for m in run_1m.MAPPING["markets"]:
-        if not m.get("covered", True):
-            excluded.append(dict(
-                market=m["socrates_name"].replace("_", " "),
-                reason="coverage gap: no 1-minute data source"))
-        elif m["key"] not in universe:
-            excluded.append(dict(
-                market=m["key"],
-                reason="in the active Socrates list but not part of the "
-                       "1-minute universe"))
-    _, _, final, max_dd = replay(trades)
-    wins = sum(1 for t in trades if t["net_r"] > 0)
-    return dict(
-        strategy="quickfix1m1dc25",
-        params=data["params"],
-        portfolio=dict(final=round(final, 2), max_dd_pct=round(max_dd, 2),
-                       trades=len(trades),
-                       win_rate=round(100 * wins / len(trades), 1),
-                       net_r=round(sum(t["net_r"] for t in trades), 2)),
-        markets=[r for r in data["markets"] if r["market"] in active],
-        excluded=excluded,
-        trades=trades,
-        universe_note=(
-            " <b>This build trades the active Socrates list only</b>: the "
-            "25 numbered markets, with the obsolete softs, ETFs and "
-            "Binance pairs left out. Same time base, rules and dials as "
-            "the published baseline; the two actives without 1-minute "
-            "data are under Not tested."))
-
-
 def build_baseline():
     """The published baseline page, sized to a drawdown budget (Lode,
     2026-08-11, audit s.17): risk per trade is SOLVED by bisection so the
@@ -834,32 +785,6 @@ def build_baseline():
         f"to <b>{risk:g}%</b> so the worst drawdown reached intraday is "
         "6%, the daily project's target.")
     build(data=data)
-
-
-def build25():
-    build(data=active25_payload(),
-          out=OUT_HTML.with_name("quickfix1m1dc25_report.html"))
-
-
-def build25_6pct():
-    """The active-list build sized to a drawdown budget: risk per trade
-    solved so the worst-reached drawdown is 6%, the same TARGET_DD the
-    daily project solves its published risks to. Re-solved on every
-    build, and the page states the number it landed on."""
-    data = active25_payload()
-    risk = solve_risk_pct(data["trades"], 6.0)
-    _, _, final, max_dd = replay(data["trades"], risk)
-    data["strategy"] = "quickfix1m1dc25-6pct"
-    data["risk_pct"] = risk
-    data["params"] = dict(data["params"], risk_pct=risk)
-    data["portfolio"].update(final=round(final, 2),
-                             max_dd_pct=round(max_dd, 2))
-    data["universe_note"] += (
-        f" <b>And it is sized to a drawdown budget</b>: risk per trade is "
-        f"solved to <b>{risk:g}%</b> so the worst drawdown reached "
-        f"intraday is 6%, the daily project's target.")
-    build(data=data,
-          out=OUT_HTML.with_name("quickfix1m1dc25-6pct_report.html"))
 
 
 def variant_payload(name):
@@ -1077,14 +1002,15 @@ if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
     #                                               (at the solved 6% risk)
     # python build_1m_report.py --variant "hybrid stop"   one matrix cell
-    # python build_1m_report.py --active25          the active-list build
-    # python build_1m_report.py --active25-6pct     same, at the 6% solve
+    #
+    # There were two more builds until 2026-08-12, --active25 and
+    # --active25-6pct: the baseline restricted to the 25 numbered Socrates
+    # markets, plain and sized to the 6% budget. Both were retired with
+    # their pages (user); the human market filter is what the baseline
+    # publishes now, so an active-list cut was a second answer to a
+    # question the baseline already answers.
     args = sys.argv[1:]
     if args and args[0] == "--variant":
         build(variant=args[1])
-    elif args and args[0] == "--active25":
-        build25()
-    elif args and args[0] == "--active25-6pct":
-        build25_6pct()
     else:
         build_baseline()

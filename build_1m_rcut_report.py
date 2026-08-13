@@ -43,9 +43,11 @@
 #         python build_1m_rcut_report.py --step 0.5 --max 1.0   # coarse test
 #         python build_1m_rcut_report.py --no-reuse # ignore the cache
 
+import hashlib
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import run_1m
@@ -101,6 +103,30 @@ C_BAND, C_REF = "#1b7f45", "#898781"      # band green; muted ink for the refere
 C_DD, C_POS = "#e34948", "#2a78d6"        # slot 8 red; slot 1 blue for exposure
 PANE_H = (360, 150, 130)                  # equity, drawdown, open positions
 PRICE_SCALE_W = 76    # identical on all three panes, so the plots line up
+
+
+def data_fingerprint():
+    """A cheap key for "the 1-minute data the engine would read right now".
+
+    THE CACHE CANNOT BE ALLOWED TO OUTLIVE THE DATA. Cells were keyed on the
+    band and the dials alone until 2026-08-12, so a rebuild after new bars
+    landed replayed every cell from the previous window in about three seconds
+    and republished a grid that no longer matched the baseline beside it. That
+    is the one failure mode this page must not have: it is the research record
+    the published band was read off.
+
+    Size and mtime of every bars parquet, hashed. Ninety-odd files, ~2 ms, and
+    it errs the safe way: any touch of any file throws the cache away and pays
+    the full ~90 minutes, where the alternative would be showing old numbers as
+    if they were current. It deliberately does NOT try to be clever about which
+    markets a given run reads -- a wrong cache hit costs correctness, a wrong
+    miss costs time.
+    """
+    parts = []
+    for p in sorted((run_1m.DC / "data").glob("*/bars/*.parquet")):
+        st = p.stat()
+        parts.append(f"{p.parent.parent.name}/{p.name}:{st.st_size}:{int(st.st_mtime)}")
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
 
 def solve_risk(trades, target=TARGET_DD):
@@ -304,11 +330,23 @@ def main():
 
     # Reuse TRADES, not finished cells: metrics are recomputed every build, so
     # adding a metric never costs an engine pass again.
+    #
+    # The cache is keyed on the DIALS *and* the DATA (see data_fingerprint):
+    # either one moving throws all of it away, because a cell computed on last
+    # week's bars is not an answer to today's question and the page has no way
+    # to show that it is stale once it is drawn.
+    fingerprint = data_fingerprint()
     tcache = {}
     if reuse and OUT_TRADES.exists():
         try:
             old = json.loads(OUT_TRADES.read_text(encoding="utf-8"))
-            if old.get("dials") == BASE:
+            if old.get("dials") != BASE:
+                print("cache ignored: the dials have changed", flush=True)
+            elif old.get("data") != fingerprint:
+                print(f"cache ignored: the 1-minute data has changed since it "
+                      f"was built ({old.get('data')} -> {fingerprint}). Every "
+                      f"cell is a fresh engine pass.", flush=True)
+            else:
                 tcache = old.get("trades", {})
                 print(f"reusing trades for {len(tcache)} cells from "
                       f"{OUT_TRADES.name}", flush=True)
@@ -365,10 +403,22 @@ def main():
             audit_doc="docs/quickfix1m1dc_audit.md (s.15)",
             target_dd=TARGET_DD, step=step, edges=edges,
             dials=BASE, baseline=baseline,
+            # Stamped so the PAGE can say which data it was computed on. This
+            # grid is the only output here that is not rebuilt by the refresh
+            # (Lode, 2026-08-12: it has its own button instead), so "when was
+            # this last true" is a question the reader will actually have.
+            built=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            data=fingerprint,
+            # The size of the WHOLE grid, not of `cells`. A checkpoint writes
+            # only the cells finished so far, so the page would otherwise
+            # quote its own progress as the cost of a rebuild ("49 bands")
+            # and undersell it by a factor of five mid-run.
+            n_cells=len(combos),
             cells={k: v for k, v in cells.items() if v})
         OUT_JSON.write_text(json.dumps(payload) + "\n", encoding="utf-8")
         OUT_HTML.write_text(page(payload), encoding="utf-8")
-        OUT_TRADES.write_text(json.dumps(dict(dials=BASE, trades=tcache)),
+        OUT_TRADES.write_text(json.dumps(dict(dials=BASE, data=fingerprint,
+                                              trades=tcache)),
                               encoding="utf-8")
 
     for i, (lo, hi) in enumerate(combos, 1):
@@ -434,6 +484,21 @@ border-left:1px dashed #52514e; display:none; pointer-events:none; z-index:4; }}
 #bar {{ display:flex; gap:18px; align-items:center; flex-wrap:wrap;
 margin-top:10px; }}
 select {{ font:13px inherit; padding:2px 4px; }}
+/* The page's own update control. This grid is the one output the refresh
+   button does NOT rebuild (Lode, 2026-08-12), so the button for it lives
+   here, next to the numbers it changes. */
+#upd {{ display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+margin-top:12px; padding:9px 12px; border:1px solid var(--grid);
+border-radius:8px; background:#fff; max-width:1150px; }}
+#updbtn {{ font:13px inherit; font-weight:600; padding:5px 13px;
+border:1px solid var(--axis); border-radius:6px; background:#f2f1ec;
+color:var(--ink); cursor:pointer; }}
+#updbtn:hover:enabled {{ border-color:var(--band); }}
+#updbtn:disabled {{ opacity:.45; cursor:default; }}
+#updlog {{ display:none; margin-top:10px; max-width:1150px; max-height:340px;
+overflow:auto; background:#14150f; color:#d7d6cd; border-radius:8px;
+padding:10px 12px; font:11.5px ui-monospace,Consolas,monospace;
+white-space:pre-wrap; }}
 .legend {{ display:flex; gap:14px; align-items:center; color:var(--ink-2);
 margin-top:8px; font-size:12px; }}
 .legend i {{ display:inline-block; width:16px; height:3px; margin-right:5px;
@@ -482,6 +547,15 @@ NOT: every cell here runs the whole universe, and "all trades" is the
 pre-adoption engine with no cuts, so this page stays the research record
 the band was read from.</span>
 </div>
+<div id="upd">
+  <button id="updbtn" type="button" disabled>Update this grid</button>
+  <span id="updnote" class="note">built <b class="k">{p.get('built', 'unknown')}</b>
+  &middot; every other page is rebuilt by charter's Update button, this grid is
+  not: it is {p.get('n_cells') or len(p.get('cells') or {{}})} bands at one
+  engine pass each, about <b class="k">90 minutes</b>. Press this when you want
+  it re-read on current data.</span>
+</div>
+<pre id="updlog"></pre>
 <div id="bar">
   <label>lower cut <select id="lo"></select></label>
   <label>upper cut <select id="hi"></select></label>
@@ -847,6 +921,129 @@ function boot(tries) {{
   }}
 }}
 boot(15);
+
+/* ---- this page's own update button -------------------------------------
+   Every other 1-minute page is rebuilt by charter's Update button. This grid
+   is not (Lode, 2026-08-12): it is ~231 engine passes, about ninety minutes,
+   which is not a thing to hang off a button somebody presses to see this
+   morning's bars. So the control for it lives on the page that shows the
+   result, and it drives the SAME runner - it posts the `rcut1m` step to
+   charter's /api/refresh, which is exactly what the rail button posts for the
+   ordinary steps. No second way to build anything.
+
+   The server is FOUND, not configured: this file is usually opened straight
+   off disk, so it has no origin to infer a port from. serve.py takes the first
+   free port from 8000, so try that handful. A GET /api/refresh is a cheap
+   probe and is the same call the poll uses. */
+(function updater() {{
+  const btn = document.getElementById('updbtn');
+  const note = document.getElementById('updnote');
+  const log = document.getElementById('updlog');
+  const STEP = 'rcut1m';
+  let base = null, at = 0;
+
+  const say = t => {{ note.innerHTML = t; }};
+  function write(lines) {{
+    if (!lines || !lines.length) return;
+    log.style.display = 'block';
+    log.textContent += lines.join('\\n') + '\\n';
+    log.scrollTop = log.scrollHeight;
+  }}
+
+  async function probe() {{
+    for (let port = 8000; port < 8020; port++) {{
+      const url = 'http://127.0.0.1:' + port;
+      try {{
+        /* A 1.2s cap per port: a closed port rejects at once, but a port held
+           by something that is not this server can hang the whole sweep. */
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 1200);
+        const r = await fetch(url + '/api/refresh', {{signal: ctl.signal}});
+        clearTimeout(t);
+        if (!r.ok) continue;
+        const j = await r.json();
+        if (j && typeof j.state === 'string') return {{url, snap: j}};
+      }} catch (e) {{ /* not this port */ }}
+    }}
+    return null;
+  }}
+
+  async function poll() {{
+    let r;
+    try {{
+      r = await (await fetch(base + '/api/refresh?from=' + at)).json();
+    }} catch (e) {{
+      say('lost the connection to the server - the run may still be going; '
+          + 'reload this page to reattach.');
+      btn.disabled = false;
+      return;
+    }}
+    write(r.lines);
+    at = r.next;
+    if (r.state === 'running') return setTimeout(poll, 1000);
+    btn.disabled = false;
+    if (r.state === 'done') {{
+      say('done - reloading this page with the new grid...');
+      /* The page is a static file the run has just rewritten, so the only way
+         to show the result is to re-read it from disk. */
+      setTimeout(() => location.reload(), 900);
+    }} else {{
+      say('<b class="k">' + r.state + '</b> - see the log below. Nothing on '
+          + 'this page has changed.');
+    }}
+  }}
+
+  async function start() {{
+    btn.disabled = true;
+    log.textContent = '';
+    at = 0;
+    say('starting...');
+    let r;
+    try {{
+      /* text/plain, not application/json: a JSON content type makes this a
+         CORS preflight, and a page opened from disk has a null origin. The
+         server json.loads() the body whatever it is labelled. */
+      r = await fetch(base + '/api/refresh', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'text/plain'}},
+        body: JSON.stringify({{steps: [STEP]}})
+      }});
+    }} catch (e) {{
+      btn.disabled = false;
+      return say('could not reach the server: ' + e.message);
+    }}
+    if (r.status === 409) {{
+      say('a run is already going - following it.');
+    }} else if (!r.ok) {{
+      btn.disabled = false;
+      return say('the server refused the run (HTTP ' + r.status + ').');
+    }} else {{
+      say('running - about <b class="k">90 minutes</b> for a full grid, less '
+          + 'when the 1-minute data has not moved since the last build. You '
+          + 'can leave this page; the run is on the server, and reloading '
+          + 'reattaches to it.');
+    }}
+    poll();
+  }}
+
+  probe().then(found => {{
+    if (!found) {{
+      return say('built <b class="k">{p.get("built", "unknown")}</b> &middot; '
+        + 'to rebuild it from this page, start charter\\'s server '
+        + '(<b class="k">python serve.py</b> in ../charter) and reload. '
+        + 'By hand: <b class="k">python build_1m_rcut_report.py</b>.');
+    }}
+    base = found.url;
+    btn.disabled = false;
+    if (found.snap.state === 'running') {{
+      btn.disabled = true;
+      say('a run is already going - following it.');
+      poll();
+    }}
+  }});
+
+  btn.addEventListener('click', start);
+}})();
 </script></body></html>"""
 
 

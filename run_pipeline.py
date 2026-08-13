@@ -4,12 +4,15 @@
 # account portfolio xlsx + equity JSON, the standalone HTML page, and the charter hand-off.
 #
 #   python run_pipeline.py            # every registered strategy
-#   python run_pipeline.py quickfixwick   # just one
+#   python run_pipeline.py quickfixclose1   # just one
 #
 # This exists because reading the array archive is the slow part of every runner. The
 # pipeline parses it ONCE (engine.run_markets) and feeds the same backtests to all four
 # writers, so a full refresh costs one pass instead of four. Running the individual
 # scripts still works and produces identical files -- this is only faster.
+#
+# It also wrote comparison.html and conclusions.html until 2026-08-12, when both pages were
+# retired (user). Neither builder exists any more; see build_equity_html.py.
 
 import sys
 
@@ -23,6 +26,16 @@ import strategies
 
 def main(argv):
     picked = strategies.selected(argv)
+    # THE DAILY REGISTRY IS EMPTY since 2026-08-12 (see strategies.py): quickfix1m1dc
+    # replaced the daily strategies and runs on its own engine, so there is nothing for this
+    # pipeline to build. Bailing here is not cosmetic -- run on an empty registry it still
+    # spent a full archive pass on the 75-cap grid, wrote a `_variants.json` and an empty
+    # `report.html` that nothing reads, and pruned the charter directory down to nothing.
+    if not picked:
+        raise SystemExit(
+            "the daily registry is empty (see strategies.py) -- nothing to build. The "
+            "published strategy is quickfix1m1dc: run `python run_1m.py`, or "
+            "`python ../trading_system/refresh.py` for the whole system.")
     print(f"strategies: {', '.join(s.key for s in picked)}\n")
     # The full cap grid: the pages carry a Rule 4 dial, and every position on it is a real
     # backtest. It rides along on the one archive pass, so it costs backtest time only.
@@ -54,9 +67,6 @@ def main(argv):
     # cap grid, so they must not be written before it exists.
     for s in picked:
         build_equity_html.build(s)
-    build_equity_html.build_conclusions()
-    # Always every strategy, even on a partial run: comparing a subset is not the comparison.
-    build_equity_html.build_comparison()
     build_equity_html.build_report(
         [s for s in strategies.REGISTRY
          if (eng.OUT_DIR / f"_equity_{s.key}.json").exists()])

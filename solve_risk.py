@@ -4,10 +4,10 @@
 # that strategy at engine.TARGET_DD (6%) maximum drawdown on the current data.
 #
 #   venv\Scripts\python.exe solve_risk.py             # every registered strategy
-#   venv\Scripts\python.exe solve_risk.py quickfixwick   # just one
+#   venv\Scripts\python.exe solve_risk.py quickfixclose1   # just one
 #
 # NOT every strategy is published at its solved risk. Only quickfix is (`risk_solved=True`);
-# the three quick exits are published at a flat 1% by the user's choice, so their solve is
+# the four bar exits are published at a flat 1% by the user's choice, so their solve is
 # printed for information and they are never called stale. See `Strategy` in strategies.py.
 #
 # Those numbers live as constants in `strategies.py` (`Strategy.risk_pct`) because everything
@@ -21,9 +21,9 @@
 # Why per strategy at all: a drawdown budget is the thing actually being chosen, and return
 # is what comes out of it. Opening every page at one bet size shows different depths of hole
 # and invites ranking them on return alone -- which flatters whichever strategy was allowed
-# to dig deepest. Solved this way, the pages are directly comparable. (`comparison.html`
-# makes the same argument across strategies rather than across caps, and does the same
-# bisection in the browser to do it.)
+# to dig deepest. Solved this way, the pages are directly comparable. (The cap chart at the
+# bottom of quickfix's page makes the same argument across caps rather than across
+# strategies, and does the same bisection in the browser to do it.)
 #
 # Method: maximum drawdown rises monotonically with risk (a bigger bet swings the balance
 # further), so a plain bisection finds it. It calls run_portfolio's OWN `account()` -- never

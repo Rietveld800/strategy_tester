@@ -468,11 +468,16 @@ def main():
     # The published page is sized to the 6% drawdown budget (Lode,
     # 2026-08-11): risk per trade solved on every refresh, page states it.
     build_1m_report.build_baseline()
-    # The active-list builds read the JSON just written, so they stay in
-    # step with the baseline on every refresh; the 6pct page re-solves
-    # its risk against the fresh data and prints what it landed on.
-    build_1m_report.build25()
-    build_1m_report.build25_6pct()
+    # Two active-list builds rode along here (quickfix1m1dc25 and its 6%
+    # sizing) until 2026-08-12, when both pages were retired (user).
+    #
+    # The charter hand-off rides along too (2026-08-12), for the same reason
+    # the report does: it is written from the blotter just produced, so the
+    # overlay charter draws can never be a refresh behind the page beside it.
+    # It also PRUNES, and it is the only owner of charter_trades_*.json now
+    # that the daily registry is empty.
+    import export_charter_trades_1m
+    export_charter_trades_1m.write(data=None)
     print(f"wrote {OUT_JSON.name}")
 
 

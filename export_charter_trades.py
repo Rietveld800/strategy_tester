@@ -63,17 +63,18 @@ CHARTER_CAPS = [1.9, 2.0, 2.25, 2.5, 5.0]
 # DERIVED from the registry rather than typed, since the sweep took it from six names to
 # twenty-four (2026-08-01). It is exactly "every registered strategy that is not a point on
 # the cap axis", which is what the hand-typed list always was; deriving it means a new bar
-# exit reaches charter with no second edit, and a retired one cannot linger here. The caps
+# exit reaches charter with no second edit, and a retired one cannot linger here. That paid
+# off twice: the list went to 24 on 2026-08-01 and back to 4 on 2026-08-12, when the wick and
+# every hold past bar 2's open were retired, and neither move needed an edit here. The caps
 # above stay a CHOSEN handful, because there the registry is not the right source: the cap
 # grid has 75 points and charter wants five.
 #
-# The count is worth being honest about: 24 of these plus 5 caps is 29 overlay boxes on
-# charter's T rail, up from 11. That is a lot of checkboxes, but unlike 75 identical caps they
-# are not redundant, each one exits on a different BAR. Read a few at a time.
+# The count today is 4 of these plus 5 caps, so 9 overlay boxes on charter's T rail. It peaked
+# at 29, which was a lot of checkboxes but, unlike 75 identical caps, not redundant: each one
+# exits on a different BAR. Read a few at a time.
 #
-# Charter lists the boxes in FILENAME order, so it sorts them alphabetically (quickfixclose0,
-# quickfixclose1, quickfixclose10, quickfixclose11, ...) rather than in hold order; nothing
-# depends on the order here, and note that alphabetical puts bar 10 next to bar 1.
+# Charter lists the boxes in FILENAME order, so it sorts them alphabetically rather than in
+# hold order; nothing depends on the order here.
 CHARTER_STRATEGIES = [s.key for s in strategies.REGISTRY if not s.r4.in_grid]
 
 
@@ -160,7 +161,18 @@ def prune(items):
     being drawn -- which is how slowfix would go on appearing on the charts after being
     dropped here. Only files matching this exact pattern are touched, and each one is named
     as it goes.
+
+    IT REFUSES TO PRUNE ON AN EMPTY SET, and that guard is here rather than only in main()
+    because main() is not the only caller: run_pipeline.py calls export() and prune()
+    directly. With the daily registry emptied on 2026-08-12 that path deleted
+    charter_trades_quickfix1m1dc.json -- the only overlay charter has left -- on the
+    reasoning that it owned nothing so everything was stale. A prune that owns nothing is
+    not a prune, it is a wipe.
     """
+    if not items:
+        print("prune skipped: this exporter owns no hand-offs (the daily registry is "
+              "empty), and pruning would delete the 1-minute overlay")
+        return
     keep = {out_path(i[0]).name for i in items}
     for p in sorted(eng.OUT_DIR.glob("charter_trades_*.json")):
         if p.name not in keep:
@@ -169,6 +181,16 @@ def prune(items):
 
 
 def main(argv):
+    # THE DAILY REGISTRY IS EMPTY since 2026-08-12, so this exporter owns NOTHING -- and that
+    # matters more than it sounds, because `prune()` deletes every charter_trades_*.json it
+    # does not own. Running it now would wipe `charter_trades_quickfix1m1dc.json`, which is
+    # written by export_charter_trades_1m.py and is the only overlay charter has left. Refuse
+    # instead of doing damage; register a Strategy again and this comes straight back.
+    if not strategies.REGISTRY:
+        raise SystemExit(
+            "the daily registry is empty (see strategies.py) -- nothing to hand over, and "
+            "pruning would delete the 1-minute overlay. The published hand-off is written by "
+            "export_charter_trades_1m.py.")
     # Arguments select the CAPS only; the non-cap strategies are always handed over, since
     # naming one on the command line would mean guessing whether it is a cap or a key.
     caps = [float(a) for a in argv] if argv else list(CHARTER_CAPS)

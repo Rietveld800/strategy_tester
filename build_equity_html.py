@@ -11,7 +11,11 @@
 # second renderer to keep in step.
 #
 #   python build_equity_html.py            # every registered strategy + report.html
-#   python build_equity_html.py quickfixwick   # just one page (report.html still gets all)
+#   python build_equity_html.py quickfixclose1   # just one page (report.html still gets all)
+#
+# It built two more pages until 2026-08-12, both retired by the user: comparison.html (every
+# strategy against every other) and conclusions.html (two free-text fields printed at the end
+# of the exported PDF). They are in git; nothing here links to either any more.
 #
 # PDF: the pages do NOT bundle a JavaScript PDF library. The browser's own print-to-PDF
 # produces selectable vector text at a fraction of the size, where an html2canvas-style
@@ -87,22 +91,6 @@ body{margin:0;background:var(--bg);color:var(--ink);
   background:var(--surface);color:var(--ink2);font-size:13px;font-weight:600;cursor:pointer;
   font-family:inherit;}
 .pdfbtn:hover{border-color:var(--accent);color:var(--ink);}
-/* conclusions editor */
-.cfield{margin-top:22px;}
-.cfield label{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--ink3);font-weight:600;margin-bottom:7px;}
-.cfield textarea{width:100%;min-height:230px;padding:14px 16px;font:15px/1.6 inherit;
-  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
-  color:var(--ink);background:var(--surface);border:1px solid var(--border);
-  border-radius:12px;resize:vertical;}
-.cfield textarea:focus{outline:none;border-color:var(--accent);}
-.cbar{display:flex;align-items:center;gap:12px;margin-top:18px;}
-.cbar .status{font-size:12px;color:var(--ink3);}
-/* conclusions as printed at the end of the report */
-.concl{margin-top:38px;padding-top:6px;}
-.conclbody{white-space:pre-wrap;font-size:14px;color:var(--ink2);line-height:1.65;
-  padding:14px 18px;background:var(--surface);border:1px solid var(--border);
-  border-radius:12px;}
 header{margin-bottom:26px;}
 .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
   font-weight:600;margin-bottom:12px;}
@@ -243,8 +231,7 @@ table.trades td.act{white-space:normal;font-size:11px;}
 table.trades td:first-child,table.trades th:first-child,
 table.trades td:last-child,table.trades th:last-child{white-space:normal;word-break:break-word;}
 /* td/th default to nowrap and the table is table-layout:fixed, so a long cell that is
-   neither first nor last OVERFLOWS its column instead of wrapping. The comparison page's
-   Rule 4 column is the only one, and it was printing over the Trades figures. */
+   neither first nor last OVERFLOWS its column instead of wrapping. Opt a column back in. */
 table.trades td.wrap,table.trades th.wrap{white-space:normal;word-break:break-word;}
 .tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:20px;
   background:var(--grid);color:var(--ink3);font-size:9.5px;letter-spacing:.04em;
@@ -274,20 +261,6 @@ footer{margin-top:30px;font-size:12px;color:var(--ink3);}
 .dlgbtns button.pri{background:var(--accent);border-color:var(--accent);color:#fff;}
 .dlgbtns button:hover{border-color:var(--accent);}
 .rep + .rep{margin-top:48px;padding-top:8px;}
-/* comparison page: every Rule 4 side by side, then the two bar charts. auto-fill rather
-   than a fixed 2 columns, so the grid follows the registry instead of leaving a half-width
-   orphan card whenever the count is odd (it went from four to seven on 2026-07-31). */
-.cmpcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;
-  background:var(--border);border:1px solid var(--border);border-radius:12px;
-  overflow:hidden;margin:24px 0 0;}
-@media(max-width:720px){.cmpcards{grid-template-columns:1fr}}
-.cmpcard{background:var(--surface);padding:13px 16px 15px;}
-.cmpcard .nm{font-weight:650;font-size:14px;letter-spacing:-.01em;}
-.cmpcard .r4{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);
-  font-weight:600;margin:6px 0 3px;}
-.cmpcard .rt{font-size:12.5px;color:var(--ink2);line-height:1.5;}
-.cmpcard .rt b{color:var(--ink);font-weight:600;}
-.barplot{min-height:300px;}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ---- print / PDF -------------------------------------------------------------
@@ -485,10 +458,12 @@ DAILY_HTML = r"""
 """
 
 # The JS EVERY page shares. Chiefly it holds the one money-management replay: `simulate` is
-# a direct port of run_portfolio.py's loop, and both `mountReport` (the strategy pages and
-# report.html) and `mountComparison` (comparison.html) call THIS one. A second copy would be
-# free to drift, and then two pages of the same site would quote different final capitals for
-# the same account. Same argument as the cap charts' `lite` flag, one level up.
+# a direct port of run_portfolio.py's loop, and `mountReport` (the strategy pages and
+# report.html) calls THIS one. It sits out here rather than inside the renderer because a
+# second copy would be free to drift, and then two pages of the same site would quote
+# different final capitals for the same account. Same argument as the cap charts' `lite`
+# flag, one level up. It also had a second caller until 2026-08-12: comparison.html, which
+# is exactly the drift this arrangement prevented.
 CORE_JS = r"""<script>
 const STRATS = __STRATS__;
 // The REFERENCE risk: what the shared variant grid in _variants.json is priced at, and the
@@ -499,9 +474,9 @@ const REF_RISK = __REFRISK__;
 // Every Rule 4 setting, each a REAL backtest run by run_portfolio.py, shared by every
 // strategy on the page: two strategies sitting on the same cap are one run, stored once.
 // `caps` is the cap family -- the dial's axis and the sweep chart's x axis. `extra` holds
-// the settings that are NOT caps (the entry-bar wick and the 23 bar exits): same packed
-// rows, same replay, but not points on that axis, so a strategy sitting on one carries
-// neither the dial nor the sweep.
+// the settings that are NOT caps (the four bar exits): same packed rows, same replay, but
+// not points on that axis, so a strategy sitting on one carries neither the dial nor the
+// sweep.
 //
 // Why this is precomputed while the risk % is replayed live: risk changes only the DOLLAR
 // SIZING of a fixed trade list, so the browser can redo the arithmetic. Rule 4 changes the
@@ -537,12 +512,6 @@ function snapCap(x){
   for (const c of CAP_NUMS) if (Math.abs(c - x) < Math.abs(best - x)) best = c;
   return String(best);
 }
-// Where the Conclusions page keeps its text. Read back by the report when printing.
-const CONCL_KEY = "strategy_conclusions";
-function readConclusions(){
-  try { return JSON.parse(localStorage.getItem(CONCL_KEY) || "null") || null; }
-  catch(e){ return null; }
-}
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtUSD = v => (v<0?"−$":"$") + Math.abs(Math.round(v)).toLocaleString("en-US");
 const fmtK = v => (v<0?"−$":"$") + Math.abs(v/1000).toFixed(0) + "k";
@@ -554,19 +523,20 @@ const signFix = (v,d) => v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(d);
 const signUSD = v => v==null?"—":(v>=0?"+$":"−$")+Math.abs(v).toLocaleString("en-US",{maximumFractionDigits:0});
 // 'target_r' = the R cap itself was hit, at whatever cap the run used. It is not named for
 // a number any more: the cap is a dial, so "5R target" would be a lie at any other setting.
-// 'target_bar' = Quickfixwick's target, one tick past the entry bar's own wick.
+// 'target_bar' was Quickfixwick's target, one tick past the entry bar's own wick. That
+// strategy was retired on 2026-08-12 and nothing books the reason any more; the name is
+// kept so a ledger exported before then still reads.
 // 'exit_close' / 'exit_open' = the BAR EXITS. Neither is a level that was reached, so they
 // are named for the ORDER TYPE rather than for a target: a market-on-close and a
-// market-on-open. Which BAR it was sent on is the strategy, not the reason, so all five bar
-// exits share these two names and the blotter does not need five more.
+// market-on-open. Which BAR it was sent on is the strategy, not the reason, so all four bar
+// exits share these two names and the blotter does not need four more.
 const prettyReason = r => ({target_r:"R cap",stop:"stop",unknown_pl:"unknown P/L",
   bullish_reversal:"bull reversal",bearish_reversal:"bear reversal",
   data_end:"data ended",open_at_end:"open at end",target_bar:"bar wick",
   exit_close:"close exit",exit_open:"open exit"})[r]||r;
 
 // One calendar for every setting, so moving the cap dial does not shift the equity curve's
-// x-axis underneath the reader: 4R and 8R are drawn over exactly the same period, and so are
-// every strategy on the comparison page.
+// x-axis underneath the reader: 4R and 8R are drawn over exactly the same period.
 const DAYS = VARIANTS.days;
 const START_CAP = __STARTCAP__;
 
@@ -598,9 +568,9 @@ function txt(x,y,s,anchor,size,fill,ls){
 // sizing base as the run compounds, so it cannot be derived from the net one afterwards.
 //
 // `lite` skips the daily narrative (the per-day activity strings and the point series),
-// which is all the cap charts and the comparison page need and is where nearly all the cost
-// is -- sorting the open markets into a string on all 180 days, 75 times over, would be felt
-// on every keystroke. It is the SAME function either way on purpose.
+// which is all the cap charts need and is where nearly all the cost is -- sorting the open
+// markets into a string on all 180 days, 75 times over, would be felt on every keystroke.
+// It is the SAME function either way on purpose.
 //
 // A note that matters for quickfixclose0: its trades enter and exit on the SAME day, so the
 // entries loop commits their risk and the exits loop releases it before the day's snapshot
@@ -695,13 +665,12 @@ function simulate(risk, rows, lite, start){
 // ---- one setting, priced two ways --------------------------------------------------
 // `statsAt` is one lite replay of one Rule 4 setting at one risk. `leveredAt` is the same
 // thing at the risk that puts THAT setting at TARGET_DD, found by bisection. Both are used
-// by the cap charts (across the cap axis) and by the comparison page (across strategies), so
-// they live out here: one bisection, one cache, and the two page types cannot disagree about
-// what 6% costs a given setting.
+// by the cap charts, across the cap axis, and they live out here so there is one bisection
+// and one cache: nothing on the page can disagree about what 6% costs a given setting.
 const ROWCACHE={};
 const rowsFor = tok => ROWCACHE[tok] || (ROWCACHE[tok] = unpackCap(tok));
-// null for anything that is not a point on the cap axis: "none", and the three Rule 4
-// shapes that are not caps at all. Number("wick") is NaN, which would plot somewhere.
+// null for anything that is not a point on the cap axis: "none", and the bar-exit Rule 4
+// shapes. Number("close1") is NaN, which would plot somewhere.
 const capOf = tok => { const x = Number(tok); return (tok === "none" || !isFinite(x)) ? null : x; };
 function statsAt(risk, tok){
   const s = simulate(risk, rowsFor(tok), true).stats;
@@ -762,9 +731,9 @@ function mountReport(root, DATA){
   let RAW = unpackCap(CAP);
 
   // The ONE money-management replay lives at the top of the page (see CORE_JS): the cap
-  // charts, the risk dial and comparison.html all run through it. This binds it to this
-  // section's own defaults -- the cap in force and this strategy's starting capital -- so
-  // the call sites below read as they always did.
+  // charts and the risk dial both run through it. This binds it to this section's own
+  // defaults -- the cap in force and this strategy's starting capital -- so the call sites
+  // below read as they always did.
   const sim = (risk, rows, lite) => simulate(risk, rows || RAW, lite, START);
 
   let SIM = sim(RISK), P = SIM.points, N = P.length, T = SIM.trades, ST = SIM.stats;
@@ -970,7 +939,7 @@ function mountReport(root, DATA){
     }).join("")+"</tr>").join("");
   }
 
-  // niceTicks / mk / txt are shared with the comparison page and live in CORE_JS.
+  // niceTicks / mk / txt are shared page-wide and live in CORE_JS.
   const svg=$("svg"), plot=$("plot"), tip=$("tip");
   let geom=null, firstDraw=true;
 
@@ -1098,8 +1067,8 @@ function mountReport(root, DATA){
   //
   // Both are drawn by one plotter over one x axis (the cap grid). Two near-identical
   // renderers would drift apart.
-  // rowsFor / capOf / statsAt / leveredAt are in CORE_JS: the comparison page asks the same
-  // questions of the same settings, and one cache means the two pages cannot disagree.
+  // rowsFor / capOf / statsAt / leveredAt are in CORE_JS: one cache of one bisection, so
+  // the two charts below cannot disagree about what a setting costs.
 
   // ---- shared plotter ---------------------------------------------------------------
   // `panels` stack down the card: the first is the tall one, the rest are compact rows.
@@ -1340,7 +1309,7 @@ function mountReport(root, DATA){
   //
   // Deliberately NOT the risk dial's value, so it stays cacheable and so the two charts are
   // a fixed pair rather than one of them sliding around under the reader. FIXED_RISK is in
-  // CORE_JS, because the comparison page's top chart is pinned at the same number.
+  // CORE_JS, beside the replay that reads it.
   let FIXED=null;
   function buildFixed(){
     return FIXED || (FIXED = VARIANTS.caps.map(tok => statsAt(FIXED_RISK, tok)));
@@ -1524,7 +1493,7 @@ function mountReport(root, DATA){
   function setCap(tok, typed){
     // IN_FAMILY guards the URL route as much as the control: report.html accepts a
     // "&cap=key:tok" pair, and letting one re-dial a strategy that is not on the cap axis
-    // would print a Quickfixwick section showing a cap run's trades.
+    // would print a Quickfixclose1 section showing a cap run's trades.
     if (!IN_FAMILY || !VARIANTS.v[tok] || tok === CAP) return;
     CAP = tok;
     if (tok !== "none") lastNum = tok;
@@ -1588,9 +1557,6 @@ PDF_SCRIPT = r"""
 // No PDF library is bundled. The browser's own print-to-PDF gives selectable vector text at
 // a fraction of the size that an html2canvas-style rasteriser would produce, so the button
 // opens report.html for the chosen strategies and lets it call window.print().
-const conclBtn = document.querySelector('[data-el="concl"]');
-if (conclBtn) conclBtn.addEventListener("click", () => { location.href = "conclusions.html"; });
-
 const pdfBtn = document.querySelector('[data-el="pdfopen"]');
 if (pdfBtn) pdfBtn.addEventListener("click", () => {
   const here = document.body.dataset.strategy;
@@ -1601,8 +1567,7 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
   mask.innerHTML =
     '<div class="dlg"><h4>Export PDF</h4>' +
     '<p>Choose the strategies to include. They print one per page, in this order, at the ' +
-    'risk currently set on the page. Anything written on the Conclusions page is printed ' +
-    'at the end.</p><div class="dlglist">' +
+    'risk currently set on the page.</p><div class="dlglist">' +
     STRATS.map(s => '<label class="dlgrow"><input type="checkbox" data-s="' + s.key + '">' +
       '<span class="nm">' + s.title + '<span class="sb">' + s.rule4 + '</span></span></label>').join("") +
     '</div><div class="dlgbtns"><button data-a="all">Select all</button>' +
@@ -1631,14 +1596,6 @@ if (pdfBtn) pdfBtn.addEventListener("click", () => {
     const caps = INST.filter(i => i.cap() !== VARIANTS.defaults[i.key])
                      .map(i => i.key + ":" + i.cap());
     if (caps.length) url += "&cap=" + caps.join(",");
-    // Carry the conclusions in the HASH as well as leaving them in localStorage. Opened from
-    // a file:// path, browsers do not reliably share storage between two local documents,
-    // and the text must survive the hop to the report either way. A hash is never sent
-    // anywhere -- it is read by the report itself.
-    const c = readConclusions();
-    if (c && ((c.general || "").trim() || (c.final || "").trim())){
-      url += "#c=" + encodeURIComponent(JSON.stringify(c));
-    }
     window.open(url, "_blank");
   }
   function onKey(e){
@@ -1678,9 +1635,9 @@ if (want.length){
 // still the honest way to ask "compare them all at 2%", and it keeps older links working.
 //
 // Number(null) is 0, NOT NaN. Reading the parameter straight into Number() therefore made a
-// report opened WITHOUT ?risk= (e.g. the Conclusions page's "Open report" link) re-run the
-// whole simulation at 0% -- every position sized to nothing, so the equity curve came out
-// flat at exactly the starting capital. Hence the empty-string guard before any Number().
+// report opened WITHOUT ?risk= re-run the whole simulation at 0% -- every position sized to
+// nothing, so the equity curve came out flat at exactly the starting capital. Hence the
+// empty-string guard before any Number().
 const rpRaw = (params.get("risk") || "").trim();
 if (rpRaw && rpRaw.indexOf(":") === -1){
   const rp = Number(rpRaw);
@@ -1695,31 +1652,6 @@ document.querySelectorAll(".repcount").forEach(e => {
   const n = document.querySelectorAll("[data-root]").length;
   e.textContent = n + (n === 1 ? " strategy" : " strategies");
 });
-// Conclusions: the hash wins (that is how Export PDF hands them over, and it survives
-// file:// documents not sharing storage); otherwise fall back to this browser's own copy.
-function conclusionsForReport(){
-  const m = (location.hash || "").match(/[#&]c=([^&]*)/);
-  if (m){ try { return JSON.parse(decodeURIComponent(m[1])); } catch(e){} }
-  return readConclusions();
-}
-(function renderConclusions(){
-  const c = conclusionsForReport() || {};
-  const g = (c.general || "").trim(), f = (c.final || "").trim();
-  const box = document.querySelector('[data-el="conclusions"]');
-  if (!box) return;
-  if (!g && !f){ box.remove(); return; }            // nothing written: no empty headings
-  const put = (key, text) => {
-    const wrap = box.querySelector('[data-el="'+key+'wrap"]');
-    if (!text){ wrap.remove(); return; }
-    // textContent, not innerHTML: this is typed prose, and CSS white-space:pre-wrap keeps
-    // the line breaks without needing any markup.
-    box.querySelector('[data-el="'+key+'"]').textContent = text;
-  };
-  put("cgeneral", g);
-  put("cfinal", f);
-  box.hidden = false;
-})();
-
 const printBtn = document.querySelector('[data-el="printnow"]');
 if (printBtn) printBtn.addEventListener("click", () => window.print());
 // Auto-open the print dialog when arrived at from the Export PDF button. Deferred a frame so
@@ -1844,8 +1776,8 @@ def section_html(strategy, data, riskbar, daily):
             f"when a trade closes; each new trade risks "
             f"<span class=\"riskecho\">{strategy.risk_pct:g}%</span> of liquid "
             # Only a SOLVED risk is the 6%-drawdown one. Saying so on a page published at a
-            # chosen 1% was a claim about work that was never done, and it was on six of the
-            # twenty-four of the twenty-five pages. Same test as page_title's "optimized".
+            # chosen 1% is a claim about work that was never done, which is true of every
+            # page but quickfix's. Same test as page_title's "optimized".
             + (f"capital, the risk that holds this strategy to a {eng.TARGET_DD:g}% "
                f"maximum drawdown. " if strategy.risk_solved else
                f"capital, a chosen figure rather than one solved for a drawdown budget. ")
@@ -1886,31 +1818,26 @@ def section_html(strategy, data, riskbar, daily):
             .replace("__FOOTER__", footer))
 
 
-def strat_meta(registry=None):
-    """The registry as the pages see it, or a subset of it.
+def strat_meta():
+    """The whole registry as the pages see it.
 
-    `r4` is the variant token the strategy's own backtest is filed under, and `risk` its
-    published default -- the comparison page needs both to price each strategy, and the PDF
-    picker ignores them. `solved` says whether that risk is the measured 6%-drawdown one or
-    a chosen number, which is a caveat the comparison page has to print rather than hide.
-
-    `registry` exists for ONE caller: the comparison page ships a subset (see
-    COMPARISON_SKIP). Everywhere else it is the whole registry, because the PDF picker and the
-    strategy switcher must be able to reach every page that exists.
+    `r4` is the variant token the strategy's own backtest is filed under and `risk` its
+    published default; the PDF picker ignores both. `solved` says whether that risk is the
+    measured 6%-drawdown one or a chosen number.
     """
     return json.dumps([{"key": s.key, "title": s.title, "rule4": s.rule4,
                         "rule4_text": s.rule4_text, "r4": s.token,
                         "risk": s.risk_pct, "solved": s.risk_solved}
-                       for s in (strategies.REGISTRY if registry is None else registry)],
+                       for s in strategies.REGISTRY],
                       separators=(",", ":"))
 
 
-def core_js(variants, registry=None):
+def core_js(variants):
     """The script block every page type emits first: the variant grid, the unpacker and the
     one money-management replay both renderers run on."""
     return (CORE_JS
             .replace("__VARIANTS__", json.dumps(variants, separators=(",", ":")))
-            .replace("__STRATS__", strat_meta(registry))
+            .replace("__STRATS__", strat_meta())
             .replace("__REFRISK__", f"{eng.RISK_PCT:g}")
             .replace("__STARTCAP__", f"{eng.STARTING_CAPITAL:g}"))
 
@@ -1927,13 +1854,10 @@ def build(strategy):
     data = load_data(strategy)
     variants = load_variants()
     check_variants(strategy, data, variants)
-    # Compare sits FIRST of the three buttons: it is the page that answers "and which of
-    # these should I use", which is the question a reader arrives at a single strategy's
-    # page already holding.
+    # Export PDF is the only button left in the row: Compare and Conclusions went with
+    # comparison.html and conclusions.html on 2026-08-12.
     body = (f'<div class="wrap">\n<nav class="nav noprint"><span class="lbl">Strategy</span>'
             f'{nav_html(strategy)}<span class="navbtns">'
-            f'<a class="pdfbtn" href="{COMPARISON_PATH.name}">Compare</a>'
-            f'<button class="pdfbtn" data-el="concl" type="button">Conclusions</button>'
             f'<button class="pdfbtn" data-el="pdfopen" type="button">Export PDF</button>'
             f'</span></nav>\n'
             + section_html(strategy, data, RISKBAR_HTML, DAILY_HTML) + "\n</div>")
@@ -1971,23 +1895,10 @@ def build_report(picked):
         '<span class="navbtns">'
         '<button class="pdfbtn" data-el="printnow" type="button">Print / Save as PDF</button>'
         '</span></nav>\n')
-    # Sits after every strategy, so it is the last thing in the PDF. Hidden until the script
-    # finds text; removed outright when there is none, so an unused field never prints.
-    conclusions = (
-        '\n<section class="concl" data-el="conclusions" hidden>\n'
-        '  <div data-el="cgeneralwrap">\n'
-        '    <h2 class="section-h">General conclusions</h2>\n'
-        '    <div class="conclbody" data-el="cgeneral"></div>\n'
-        '  </div>\n'
-        '  <div data-el="cfinalwrap">\n'
-        '    <h2 class="section-h">Final conclusions of the author</h2>\n'
-        '    <div class="conclbody" data-el="cfinal"></div>\n'
-        '  </div>\n'
-        '</section>\n')
     html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f'<title>Strategy report</title>\n{CSS}\n</head>\n<body>\n'
-            f'{head}{sections}\n{conclusions}</div>\n'
+            f'{head}{sections}\n</div>\n'
             f'{script_html(datasets, variants, REPORT_SCRIPT)}\n</body>\n</html>\n')
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(html, encoding="utf-8")
@@ -1995,682 +1906,11 @@ def build_report(picked):
           f"({', '.join(s.key for s in picked)})")
 
 
-# --- comparison.html ------------------------------------------------------------------
-# Every registered strategy against every other, which is a question no strategy page can
-# answer and the cap section cannot either: the cap charts sweep ONE Rule 4 shape across its
-# own parameter, and all but one of these have no such parameter.
-#
-# Same two-chart argument as "Choosing the profit cap", one level up. First the real result
-# at a constant 1% risk, which is honest about what happened and cannot rank anything because
-# the drawdown is free to move; then the same set levered to a constant 6% drawdown, which
-# is the ranking. BARS rather than lines, because the x axis here is a list of names, not a
-# continuous number line -- joining them with a line would imply an ordering and a rate of
-# change between neighbours that do not exist. (Even the bar exits, which DO have a
-# natural order, are drawn as bars: they are a sequence of settings, not a measured axis.)
-#
-# Everything that would have to be recounted is generated from len(REGISTRY): the page went
-# from four strategies to seven on 2026-07-31 and to twenty-five on 2026-08-01, and the only
-# thing that ever had to change was the text that had "four" typed into it, which is exactly
-# the thing this replaces. At twenty-five the LAYOUT had to give, not the wording: every label
-# stands up when the names stop fitting their slots (see barPlotter).
-COMPARISON_PATH = eng.OUT_DIR / "comparison.html"
-
-# Strategies the comparison page LEAVES OUT (user, 2026-08-02). Each still has its own page,
-# its own charter overlay and its own row everywhere else; they are simply not on this page's
-# two charts, its cards or its table.
-#
-# Why these three, stated so the list is not mistaken for a grab bag: this page compares
-# HOLDING PERIODS, and none of the three answers that question.
-#   quickfix        the cap family, a price target rather than a bar. Its own page carries the
-#                   cap dial and the cap charts, which is the sweep that fits it.
-#   quickfixwick    a price target too, fixed off the entry bar, so it has no bar number.
-#   quickfixclose0  a bar, but the one that cannot be levered to TARGET_DD at any bet size. It
-#                   was the page's only EXEMPT bar, and an exempt bar answers a different
-#                   question from every bar beside it.
-#
-# The exemption and outlier machinery in COMPARISON_JS stays: neither fires today, both are
-# general, and dropping them would only have to be rebuilt for the next strategy that needs
-# one. The page's counts are all generated, so nothing here has to be recounted by hand.
-COMPARISON_SKIP = ("quickfix", "quickfixwick", "quickfixclose0")
-
-
-def comparison_strategies():
-    """The registry as the comparison page shows it: the holding-period axis, nothing else."""
-    return [s for s in strategies.REGISTRY if s.key not in COMPARISON_SKIP]
-
-COMPARISON_HTML = r"""
-  <header>
-    <div class="eyebrow">__EYEBROW__</div>
-    <h1>__NWORD__ ways to take the profit</h1>
-    <p class="lede">__LEDE__</p>
-  </header>
-
-  <section class="cmpcards" data-el="cards"></section>
-
-  <section class="card sweepcard">
-    <div class="charthead">
-      <span class="t">All __N__ strategies at a constant 1% risk per trade</span>
-      <span class="s">real result &middot; drawdown varies &middot; not a ranking</span>
-    </div>
-    <p class="chartnote">What each one actually did on the same fixed bet, over the same days
-      and the same setups. The risk is pinned so the <b>drawdown is free to move</b>, which
-      is why the tallest capital bar is not automatically the best strategy, part of its
-      return is the deeper hole it was allowed to dig. Rank them on the chart below.</p>
-    <div class="plot barplot" data-el="fxplot">
-      <svg data-el="fxsvg" role="img" aria-label="Final capital, max drawdown, return over drawdown and win rate for each strategy at a constant 1 percent risk"></svg>
-      <div class="tip" data-el="fxtip"></div>
-    </div>
-    <div class="findings" data-el="fxfindings"></div>
-  </section>
-
-  <section class="card sweepcard">
-    <div class="charthead">
-      <span class="t">The same __N__ levered to a constant 6% drawdown</span>
-      <span class="s">risk solved per strategy &middot; equal pain &middot; this is the ranking</span>
-    </div>
-    <p class="chartnote">Risk is a free variable, so the honest question is: held to the
-      <b>same 6% maximum drawdown</b>, which strategy ends up with the most money? The risk
-      is solved per strategy to make that true, and the second pane is what each one is then
-      allowed to bet.<span data-el="nwexemptnote"></span></p>
-    <div class="plot barplot" data-el="nwplot">
-      <svg data-el="nwsvg" role="img" aria-label="Final capital, risk per trade allowed and win rate for each strategy at a constant 6 percent drawdown"></svg>
-      <div class="tip" data-el="nwtip"></div>
-    </div>
-    <div class="findings" data-el="nwfindings"></div>
-  </section>
-
-  <h2 class="section-h">The numbers</h2>
-  <div class="tradecard">
-    <div class="charthead" style="padding:12px 14px 10px">
-      <span class="t">Both readings, side by side</span>
-      <span class="s"><span data-el="tblcount"></span></span>
-    </div>
-    <div class="tradescroll">
-      <table class="trades"><thead><tr>
-        <th class="l" style="width:15%">Strategy</th>
-        <th class="l wrap" style="width:25%">Rule 4</th>
-        <th style="width:7%">Trades</th>
-        <th style="width:8%">Win %</th>
-        <th style="width:11%">Capital @1%</th>
-        <th style="width:8%">Max DD</th>
-        <th style="width:7%">Ret/DD</th>
-        <th style="width:9%">Risk for 6%</th>
-        <th style="width:10%">Capital @6%</th>
-      </tr></thead><tbody data-el="cmpbody"></tbody></table>
-    </div>
-  </div>
-
-  <p class="note">__NOTE__</p>
-  <footer class="mono">__FOOTER__</footer>
-"""
-
-COMPARISON_JS = r"""<script>
-// ---- comparison.html: every strategy against every other --------------------------
-// It calls the SAME `simulate`, `statsAt` and `leveredAt` as the strategy pages (CORE_JS),
-// so a figure here and the same figure on a strategy page cannot disagree. What is different
-// is only the x axis: one bar per registered Rule 4 rather than one shape's parameter.
-const $ = k => document.querySelector('[data-el="'+k+'"]');
-
-// The strategies this page shows, at their own Rule 4 tokens. NOT the whole registry since
-// 2026-08-02: STRATS is the trimmed list the builder shipped (see COMPARISON_SKIP), so the
-// page has nothing to filter and no way to disagree with its own variant table. Order is the
-// registry's, which here is the holding period ascending.
-const FIXED_PTS = STRATS.map(s => Object.assign(statsAt(FIXED_RISK, s.r4), {s:s}));
-
-// The levered chart, with one EXEMPTION (user, 2026-07-31). A strategy that cannot be made
-// to lose TARGET_DD at any bet size has no solved risk, and until now it drew no bar at all.
-// It is now priced at its OWN published risk instead and flagged `exempt`, so the ranking
-// chart has a bar for every strategy and the reader is not left with a blank column to
-// interpret.
-//
-// It lands on quickfixclose0 and, on this data, only there: its drawdown is theoretically
-// near zero, so no leverage reaches 6%. The bar is therefore NOT comparable to its
-// neighbours, which is why it is drawn hollow and dashed, marked with a dagger on the axis,
-// and spelled out in the prose under the chart. A solid bar here would be a lie; no bar at
-// all was merely unhelpful.
-const NORM_PTS = STRATS.map(s => {
-  const lv = leveredAt(s.r4);
-  return lv.final != null
-    ? Object.assign({}, lv, {s:s, exempt:false})
-    : Object.assign(statsAt(s.risk, s.r4), {s:s, exempt:true});
-});
-const EXEMPT = NORM_PTS.filter(p => p.exempt);
-
-const row=(k,v)=>`<div class="row"><span>${k}</span><b class="mono">${v}</b></div>`;
-const ddTxt = v => v==null?"—":Math.abs(v).toFixed(2)+"%";
-const rddTxt = v => v==null?"—":v.toFixed(1)+"x";
-const riskTxt = v => v==null?"—":v.toFixed(2)+"%";
-
-// ---- the bar plotter ---------------------------------------------------------------
-// One plotter for both charts, the same way the cap section has one line plotter: two
-// near-identical renderers drift apart.
-//
-// BARS, ZERO BASELINE, always. A bar's length is read as its value, so a truncated axis
-// would misstate every comparison on the page -- which is exactly the thing these two charts
-// exist to get right. The panes still auto-scale their TOP, so a pane's pixel height is how
-// much of the spread across the strategies is visible; the heights match the cap section's
-// (250px main, 90px readouts) for the same reason they were raised there.
-//
-// Bar width, label size and the x-axis type all scale with HOW MANY strategies there are, so
-// the chart survives the registry growing (four to seven on 2026-07-31, seven to twenty-five
-// on 2026-08-01) instead of running the names into each other.
-//
-// Past a certain density every LABEL IS TURNED ON ITS SIDE, names and values alike, and the
-// x-axis band grows to fit them. That is the whole adaptation and it is deliberate: the
-// alternative was to drop labels, or to let the chart scroll sideways, and both cost more
-// than a quarter turn does. A direct label on every bar is what makes these charts readable
-// in the printed PDF, where nothing can be hovered, so it is the last thing to give up. The
-// switch is measured, not a count: it fires when the longest name would not fit its slot.
-function barPlotter(plotEl, svgEl, tipEl, tipRows){
-  let g=null;
-  // Rotated text reads bottom to top. With text-anchor="end" the string hangs DOWNWARD from
-  // its anchor (used under the axis); with "start" it climbs UPWARD from it (used above a
-  // bar). Both are the same quarter turn, so the two never disagree about which way is up.
-  const CHW=0.58;                                  // width of a character, in font sizes
-  const spin=(el,x,y)=>{ el.setAttribute("transform",`rotate(-90 ${x.toFixed(1)} ${y.toFixed(1)})`);
-                         return el; };
-  function draw(items, panels){
-    if(!items.length) return;
-    const W=plotEl.clientWidth||880, mL=64, mR=16, plotW=W-mL-mR;
-    const n=items.length, slot=plotW/n;
-    // Value and name label sizes, stepped down as the axis fills up. The names are the long
-    // ones ("Quickfixclose20" is 15 characters), so they get the earlier step.
-    const vSize=n>6?11.5:12.5, nSize=n>12?9.5:n>6?10:n>4?11:12;
-    const names=items.map(q=>q.s.title+(q.exempt?" †":""));
-    const nameW=Math.max.apply(null,names.map(s=>s.length))*nSize*CHW;
-    // Turn the labels only when they genuinely will not fit lying down. At seven strategies
-    // they still do and the chart is unchanged; at twenty-five they do not.
-    const rot=nameW > slot-4;
-    const padT=18, xAxisH=rot?Math.ceil(nameW)+16:30, gap=28;
-    // A standing value label needs its own WIDTH as vertical headroom, and on a 90px readout
-    // pane there is not that much above the tallest bar. So when the labels stand up the
-    // readout panes get taller AND reserve more of themselves as headroom (`head`), which is
-    // what keeps a value off the pane caption sitting just above it. The main pane is left
-    // alone: it is 250px, it carries no caption, and nothing sits above it to collide with.
-    const hs=panels.map((p,i)=> rot && i>0 ? p.h+30 : p.h);
-    const head=pi=> rot && pi>0 ? 1.5 : 1.20;
-    const tops=[]; let H=padT;
-    hs.forEach(h=>{ tops.push(H); H+=h+gap; });
-    H=H-gap+xAxisH;
-    svgEl.setAttribute("viewBox",`0 0 ${W} ${H}`); svgEl.setAttribute("height",H);
-    while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-
-    // A gap between neighbours: a handful of bars should not read as one block, and the
-    // value labels above them need room not to collide. It narrows as the count grows, but
-    // never below a third of the slot, so the bars stay bars.
-    const bw=Math.min(Math.max(slot-30, slot*0.66), 104), cx=i=> mL+slot*i+slot/2;
-    const ys=[];
-
-    panels.forEach((p,pi)=>{
-      const top=tops[pi], ph=hs[pi], bot=top+ph;
-      const val=q=> { const v=q[p.k]; return v==null?null:(p.abs?Math.abs(v):v); };
-      const finite=items.map(val).filter(v=>v!=null);
-      // ONE value orders of magnitude above the rest flattens every other bar to a stub, and
-      // then the pane shows nothing except that the outlier is big -- which the reader could
-      // have got from the label. So scale to the REST and draw the outlier BROKEN at the top
-      // with its true value on it: the label carries the number, the bar only says "off this
-      // scale". The axis still starts at zero, so no bar that IS on the scale is misread.
-      //
-      // It fires today on return/drawdown: quickfixclose0's drawdown is a rounding error, so
-      // the ratio comes out in the thousands and the metric has stopped meaning anything.
-      // Written generally because any pane could meet an outlier later.
-      const desc=finite.slice().sort((a,b)=>b-a);
-      const scaleOn=(desc.length>1 && desc[0] > 10*Math.max(desc[1],1e-9))
-        ? desc.slice(1) : desc;
-      const ceiling=Math.max.apply(null, scaleOn.concat(p.ref!=null?[p.ref]:[], [0]));
-      const yHi=(ceiling*head(pi))||1;             // headroom for the label above the tallest
-      const y=v=> bot-(v/yHi)*ph;
-      ys.push(y);
-
-      (pi===0?niceTicks(0,yHi,3):[ceiling]).forEach(v=>{
-        if(v<0||v>yHi) return;
-        svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(v),y2:y(v),stroke:"var(--grid)","stroke-width":1}));
-        svgEl.appendChild(txt(mL-9,y(v)+3.5,p.fmt(v),"end",10.5,"var(--ink3)"));
-      });
-      svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:bot,y2:bot,stroke:"var(--border)","stroke-width":1}));
-      if(p.label) svgEl.appendChild(txt(mL+4,top-5,p.label,"start",10.5,"var(--ink3)",".04em"));
-      if(p.ref!=null){
-        svgEl.appendChild(mk("line",{x1:mL,x2:W-mR,y1:y(p.ref),y2:y(p.ref),stroke:"var(--ref)",
-          "stroke-width":1.2,"stroke-dasharray":"3 4"}));
-        svgEl.appendChild(txt(W-mR-2,y(p.ref)-5,p.fmt(p.ref)+" start","end",10,"var(--ink3)"));
-      }
-
-      items.forEach((q,i)=>{
-        const v=val(q);
-        // A pane with genuinely no value for a strategy draws NO BAR and says so on the
-        // baseline; a zero-height bar would read as "it earns nothing" instead of "the
-        // question does not apply". Since 2026-07-31 the levered chart no longer lands here
-        // for Quickfixclose0 -- an unreachable TARGET_DD is handled as an EXEMPTION with a
-        // hollow bar (see NORM_PTS) rather than as a hole -- but the branch stays for any
-        // pane that really has nothing to show.
-        if(v==null){
-          svgEl.appendChild(txt(cx(i),bot-6,"n/a","middle",11,"var(--ink3)"));
-          return;
-        }
-        const off=v>yHi, ty=off?top+14:y(v);
-        // An EXEMPT bar is a real number on a different basis, so it is drawn hollow and
-        // dashed in the pane's own colour: present and readable, but visibly not one of the
-        // bars the chart's title describes. The dagger on the axis name says which one.
-        svgEl.appendChild(mk("rect",Object.assign(
-          {x:(cx(i)-bw/2).toFixed(1),y:ty.toFixed(1),
-           width:bw.toFixed(1),height:Math.max(bot-ty,0).toFixed(1),rx:4},
-          q.exempt ? {fill:p.color,opacity:.18,stroke:p.color,"stroke-width":1.6,
-                      "stroke-dasharray":"5 3"}
-                   : {fill:p.color,opacity:.92})));
-        if(off){
-          // The break mark: two strokes in the surface colour across the bar, the standard
-          // "this bar does not end here" glyph.
-          [0,5].forEach(d=>svgEl.appendChild(mk("line",{
-            x1:(cx(i)-bw/2).toFixed(1), x2:(cx(i)+bw/2).toFixed(1),
-            y1:(ty+8+d).toFixed(1), y2:(ty+3+d).toFixed(1),
-            stroke:"var(--surface)","stroke-width":2.5})));
-        }
-        // Direct label on every bar, however many bars there are. Labelling all of them is
-        // clearer than a hover-only readout, and it is the only thing that makes the chart
-        // readable in the printed PDF, where nothing can be hovered. Once the slots are too
-        // narrow the label stands up above its bar instead of lying across its neighbours;
-        // it climbs into the headroom the pane already reserves and, at worst, into the gap
-        // above the pane, which is empty.
-        const vs=pi===0?vSize:11, str=(p.mfmt||p.fmt)(v)+(off?" ▲":"");
-        // A BROKEN bar's label has no headroom to climb into: the bar already fills its pane,
-        // so standing the label up above it would put it in the pane overhead (that is exactly
-        // what quickfixclose0's 7281x did to the drawdown pane's own labels). A broken bar is
-        // full height by definition, so when the labels stand up this one hangs DOWN into the
-        // bar instead, under the break mark and in the surface colour, which is legible on the
-        // fill and stays inside the pane it belongs to.
-        const lx=cx(i)+vs*0.36;
-        const lab=rot
-          // "end" hangs the string downward from its anchor, "start" climbs upward from it;
-          // both read bottom to top, so only the direction of travel differs.
-          ? (off ? spin(txt(lx,ty+18,str,"end",vs,"var(--surface)"),lx,ty+18)
-                 : spin(txt(lx,ty-6,str,"start",vs,"var(--ink)"),lx,ty-6))
-          : txt(cx(i),ty-7,str,"middle",vs,"var(--ink)");
-        if(pi===0) lab.setAttribute("font-weight",600);
-        svgEl.appendChild(lab);
-      });
-    });
-
-    // x axis: the strategy names, written once under the last pane. A dagger marks a column
-    // whose bars are on a different basis, once for the whole column rather than on each of
-    // its value labels.
-    const axY=H-xAxisH;
-    items.forEach((q,i)=>{
-      svgEl.appendChild(rot
-        ? spin(txt(cx(i)+nSize*0.36,axY+8,names[i],"end",nSize,"var(--ink2)"),
-               cx(i)+nSize*0.36, axY+8)
-        : txt(cx(i),H-10,names[i],"middle",nSize,"var(--ink2)"));
-    });
-
-    // Hover: a full-height hit slot per strategy, so the target is the column and not the
-    // bar, which on the short panes would be a few pixels tall.
-    const hit=[];
-    items.forEach((q,i)=>{
-      const r=mk("rect",{x:(mL+slot*i).toFixed(1),y:padT,width:slot.toFixed(1),
-        height:(H-xAxisH-padT).toFixed(1),fill:"transparent"});
-      svgEl.appendChild(r); hit.push(r);
-    });
-    const band=mk("rect",{y:padT,height:(H-xAxisH-padT).toFixed(1),fill:"var(--accent-soft)",
-      opacity:0,width:slot.toFixed(1),x:mL});
-    svgEl.insertBefore(band, svgEl.firstChild);
-    g={W,mL,slot,items,band,padT};
-  }
-  function move(ev){
-    if(!g)return;
-    const r=plotEl.getBoundingClientRect(), scale=g.W/r.width;
-    let i=Math.floor(((ev.clientX-r.left)*scale-g.mL)/g.slot);
-    if(i<0||i>=g.items.length){ leave(); return; }
-    const q=g.items[i];
-    g.band.setAttribute("x",(g.mL+g.slot*i).toFixed(1));
-    g.band.setAttribute("opacity",.5);
-    tipEl.innerHTML=tipRows(q);
-    tipEl.style.opacity=1;
-    const tw=tipEl.offsetWidth, th=tipEl.offsetHeight;
-    const cx=(g.mL+g.slot*i+g.slot/2)/scale;
-    let lx=cx-tw/2; lx=Math.max(2,Math.min(r.width-tw-2,lx));
-    tipEl.style.left=lx+"px"; tipEl.style.top=(g.padT/scale+8)+"px";
-  }
-  function leave(){ if(!g)return; g.band.setAttribute("opacity",0); tipEl.style.opacity=0; }
-  plotEl.addEventListener("pointermove",move);
-  plotEl.addEventListener("pointerleave",leave);
-  return draw;
-}
-
-// Pane colours follow the cap section's, measure for measure: capital green, drawdown red,
-// risk red, return/DD slate, win rate ink. Colour here says WHICH MEASURE, not which
-// strategy -- the strategies are already named on the axis and every bar is labelled with
-// its own value, so spending the colour channel on identity would buy nothing and would put
-// twenty-five hues in a place that needs none.
-const FIXED_PANELS = () => [
-  {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
-  {k:"dd", h:90, abs:1, color:"var(--neg)", label:"MAX DRAWDOWN", fmt:v=>v.toFixed(1)+"%"},
-  {k:"rdd", h:90, color:"var(--bars)", label:"RETURN / DRAWDOWN", fmt:v=>v.toFixed(0)+"x"},
-  {k:"wr", h:90, color:"var(--ink2)", label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
-];
-// No return/DD pane on the levered chart: drawdown is pinned at 6% by construction there, so
-// return/DD is just return divided by a constant and the pane would redraw the capital bars
-// in different units. Same reason it is missing from the levered cap chart.
-const NORM_PANELS = () => [
-  {k:"final", h:250, color:"var(--accent-line)", fmt:fmtK, mfmt:fmtUSD, ref:START_CAP},
-  {k:"risk", h:90, color:"var(--neg)", label:"RISK PER TRADE ALLOWED", fmt:v=>v.toFixed(2)+"%"},
-  {k:"wr", h:90, color:"var(--ink2)", label:"WIN RATE", fmt:v=>v.toFixed(0)+"%"},
-];
-
-const drawFixed = barPlotter($("fxplot"), $("fxsvg"), $("fxtip"), p =>
-  `<div class="d">${p.s.title}</div>`+
-  row("Final capital", fmtUSD(p.final)) + row("Return", pct(p.ret)) +
-  row("Max drawdown", ddTxt(p.dd)) + row("Risk per trade", riskTxt(FIXED_RISK)) +
-  row("Return / DD", rddTxt(p.rdd)) + row("Win rate", p.wr.toFixed(1)+"%") +
-  row("Trades", p.n));
-
-const drawNorm = barPlotter($("nwplot"), $("nwsvg"), $("nwtip"), p =>
-  `<div class="d">${p.s.title}${p.exempt?" †":""}</div>`+
-  (p.exempt ? row("Basis","exempt, at its own risk") : "")+
-  row("Risk per trade", riskTxt(p.risk)) + row("Final capital", fmtUSD(p.final)) +
-  row("Return", pct(p.ret)) + row("Max drawdown", ddTxt(p.dd)) +
-  row("Win rate", p.wr.toFixed(1)+"%") + row("Trades", p.n)+
-  (p.exempt ? row("Why", "never reaches "+TARGET_DD+"% at any bet") : ""));
-
-// ---- what the charts say, read out of the charts ------------------------------------
-// Generated, not typed, exactly like the cap section's first passage: every number below
-// comes off the two grids at render time, so it cannot go stale against the data.
-function renderFindings(){
-  const h=(t,b)=>`<h4>${t}</h4><p>${b}</p>`;
-  // `nw` is the strategies actually held to TARGET_DD. An exempt one is drawn but excluded
-  // here: it is at its own risk, so it cannot be ranked against a solved point.
-  const fx=FIXED_PTS.slice(), nw=NORM_PTS.filter(p=>!p.exempt && p.final!=null);
-  const fxBest=fx.reduce((a,b)=>b.final>a.final?b:a);
-  const ddHi=fx.reduce((a,b)=>Math.abs(b.dd)>Math.abs(a.dd)?b:a);
-  const ddLo=fx.reduce((a,b)=>Math.abs(b.dd)<Math.abs(a.dd)?b:a);
-  const r1=v=>Math.abs(v).toFixed(1);
-  const r2=v=>Math.abs(v).toFixed(2);
-  $("fxfindings").innerHTML = h("Why this one cannot rank them",
-    `Best here is <b>${fxBest.s.title}</b> at <b>${fmtUSD(fxBest.final)}</b>. But on the same `+
-    `1% bet these ${fx.length} dig completely different holes, <b>${r2(ddHi.dd)}%</b> for `+
-    `${ddHi.s.title} against <b>${r2(ddLo.dd)}%</b> for ${ddLo.s.title}, so they are not `+
-    `being asked the same question and the tallest bar is not the answer to it. Return over `+
-    `drawdown is on this chart for that reason, and it is also where the limit of the metric `+
-    `shows: divide by a drawdown that is a rounding error and the ratio runs off the pane. `+
-    `The chart below asks the question properly, by giving each strategy the bet size that `+
-    `puts it in the same hole.`);
-
-  // The ranking is over the SOLVED points only. An exempt strategy has a bar, but it is not
-  // in the race: it is priced at its own risk, not at one that produces the same drawdown, so
-  // letting it win "best at 6%" would be exactly the confusion the two-chart argument exists
-  // to prevent.
-  const unreach=NORM_PTS.filter(p=>p.exempt);
-  const nwBest=nw.length?nw.reduce((a,b)=>b.final>a.final?b:a):null;
-  const nwWorst=nw.length?nw.reduce((a,b)=>b.final<a.final?b:a):null;
-  const rHi=nw.length?nw.reduce((a,b)=>b.risk>a.risk?b:a):null;
-  let body = nwBest
-    ? `<span class="hl">Optimal point ${nwBest.s.title}</span> at `+
-      `<b>${fmtUSD(nwBest.final)}</b>, allowed <b>${riskTxt(nwBest.risk)}</b> per trade`+
-      (nwWorst && nwWorst!==nwBest
-        ? `, against ${fmtUSD(nwWorst.final)} for ${nwWorst.s.title} at `+
-          `${riskTxt(nwWorst.risk)}`
-        : ``)+
-      `. The bet size is the whole mechanism: the strategy that draws down least is the one `+
-      `that can be levered hardest, and `+
-      (rHi ? `${rHi.s.title} is allowed the most at ${riskTxt(rHi.risk)}` : ``)+`.`
-    : `No strategy on this page reaches a ${TARGET_DD}% drawdown at any bet size.`;
-  if(unreach.length){
-    const many=unreach.length>1;
-    body += ` <b>${unreach.map(p=>p.s.title).join(" and ")}</b> `+
-      `${many?"are":"is"} marked <b>†</b> and ${many?"are":"is"} not in that ranking: on `+
-      `this sample ${many?"they":"it"} cannot be made to lose ${TARGET_DD}% at ANY bet size, `+
-      `so there is no leverage that puts ${many?"them":"it"} on the same footing as the rest. `+
-      `${many?"Those bars are":"That bar is"} drawn hollow at `+
-      `${unreach.map(p=>riskTxt(p.risk)).join(" and ")}, `+
-      `${many?"their":"its"} own published risk, and reads `+
-      `${unreach.map(p=>fmtUSD(p.final)).join(" and ")} `+
-      `at a drawdown of ${unreach.map(p=>ddTxt(p.dd)).join(" and ")}, which is why the `+
-      `${TARGET_DD}% question does not apply. Comparing that height to the solid bars beside `+
-      `it compares two different questions. It is a result rather than a gap, and it is the `+
-      `strongest thing this chart says, read it against the fill assumptions in the note `+
-      `below rather than as a free lunch.`;
-  }
-  $("nwfindings").innerHTML = h("Where it pays", body);
-}
-
-// ---- the rule cards and the table ----------------------------------------------------
-function renderCards(){
-  $("cards").innerHTML = STRATS.map(s =>
-    `<div class="cmpcard"><div class="nm">${s.title}</div>`+
-    `<div class="r4">Rule 4 &middot; ${s.rule4}</div>`+
-    `<div class="rt">${s.rule4_text}</div></div>`).join("");
-}
-function renderTable(){
-  $("tblcount").textContent = STRATS.length + " strategies · rules 1 to 3 identical";
-  const cell=(v,cls)=>`<td class="${cls||"mono"}">${v}</td>`;
-  $("cmpbody").innerHTML = STRATS.map((s,i) => {
-    const f=FIXED_PTS[i], n=NORM_PTS[i];
-    return "<tr>"+
-      `<td class="l">${s.title}</td>`+
-      `<td class="l wrap">${s.rule4}</td>`+
-      cell(f.n) + cell(f.wr.toFixed(1)+"%") + cell(fmtUSD(f.final)) +
-      cell(ddTxt(f.dd)) + cell(rddTxt(f.rdd)) +
-      cell(riskTxt(n.risk)+(n.exempt?" †":"")) +
-      cell(fmtUSD(n.final)+(n.exempt?" †":"")) + "</tr>";
-  }).join("");
-}
-
-// The levered chart's note explains the dagger, so it is written only when there IS one. The
-// machinery is general and stays; the sentence describing a marker nobody can see on this page
-// is just clutter, and until 2026-08-02 (when the one exempt strategy came off the page) it
-// always had a case.
-function renderExemptNote(){
-  $("nwexemptnote").innerHTML = EXEMPT.length
-    ? ` A strategy that <b>never reaches ${TARGET_DD}% at any bet size</b> is marked `+
-      `<b>&dagger;</b> and drawn hollow at its own published risk instead, so it still has a `+
-      `bar to read, but that bar answers a different question and is not part of the ranking.`
-    : "";
-}
-
-function renderAll(){
-  drawFixed(FIXED_PTS, FIXED_PANELS());
-  drawNorm(NORM_PTS, NORM_PANELS());
-}
-renderCards(); renderTable(); renderFindings(); renderExemptNote(); renderAll();
-new ResizeObserver(renderAll).observe($("fxplot"));
-new ResizeObserver(renderAll).observe($("nwplot"));
-window.addEventListener("beforeprint", renderAll);
-</script>"""
-
-
-NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
-                "Nine", "Ten", "Eleven", "Twelve"]
-
-
-def build_comparison():
-    """comparison.html -- the holding-period axis against itself, one shared account.
-
-    NOT the whole registry since 2026-08-02: `COMPARISON_SKIP` names the three that are not on
-    that axis, and everything on this page (the charts, the cards, the table, the counts and
-    the generated prose) is built from `comparison_strategies()` instead.
-
-    It carries a TRIMMED variant grid: only the tokens the page actually prices, not all 99.
-    The full grid is ~530 KB and exists so the strategy pages can move a cap dial; this page
-    has no dial and would only be paying to ship settings nobody can reach from it. Skipping
-    three strategies makes it smaller again, which is a side effect and not the reason.
-    """
-    variants = load_variants()
-    shown = comparison_strategies()
-    want = {s.token for s in shown}
-    missing = sorted(want - set(variants["v"]))
-    if missing:
-        raise SystemExit(f"comparison: no backtest for Rule 4 {missing} -- rerun "
-                         f"run_portfolio.py after changing strategies.py")
-    slim = dict(variants)
-    slim["v"] = {t: variants["v"][t] for t in want}
-    slim["caps"] = [t for t in variants["caps"] if t in want]
-    slim["extra"] = [t for t in variants["extra"] if t in want]
-    slim["labels"] = {t: variants["labels"][t] for t in want}
-    slim["texts"] = {t: variants["texts"][t] for t in want}
-
-    n_strat = len(shown)
-    last_k = strategies.CLOSE_SWEEP_KS[-1]
-    skipped = [strategies.get(k).title for k in COMPARISON_SKIP]
-    eyebrow = (f"Strategy comparison &middot; daily &middot; "
-               f"${eng.STARTING_CAPITAL / 1000:.0f}k starting capital")
-    # The page is one question now, so the lede says which one and names what was left off it
-    # rather than letting a reader who knows the registry wonder where three of them went.
-    n_sweep = len(strategies.CLOSE_SWEEP_KS)
-    lede = (f"All {n_strat} strategies share <b>rules 1 to 3</b> exactly, so "
-            f"they take the <b>same setups on the same bars</b>, and the only thing that "
-            f"differs is Rule 4, where the profit is taken. Everything below is therefore a "
-            f"comparison of <b>exits and nothing else</b>, and all of them are one family: "
-            f"the <b>bar exit</b>, running from the bar after the entry out to bar "
-            f"{last_k}, so the axis reads as a <b>holding period</b> rather than as a list of "
-            f"unrelated ideas. {' and '.join(skipped)} are left off it on purpose, they are "
-            f"not points on that axis and each has its own page. One shared account per "
-            f"strategy, the same days, net of the same slippage. Read the two charts in "
-            f"order: the first is what happened, the second is the ranking.")
-    # The honesty note. It is longer than the strategy pages' because the shortest hold leans
-    # hardest on the daily-proxy fill model, and this is the page that invites reading the
-    # whole axis against itself.
-    note = (f"<b>Backtest on daily bars, net of slippage.</b> Costs are charged as tick "
-            f"slippage, 1 tick on entry, 1 on a limit take-profit or a scheduled "
-            f"close-out, 3 on a stop, converted to R through each trade's own risk "
-            f"distance. The shortest hold rests hardest on the fill model: "
-            f"<b>Quickfixopen1</b> assumes the next open is fillable and its stop cannot "
-            f"trade ahead of that open, so an adverse gap costs more than 1R. Every longer "
-            f"hold does carry a live stop on every bar in between, which is what makes them "
-            f"a different question rather than more of the same one, but they inherit the "
-            f"same daily-bar assumption: a stop inside a bar's range is taken as hit before "
-            f"that bar's close, and a {n_sweep}-bar sweep out to bar "
-            f"{last_k} makes that assumption {last_k} "
-            f"times on a single trade rather than once. One more thing the long holds change "
-            f"on their own: one position per market at a time, so a trade still running on "
-            f"bar {last_k} blocks every signal that market gives in "
-            f"the meantime, and part of the difference between a short hold and a long one is "
-            f"which setups each was free to take rather than what it made of them. Read the "
-            f"trade counts beside the capital. None of this is a free lunch, all of it is the "
-            f"daily-proxy assumption showing through, and intraday prices are what would "
-            f"settle it.")
-    footer = (f"source: &lt;strategy&gt;_portfolio_daily.xlsx and _variants.json &middot; "
-              f"top chart at a constant 1% risk, bottom levered to a constant "
-              f"{eng.TARGET_DD:g}% drawdown &middot; the shared money management is replayed "
-              f"in the browser from the same code the strategy pages run")
-
-    # The switcher stays COMPLETE even though the charts do not: it is how you leave this page,
-    # and the three skipped strategies still have pages to leave to. Dropping them from the nav
-    # would strand them behind the report's picker.
-    back = "".join(f'<a href="{page_path(s).name}">{s.title}</a>'
-                   for s in strategies.REGISTRY)
-    body = ('<div class="wrap">\n'
-            '<nav class="nav noprint"><span class="lbl">Strategy</span>' + back +
-            '<span class="navbtns">'
-            '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
-            '</span></nav>\n'
-            + COMPARISON_HTML
-            .replace("__EYEBROW__", eyebrow)
-            .replace("__NWORD__", NUMBER_WORDS[n_strat]
-                     if n_strat < len(NUMBER_WORDS) else str(n_strat))
-            .replace("__N__", str(n_strat))
-            .replace("__LEDE__", lede)
-            .replace("__NOTE__", note)
-            .replace("__FOOTER__", footer)
-            + "\n</div>")
-    html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-            f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-            f'<title>Strategy comparison</title>\n{CSS}\n</head>\n<body>\n{body}\n'
-            f'{core_js(slim, shown)}\n{COMPARISON_JS}\n</body>\n</html>\n')
-    COMPARISON_PATH.parent.mkdir(parents=True, exist_ok=True)
-    COMPARISON_PATH.write_text(html, encoding="utf-8")
-    print(f"wrote {COMPARISON_PATH.name}  {len(html):,} bytes")
-
-
-CONCLUSIONS_PATH = eng.OUT_DIR / "conclusions.html"
-
-CONCLUSIONS_SCRIPT = r"""<script>
-// Two free-text fields, kept in this browser and printed at the end of the exported PDF.
-// Nothing is sent anywhere and no file on disk is written -- the report reads them back when
-// it prints (via localStorage, or via the URL hash when opened from a file:// path, where
-// browsers do not reliably share storage between two local documents).
-const CONCL_KEY = "strategy_conclusions";
-const gEl = document.getElementById("cgeneral");
-const fEl = document.getElementById("cfinal");
-const status = document.getElementById("cstatus");
-function load(){
-  let c = null;
-  try { c = JSON.parse(localStorage.getItem(CONCL_KEY) || "null"); } catch(e){}
-  if (c){ gEl.value = c.general || ""; fEl.value = c.final || ""; }
-}
-let t = null;
-function save(quiet){
-  try {
-    localStorage.setItem(CONCL_KEY, JSON.stringify({general:gEl.value, final:fEl.value}));
-    status.textContent = quiet ? "Saved automatically." : "Saved.";
-  } catch(e){
-    status.textContent = "Could not save in this browser -- copy the text elsewhere before leaving.";
-  }
-}
-[gEl, fEl].forEach(el => el.addEventListener("input", () => {
-  status.textContent = "Typing...";
-  clearTimeout(t);
-  t = setTimeout(() => save(true), 500);        // autosave, so nothing is lost on navigation
-}));
-document.getElementById("csave").addEventListener("click", () => save(false));
-document.getElementById("cclear").addEventListener("click", () => {
-  if (!gEl.value && !fEl.value) return;
-  gEl.value = ""; fEl.value = ""; save(false);
-});
-load();
-status.textContent = (gEl.value || fEl.value) ? "Loaded your saved text." : "";
-</script>"""
-
-
-def build_conclusions():
-    """The Conclusions editor: two fields that print at the end of the exported PDF."""
-    back = "".join(
-        f'<a href="{page_path(s).name}">{s.title}</a>' for s in strategies.REGISTRY)
-    body = (
-        '<div class="wrap">\n'
-        '<nav class="nav"><span class="lbl">Back to</span>' + back +
-        '<span class="navbtns">'
-        f'<a class="pdfbtn" href="{COMPARISON_PATH.name}">Compare</a>'
-        '<a class="pdfbtn" href="report.html" target="_blank">Open report</a>'
-        '</span></nav>\n'
-        '<header>\n'
-        '  <div class="eyebrow">Report &middot; conclusions</div>\n'
-        '  <h1>Conclusions</h1>\n'
-        '  <p class="lede">Whatever you write here is printed at the <b>end of the exported '
-        'PDF</b>, after the last strategy. Both fields are optional, an empty one is '
-        'left out of the report entirely. The text is saved in this browser as you type; it '
-        'is not written to any file and never leaves your machine.</p>\n'
-        '</header>\n'
-        '<div class="cfield">\n'
-        '  <label for="cgeneral">General conclusions</label>\n'
-        '  <textarea id="cgeneral" placeholder="What the results show across the '
-        'strategies..."></textarea>\n'
-        '</div>\n'
-        '<div class="cfield">\n'
-        '  <label for="cfinal">Final conclusions of the author</label>\n'
-        '  <textarea id="cfinal" placeholder="Your own reading, caveats and what you intend '
-        'to do next..."></textarea>\n'
-        '</div>\n'
-        '<div class="cbar">\n'
-        '  <button class="pdfbtn" id="csave" type="button">Save</button>\n'
-        '  <button class="pdfbtn" id="cclear" type="button">Clear both</button>\n'
-        '  <span class="status" id="cstatus"></span>\n'
-        '</div>\n'
-        '</div>')
-    html = (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-            f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-            f'<title>Conclusions</title>\n{CSS}\n</head>\n<body>\n{body}\n'
-            f'{CONCLUSIONS_SCRIPT}\n</body>\n</html>\n')
-    CONCLUSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONCLUSIONS_PATH.write_text(html, encoding="utf-8")
-    print(f"wrote {CONCLUSIONS_PATH.name}  {len(html):,} bytes")
-
-
 def main(argv):
     for s in strategies.selected(argv):
         build(s)
-    build_conclusions()
-    # Both of these always carry EVERY strategy, whichever pages were built: report.html
-    # filters client-side from its picker, and the comparison is meaningless with a subset.
-    # A partial rebuild must not shrink either of them.
-    build_comparison()
+    # report.html always carries EVERY strategy that has results, whichever pages were built:
+    # it filters client-side from its own picker, so a partial rebuild must not shrink it.
     have = [s for s in strategies.REGISTRY
             if (eng.OUT_DIR / f"_equity_{s.key}.json").exists()]
     if have:

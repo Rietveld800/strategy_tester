@@ -32,12 +32,12 @@
 #           3.5R below entry, else refuse.
 #   Rule 4 (exit): STRATEGY-SPECIFIC -- the one rule that differs between strategies, and it
 #           comes in two mechanical forms (see strategies.py):
-#             a target POLICY (the cap family, Quickfixwick's entry-bar wick), recomputed on
+#             a target POLICY (the cap family), recomputed on
 #               every bar from the levels known at that bar's start, so a newly appearing
 #               nearer reversal moves a reversal target in and an elected one falls away.
 #               Only OPPOSITE-side reversals ever close a trade early (bearish for a short,
 #               bullish for a long) -- never a same-side one. Resolved by `check_exit`.
-#             a BAR EXIT (the five "out at bar k's open / close" strategies), which names a
+#             a BAR EXIT (the four "out at bar k's open / close" strategies), which names a
 #               price off the bar itself instead of watching a level. There is no TARGET for
 #               `check_exit` to resolve, so the named price is taken as given -- and it is the
 #               ONLY thing that may close a trade on its own entry bar. The STOP still runs
@@ -86,9 +86,9 @@
 #     already printed rather than one we are guessing the path to.
 #   - a bar exit that fires LATER than bar 1 is held through whole bars it did not enter on,
 #     and the stop is live on every one of them (see `no_target`). So the gap rules, the
-#     bigger-than-1R gapped stop and the -1R convention all apply to Quickfixclose1,
-#     Quickfixopen2 and Quickfixclose2 exactly as they do to a target strategy; what those
-#     three do NOT have is a target that could be ambiguous against the stop.
+#     bigger-than-1R gapped stop and the -1R convention all apply to Quickfixclose1 and
+#     Quickfixopen2 exactly as they do to a target strategy; what those two do NOT have is a
+#     target that could be ambiguous against the stop.
 
 import json
 import sys
@@ -252,8 +252,8 @@ def detect_short(bar, prev_close, tick, bull, bear):
     # No target here: Rule 4 is a property of the POLICY, not of the signal, and the same
     # position is replayed under every Rule 4 in the grid. The position carries the raw
     # ingredients instead -- `risk` (the cap family prices its ceiling off it) and the entry
-    # BAR's own high/low/tick (Quickfixwick prices its target off those) -- so a policy never
-    # needs anything the position does not already hold.
+    # BAR's own high/low/tick, which the retired entry-bar-wick target priced off -- so a
+    # policy never needs anything the position does not already hold.
     return dict(side="short", entry=entry, stop=stop, risk=risk,
                 bar_high=bar.high, bar_low=bar.low, tick=tick)
 
@@ -336,8 +336,8 @@ def check_exit(policy, pos, bar, bull, bear, prev_close):
     already have closed the trade.
 
     The policy NAMES its own exit, and the name goes into the ledger as it comes: 'target_r'
-    = the R cap itself was hit, at whatever cap the run used; 'target_bar' = Quickfixwick's
-    entry-bar wick. The one name the policy does not settle is 'reversal', which is
+    = the R cap itself was hit, at whatever cap the run used. The one name the policy does
+    not settle is 'reversal', which is
     resolved here into the SIDE of the level that closed the trade -- the policy knows a
     reversal target is in force, but the ledger wants to say which ladder it came off.
     """

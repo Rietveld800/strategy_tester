@@ -6,7 +6,7 @@
 # money management is re-run on the shared account.
 #
 #   python run_portfolio.py            # every registered strategy
-#   python run_portfolio.py quickfixwick   # just one
+#   python run_portfolio.py quickfixclose1   # just one
 #
 # Money management (confirmed with the user):
 #   - one account, starting STARTING_CAPITAL; cash balance changes ONLY when a trade closes.
@@ -269,7 +269,7 @@ def run(strategy, results):
 # One packed table of EVERY cap in strategies.CAP_CHOICES, written once and shared by every
 # strategy's page -- the cap family is a single family, so two strategies sitting on the
 # same cap are one run and must not be stored twice. Every registered Rule 4 that is NOT a cap
-# (the wick target and the 23 bar exits) is filed in the same table under its own
+# (the four bar exits) is filed in the same table under its own
 # token; they are listed separately from `caps` in the document, because the caps are the
 # dial's axis and a different Rule 4 shape is not a point on it.
 #
@@ -286,13 +286,15 @@ VAR_COLS = ["m", "side", "din", "dout", "xd", "gr", "cr", "bars",
             "pin", "pout", "sl", "reason"]
 # APPEND-ONLY. The table travels WITH the rows, so the order is technically free to change,
 # but keeping it append-only makes a hand-read of an old file far less confusing.
-#   target_bar   Quickfixwick's exit: one tick past the entry bar's own wick.
+#   target_bar   Quickfixwick's exit: one tick past the entry bar's own wick. That strategy
+#                was retired on 2026-08-12, so nothing books this any more; the name stays,
+#                because this table is append-only and old ledgers still carry it.
 #   exit_close   a market-on-close, on whichever bar the strategy names.
 #   exit_open    a market-on-open, on whichever bar the strategy names.
-# The last two name the ORDER TYPE, not the bar, so all five bar-exit strategies share them
-# (bar 0's close through bar 2's close) and none of them needed a new reason. That is
+# The last two name the ORDER TYPE, not the bar, so all four bar-exit strategies share them
+# (bar 0's close through bar 2's open) and none of them needed a new reason. That is
 # deliberate: the reason is what the ledger says HAPPENED, and "sold at the close" is the
-# same event whether it was bar 0's close or bar 2's.
+# same event whether it was bar 0's close or bar 1's.
 # A new exit reason has to be added HERE, to `prettyReason` in build_equity_html.py AND to
 # charter's TRADE_COLORS, or it will unpack as undefined on the pages and draw grey on the
 # charts.
@@ -462,9 +464,9 @@ def _streaks_and_avgs(raw):
     then, on the reasoning that the account balance moves as trades CLOSE. It was wrong for
     the reader: the blotter is sorted by entry, so somebody counting losing rows down the
     page counts the run in entry order, and the report was quoting a different sequence. It
-    showed up on quickfixwick, where three losing positions were opened on 2026-01-29 and
-    one of them did not close until 2026-02-03, after an unrelated winner had closed in
-    between -- so a run the reader plainly sees as 5 was reported as 4.
+    showed up on quickfixwick (retired 2026-08-12), where three losing positions were opened
+    on 2026-01-29 and one of them did not close until 2026-02-03, after an unrelated winner
+    had closed in between -- so a run the reader plainly sees as 5 was reported as 4.
     The question this number answers is "how many positions in a row lost", which is about
     the order they were TAKEN. The drawdown, which is about the order they closed, is a
     separate figure and still measured in exit order by `account()`.

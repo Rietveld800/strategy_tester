@@ -276,6 +276,16 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             stop_tightened=pos.stop_tightened,
             rpu_range_ratio=(round(pos.rpu_range_ratio, 4)
                              if pos.rpu_range_ratio is not None else None),
+            # THE EXIT'S SESSION, not the UTC date of its timestamp. `book` is
+            # only ever called from inside the day loop, so `day.date` is the
+            # session the exit belongs to -- and the two genuinely differ: a
+            # futures session opens the previous evening UTC, so 4 of 62 trades
+            # on the current window carry an entry_ts dated a day before their
+            # entry_date. Recorded 2026-08-12 because the charter overlay plots
+            # these on DAILY bars and was picking the wrong bar for exactly
+            # those trades. It records a date already known; no rule, no fill
+            # and no number changes.
+            exit_date=str(day.date),
             exit_ts=str(exit_ts), exit=exit_price, reason=reason,
             gross_r=round(gross_r, 4), cost_r=round(cost_r, 4),
             net_r=round(net_r, 4), risk_usd=round(pos.risk_usd, 2),

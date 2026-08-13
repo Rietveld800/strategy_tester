@@ -30,7 +30,6 @@ figures run_1m wrote and warns on drift.
 """
 
 import json
-import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -39,6 +38,7 @@ import pandas as pd
 
 import engine_1m
 import run_1m
+import run_1m_matrix
 from build_equity_html import CSS
 
 HERE = Path(__file__).resolve().parent
@@ -818,10 +818,12 @@ def build(data=None, out=None, variant=None):
     names one, written beside it under its own filename."""
     if variant:
         data = variant_payload(variant)
-        # Variant names are prose ("hybrid stop", "lockout 1"), so slug the
-        # lot rather than special-casing one separator into a filename.
-        slug = re.sub(r"[^a-z0-9]+", "_", variant.lower()).strip("_")
-        out = OUT_HTML.with_name(f"{OUT_HTML.stem}_{slug}.html")
+        # The matrix names its own cells, so it owns the filename form too
+        # ("variant 5" -> quickfix1m1dc_report_variant_05.html). A page
+        # built here can then never land under a name the matrix does not
+        # use.
+        out = OUT_HTML.with_name(
+            f"{OUT_HTML.stem}_{run_1m_matrix.variant_slug(variant)}.html")
     data = data or json.loads(IN_JSON.read_text(encoding="utf-8"))
     out = out or OUT_HTML
     trades = data["trades"]

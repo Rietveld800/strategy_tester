@@ -99,10 +99,13 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
-`hybrid1m` -> `levels1m` -> `levels1mnl` -> `charts`, ~12 min. The old
+`hybrid1m` -> `levels1m` -> `levels1mnl` -> `charts`, ~17 min. The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
 2026-08-12: run_1m 111s, matrix 240s, hybrid stop 1s (it reads the matrix JSON),
-each level study 54s.
+each level study 54s. The matrix became the full factorial on 2026-08-13
+(28 cells, 625 engine passes against 163) and now costs ~9 min, which is
+where the chain's ~12 -> ~17 min came from; `hybrid1m` builds `variant 5`
+and `levels1mnl` builds `variant 20`.
 
 **`rcut1m` IS REACHABLE BUT NOT IN A FULL RUN** (user, 2026-08-12: "we're not
 updating quickfix1m1dcRcut.html after clicking button. quickfix1m1dcRcut.html
@@ -156,12 +159,43 @@ JSON and matrix stay at 1%, since R is risk-independent. A refused entry
 does not spend the lockout allowance, so a band SHIFTS the trade list
 rather than slicing it; that is why every band in
 `build_1m_rcut_report.py` is its own engine run (that grid stays
-whole-universe, no cuts - the research record). Every adopted rule keeps
-its off/previous state as a matrix watch-cell: `no geometry cut`, `band
-0.00-0.50`, `no market filter`. The matrix chart draws every cell's
-curve LEVERED to a constant 6% drawdown (risk solved per cell, table
-carries both bases) on a window-height plot - comparing curves at one
-bet size hands the deepest hole the tallest line (Lode, 2026-08-11).
+whole-universe, no cuts - the research record). The matrix chart draws
+every cell's curve LEVERED to a constant 6% drawdown (risk solved per
+cell, table carries both bases) on a window-height plot - comparing
+curves at one bet size hands the deepest hole the tallest line (Lode,
+2026-08-11).
+**THE MATRIX IS A FULL FACTORIAL AND ITS CELLS ARE NUMBERED**
+(2026-08-13, Lode). It used to be one axis (the lockout) with four
+one-dial cells beside it, each NAMED for the dial it moved -- `hybrid
+stop`, `no lockout`, `band 0.00-0.50`, `no market filter`. That naming
+only works while every cell is one step from the baseline, and it hid
+the combinations: the table could not say what the hybrid stop is worth
+WITHOUT the lockout. So `run_1m_matrix.build_grid()` crosses four
+PROPERTIES and the page prints them as COLUMNS instead of a name --
+lockout (1 / 2 / none) x stop (4th/5th / hybrid / wick) x band
+(000-050 / 020-050 / full) = 27 cells on the filtered universe, plus
+one 31-market cell that Lode set at lockout 1 / hybrid / 000-050 so it
+pairs with `variant 4` rather than with the published dials. **`wick`
+IS the engine's existing `extreme` mode** (confirmed by Lode) -- one
+tick beyond the session's running extreme AT ENTRY, which is the only
+extreme that exists at entry -- so this cost NO engine change. Cells are
+`variant 1` .. `variant 28`, the published baseline is **`variant 2`**
+and it is an ordinary row: every row carries a checkbox (default on,
+plus all-on / all-off) and the baseline can be switched off like any
+other. Colour is a FAMILY, not an identity: hue is the stop anchor,
+the shade within a hue is the band, lightness is the lockout, and the
+31-market cell is magenta. `run_1m_matrix.variant_slug()` owns the
+filename form (`variant 5` -> `_variant_05`) and both consumers import
+it, so a variant page can never land under a name the matrix does not
+use. 625 engine passes against 163: the step went from ~4 to ~9 min and
+the refresh chain from ~12 to ~17 (accepted by Lode in advance). Every
+former watch-cell is still in the grid, now by number: `no geometry cut`
+= `variant 3`, `band 0.00-0.50` = `variant 1`, `hybrid stop` =
+`variant 5`, `no lockout` = `variant 20`. **`run_1m_matrix.py --page`
+redraws the page from the JSON with NO backtest** (the curves come back
+from the stored trades in seconds, colours are recomputed from the
+properties): nine minutes is too much to spend on a layout edit. The
+whole grid is written up in audit s.18.
 **THE SESSION LOCKOUT** (`max_entries_per_session`, default 1, Lode
 2026-08-07, audit section 11): at most one ENTRY per market per session,
 expiring at the session boundary. NOT part of rules 1-3 by explicit choice --
@@ -269,10 +303,11 @@ into charter's 1m study at that trade** (`trades.html?m=<Market>&t=<n>`,
 does); the link needs charter's `serve.py` running. The old dark
 `quickfix1m1dc_equity.html` and `run_1m.build_html` are GONE (2026-08-06) --
 the report says everything they said.
-`build_1m_report.py --variant "hybrid stop"` builds a report for ANY cell of
+`build_1m_report.py --variant "variant 5"` builds a report for ANY cell of
 `run_1m_matrix.py` straight from the matrix trades, with no extra backtest
 (the matrix already ran every dial over one data load) and under its own
-filename (the variant name, slugged). A variant worth keeping a report for
+filename (`run_1m_matrix.variant_slug()`, so
+`output/quickfix1m1dc_report_variant_05.html`). A variant worth keeping a report for
 belongs IN the matrix rather than in a page built once: the hybrid stop was
 left outside it and quietly aged a full grid out of date before anyone
 looked (2026-08-08). Only the published baseline goes through `run_1m.py`, because that

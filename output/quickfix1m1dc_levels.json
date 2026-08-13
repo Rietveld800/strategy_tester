@@ -1281,7 +1281,7 @@
    "reason": "close1",
    "net_r": 10.0714,
    "stop": 101.481,
-   "run_files": 34,
+   "run_files": 35,
    "run_start": "2026-06-25 07:35:00+00:00",
    "tests_in_run": 9,
    "tests_today": 5,
@@ -1353,7 +1353,7 @@
    "reason": "stop",
    "net_r": -1.0142,
    "stop": 1797.6999999999998,
-   "run_files": 6,
+   "run_files": 7,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 1,
    "tests_today": 9,
@@ -1363,7 +1363,7 @@
    "same_day_prior": 0,
    "nth_today": 1,
    "n_today": 1,
-   "episode_n": 2
+   "episode_n": 3
   },
   {
    "i": 56,
@@ -1425,7 +1425,7 @@
    "reason": "close1",
    "net_r": 0.3452,
    "stop": 1797.6999999999998,
-   "run_files": 6,
+   "run_files": 7,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 15,
    "tests_today": 7,
@@ -1435,7 +1435,7 @@
    "same_day_prior": 0,
    "nth_today": 1,
    "n_today": 1,
-   "episode_n": 2
+   "episode_n": 3
   },
   {
    "i": 59,
@@ -1449,7 +1449,7 @@
    "reason": "stop",
    "net_r": -1.1905,
    "stop": 1397.1,
-   "run_files": 6,
+   "run_files": 7,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 28,
    "tests_today": 4,
@@ -1473,7 +1473,7 @@
    "reason": "stop",
    "net_r": -1.1653,
    "stop": 1396.1,
-   "run_files": 3,
+   "run_files": 4,
    "run_start": "2026-08-08 07:35:00+00:00",
    "tests_in_run": 1,
    "tests_today": 1,
@@ -1508,9 +1508,49 @@
    "nth_today": 1,
    "n_today": 1,
    "episode_n": 1
+  },
+  {
+   "i": 62,
+   "market": "PL",
+   "side": "short",
+   "level": 1769.6,
+   "episode": "PL|short|1769.6|70",
+   "entry_ts": "2026-08-11 09:21:00+00:00",
+   "exit_ts": "2026-08-12 11:24:00+00:00",
+   "entry_date": "2026-08-11",
+   "reason": "stop",
+   "net_r": -1.0142,
+   "stop": 1797.6999999999998,
+   "run_files": 7,
+   "run_start": "2026-08-05 07:35:00+00:00",
+   "tests_in_run": 66,
+   "tests_today": 11,
+   "attempt": 3,
+   "prior_losses": 0,
+   "prior_wins": 1,
+   "same_day_prior": 0,
+   "nth_today": 1,
+   "n_today": 1,
+   "episode_n": 3
   }
  ],
  "episodes": [
+  {
+   "episode": "PL|short|1769.6|70",
+   "market": "PL",
+   "side": "short",
+   "level": 1769.6,
+   "n": 3,
+   "wins": 1,
+   "net_r": -1.683,
+   "sequence": "LWL",
+   "first": "2026-08-05 08:31:00+00:00",
+   "last": "2026-08-11 09:21:00+00:00",
+   "days": 3,
+   "run_files": 7,
+   "tests_first": 1,
+   "tests_last": 66
+  },
   {
    "episode": "CC|long|4082.0|12",
    "market": "CC",
@@ -1542,22 +1582,6 @@
    "run_files": 26,
    "tests_first": 13,
    "tests_last": 70
-  },
-  {
-   "episode": "PL|short|1769.6|70",
-   "market": "PL",
-   "side": "short",
-   "level": 1769.6,
-   "n": 2,
-   "wins": 1,
-   "net_r": -0.669,
-   "sequence": "LW",
-   "first": "2026-08-05 08:31:00+00:00",
-   "last": "2026-08-06 08:57:00+00:00",
-   "days": 2,
-   "run_files": 6,
-   "tests_first": 1,
-   "tests_last": 15
   },
   {
    "episode": "CC|long|2990.0|32",
@@ -1635,7 +1659,7 @@
    "first": "2026-08-07 11:25:00+00:00",
    "last": "2026-08-07 11:25:00+00:00",
    "days": 1,
-   "run_files": 6,
+   "run_files": 7,
    "tests_first": 28,
    "tests_last": 28
   },
@@ -1651,7 +1675,7 @@
    "first": "2026-08-09 22:00:00+00:00",
    "last": "2026-08-09 22:00:00+00:00",
    "days": 1,
-   "run_files": 3,
+   "run_files": 4,
    "tests_first": 1,
    "tests_last": 1
   },
@@ -2371,7 +2395,7 @@
    "first": "2026-07-28 11:55:00+00:00",
    "last": "2026-07-28 11:55:00+00:00",
    "days": 1,
-   "run_files": 34,
+   "run_files": 35,
    "tests_first": 9,
    "tests_last": 9
   }

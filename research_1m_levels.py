@@ -45,6 +45,7 @@ import pandas as pd
 
 import engine_1m
 import run_1m
+import run_1m_matrix
 from build_1m_report import STUDY_BASE, cls, esc, signed, stamp
 from build_equity_html import CSS
 
@@ -55,25 +56,24 @@ OUT_JSON = HERE / "output" / "quickfix1m1dc_levels.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_levels.html"
 
 
-def slug(variant):
-    return variant.replace(" ", "_").replace("+", "_")
-
-
 def paths(variant=None):
     """(json, html) for the published baseline, or for a matrix variant.
 
     A variant page is the SAME measurement on a different dial setting, so
     it lives beside the baseline's under its own name rather than
-    overwriting it. The no-lockout one matters in particular: once the
+    overwriting it. The NO-LOCKOUT cell matters in particular: once the
     lockout is on there are no same-session repeats left to look at, and
     the episodes table stops being able to show the thing that put the
     rule there (Lode, 2026-08-07 - "would be nice to keep that no-lockout
-    report too").
+    report too"). In the numbered grid that cell is `variant 20`.
+
+    The filename form comes from run_1m_matrix, which names the cells.
     """
     if not variant:
         return OUT_JSON, OUT_HTML
-    return (OUT_JSON.with_name(f"{OUT_JSON.stem}_{slug(variant)}.json"),
-            OUT_HTML.with_name(f"{OUT_HTML.stem}_{slug(variant)}.html"))
+    slug = run_1m_matrix.variant_slug(variant)
+    return (OUT_JSON.with_name(f"{OUT_JSON.stem}_{slug}.json"),
+            OUT_HTML.with_name(f"{OUT_HTML.stem}_{slug}.html"))
 
 
 def variant_source(variant):

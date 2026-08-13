@@ -1,31 +1,49 @@
 """The dial matrix for quickfix1m1dc v2: one pass over the data (each
 market's days/files load once), every variant run on the same inputs.
 
-GRID IN FORCE (Lode, 2026-08-07; geometry band 0.20/0.50 and the human
-market filter adopted into the base 2026-08-11, audit s.17): the SESSION
-LOCKOUT at 1, 2 and off, everything else at the published baseline (no
-tightening, overnight window blocked, no confirmation clause, ladder
-stop, geometry band 0.20/0.50, human-approved markets only). It asks
-what a market that has already traded today is worth:
-research_1m_levels.py measured the 1st trade of a market-day at 39.4%
-and +42.51R against the 2nd at 21.4% and -10.39R, and the lockout is the
-rule that follows from it. Read the LOSING STREAK and the drawdown first
-here.
+FULL FACTORIAL SINCE 2026-08-13 (Lode). The grid used to be one axis
+(the session lockout) with four cells riding along beside it, and every
+cell was NAMED for the one dial it moved - "hybrid stop", "no lockout",
+"band 0.00-0.50". That naming only works while each cell is one step
+from the baseline, and it hid the combinations: the table could not say
+what the hybrid stop is worth WITHOUT the lockout, or whether the 0.20
+lower cut still earns its place under a wick stop. So the cells are now
+numbered - `variant 1` .. `variant 28` - and the four PROPERTIES are
+columns on the page instead of prose in a name:
 
-Four cells ride along, off that axis: the HYBRID STOP at the published
-lockout (the dial left open when the confirmation clause went, section
-10), and one OFF/PREVIOUS state per adopted rule, so each adoption's
-case is re-measured on every pass instead of resting on the sample it
-was adopted on - NO GEOMETRY CUT (s.15e), BAND 0.00-0.50 (the lower cut
-published until 2026-08-11; the 0.20 edge is a one-step ridge, s.15c),
-and NO MARKET FILTER (the whole universe, s.16 - the inspection judged
-price-bar and reversal structure and dimensions, never a market's
-backtest result).
+  lockout : 1 / 2 / none        (max_entries_per_session)
+  stop    : 4th/5th / hybrid / wick   (stop_mode: ladder /
+            ladder_or_extreme / extreme - "wick" is one tick beyond the
+            session's running extreme AT ENTRY, above the high for a
+            short and below the low for a long)
+  band    : 000-050 / 020-050 / full  (the geometry cut; `full` = dial
+            off)
+  markets : 22 (the human market filter, s.16) / 31 (the whole universe)
+
+27 cells are the full cross of lockout x stop x band on the FILTERED
+universe. The 28th is the market filter's off-state, and Lode set it
+deliberately at lockout 1 / hybrid / 000-050 rather than at the
+published dials, so it pairs with variant 4 - same lockout, same stop,
+same band, only the filter differs. The published baseline is
+`variant 2` (lockout 1, 4th/5th, 020-050, 22 markets) and it is an
+ordinary row here: it can be switched off on the chart like any other.
+
+Everything not on those four axes stays at the published baseline: no
+tightening, overnight window blocked, no confirmation clause. Read the
+LOSING STREAK and the drawdown first.
 
 Earlier grids, all in git and written up in the audit: {tighten} x
 {window} picked the baseline (sections 6 and 7), {confirm} x {stop
 anchor} removed the confirmation clause and kept the ladder stop
-(section 10).
+(section 10), and the lockout axis (2026-08-07 to 2026-08-13) measured
+what a market that has already traded today is worth - the 1st trade of
+a market-day at 39.4% and +42.51R against the 2nd at 21.4% and -10.39R,
+which is the measurement the lockout rule follows from.
+
+EVERY ROW CARRIES A CHECKBOX (default on, plus all-on / all-off), which
+is what makes 28 curves readable at all: the colours run in families -
+hue by stop anchor, shade by band, lightness by lockout - so a family
+can be read together, and anything else is switched off.
 
 Metrics per variant, portfolio level (Lode's priority order): longest
 losing streak (entry order, net R), max shared-account drawdown (worst
@@ -40,7 +58,9 @@ output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
 """
 
+import colorsys
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -50,52 +70,109 @@ HERE = Path(__file__).resolve().parent
 OUT_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_matrix.html"
 
-# Everything sits on the published baseline; only the dial under test moves.
-# Since 2026-08-11 (audit s.17) the baseline is the ADOPTED geometry band
-# 0.20 / 0.50 on the HUMAN MARKET FILTER's universe (run_1m.HUMAN_APPROVED,
-# the markets that passed Lode's chart-structure inspection, s.16), so every
-# cell here inherits both and each cell is still a one-dial deviation from
-# what is actually published.
-BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
-            stop_mode="ladder",
-            min_rpu_range_ratio=0.20, max_rpu_range_ratio=0.50)
+# Everything off the four axes sits at the published baseline and never
+# moves: no tightening, overnight window blocked, no confirmation clause.
+BASE = dict(tighten=False, allow_pre_activation=False, confirm=False)
 HUMAN_APPROVED = run_1m.HUMAN_APPROVED
 
-# (name, dials, markets) - markets None = the whole universe, else only
-# keys in the set are run for that cell.
-VARIANTS = [
-    ("lockout 1", dict(BASE, max_entries_per_session=1), HUMAN_APPROVED),
-    ("lockout 2", dict(BASE, max_entries_per_session=2), HUMAN_APPROVED),
-    ("no lockout", dict(BASE, max_entries_per_session=None),
-     HUMAN_APPROVED),
-    # Not part of the lockout axis. The hybrid stop stayed an open dial
-    # when the confirmation clause was removed (section 10), so it is
-    # carried here against the published baseline rather than left in a
-    # report nobody re-runs (Lode, 2026-08-08).
-    ("hybrid stop", dict(BASE, stop_mode="ladder_or_extreme",
-                         max_entries_per_session=1), HUMAN_APPROVED),
-    # The OFF state of the adopted geometry cut (s.15e), so its case is
-    # re-measured on every pass instead of resting on the sample it was
-    # adopted on.
-    ("no geometry cut", dict(BASE, max_entries_per_session=1,
-                             min_rpu_range_ratio=None,
-                             max_rpu_range_ratio=None), HUMAN_APPROVED),
-    # The PREVIOUS lower cut (baseline until 2026-08-11). The 0.20 edge is
-    # a one-step ridge carried by five trades (s.15c), so the cell watches
-    # what adopting it is worth as the window grows.
-    ("band 0.00-0.50", dict(BASE, max_entries_per_session=1,
-                            min_rpu_range_ratio=0.00,
-                            max_rpu_range_ratio=0.50), HUMAN_APPROVED),
-    # The OFF state of the adopted market filter (s.16): the published
-    # dials on the whole universe, so the filter's case is re-measured on
-    # every pass too.
-    ("no market filter", dict(BASE, max_entries_per_session=1), None),
-]
-BASELINE_NAME = "lockout 1"               # the published run, for reference
-COLORS = {"lockout 1": "#1B9E4B", "lockout 2": "#E8A33D",
-          "no lockout": "#D64545", "hybrid stop": "#3D7FE8",
-          "no geometry cut": "#8E44AD", "band 0.00-0.50": "#C2185B",
-          "no market filter": "#0D9488"}
+# The four axes. Each entry is (label, dials it sets); the label is what
+# the page prints in that property's column, and the JSON carries both.
+LOCKOUTS = [("1", dict(max_entries_per_session=1)),
+            ("2", dict(max_entries_per_session=2)),
+            ("none", dict(max_entries_per_session=None))]
+# "wick" IS the engine's `extreme` mode (confirmed by Lode, 2026-08-13):
+# one tick beyond the session's running extreme AT ENTRY - above the high
+# for a short, below the low for a long. At entry is the only extreme that
+# exists; the rest of the day is not knowable there, and the stop does not
+# trail afterwards.
+STOPS = [("4th/5th", dict(stop_mode="ladder")),
+         ("hybrid", dict(stop_mode="ladder_or_extreme")),
+         ("wick", dict(stop_mode="extreme"))]
+BANDS = [("000-050", dict(min_rpu_range_ratio=0.00,
+                          max_rpu_range_ratio=0.50)),
+         ("020-050", dict(min_rpu_range_ratio=0.20,
+                          max_rpu_range_ratio=0.50)),
+         ("full", dict(min_rpu_range_ratio=None,
+                       max_rpu_range_ratio=None))]
+
+# Colour families, so 28 curves can still be read as a picture: HUE is
+# the stop anchor, a hue SHIFT is the band, LIGHTNESS is the lockout.
+# Two cells of the same family sit next to each other in colour, which is
+# the comparison the eye is usually making.
+STOP_HUE = {"4th/5th": 145, "hybrid": 215, "wick": 25}
+BAND_SHIFT = {"000-050": -20, "020-050": 0, "full": 20}
+LOCK_LIGHT = {"1": 32, "2": 46, "none": 61}
+UNFILTERED_HSL = (300, 0.65, 0.45)        # the one cell off the 22-market grid
+
+
+def color_for(props):
+    """The curve colour for a cell, from its properties (see above).
+
+    Emitted as HEX. The families are picked in HSL because that is the
+    space the scheme is defined in, but lightweight-charts is handed
+    `#rrggbb` - every other page in this project feeds it hex, and a
+    colour string it cannot parse fails inside the paint loop where no
+    console error and no test would show it.
+    """
+    if props["markets"] != "22":
+        h, s, li = UNFILTERED_HSL
+    else:
+        h = (STOP_HUE[props["stop"]] + BAND_SHIFT[props["band"]]) % 360
+        s, li = 0.68, LOCK_LIGHT[props["lockout"]] / 100
+    r, g, b = colorsys.hls_to_rgb(h / 360, li, s)
+    return "#{:02X}{:02X}{:02X}".format(round(r * 255), round(g * 255),
+                                        round(b * 255))
+
+
+def variant_slug(name):
+    """Filename form of a variant name: `variant 5` -> `variant_05`.
+
+    The number is zero-padded so the files of a 28-cell grid sort the way
+    the grid reads. Owned here because the matrix names the cells; the
+    JSON carries the result per variant as `slug`, and build_1m_report.py
+    and research_1m_levels.py import this function so a variant page can
+    never land under a name the matrix does not use.
+    """
+    m = re.match(r"^(.*?)\s*(\d+)$", name.strip())
+    head = re.sub(r"[^a-z0-9]+", "_",
+                  (m.group(1) if m else name).lower()).strip("_")
+    return f"{head}_{int(m.group(2)):02d}" if m else head
+
+
+def build_grid():
+    """The 28 cells: the full lockout x stop x band cross on the filtered
+    universe, then the market filter's off-state.
+
+    Returns (name, dials, markets, props) tuples in the numbered order.
+    The 28th cell is at lockout 1 / hybrid / 000-050 BY CHOICE (Lode,
+    2026-08-13), not at the published dials, so it pairs with variant 4:
+    same lockout, same stop, same band, only the filter differs.
+    """
+    out = []
+    for lock_lab, lock in LOCKOUTS:
+        for stop_lab, stop in STOPS:
+            for band_lab, band in BANDS:
+                props = dict(lockout=lock_lab, stop=stop_lab,
+                             band=band_lab, markets="22")
+                out.append((f"variant {len(out) + 1}",
+                            dict(BASE, **lock, **stop, **band),
+                            HUMAN_APPROVED, props))
+    out.append((f"variant {len(out) + 1}",
+                dict(BASE, max_entries_per_session=1,
+                     stop_mode="ladder_or_extreme",
+                     min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50),
+                None, dict(lockout="1", stop="hybrid", band="000-050",
+                           markets="31")))
+    return out
+
+
+VARIANTS = build_grid()
+# The published run (lockout 1, 4th/5th, 020-050, 22 markets). It is an
+# ORDINARY row on the page - it carries a checkbox like every other cell
+# and can be switched off (Lode, 2026-08-13) - and this constant only
+# marks it in the table and the JSON.
+BASELINE_NAME = "variant 2"
+COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 
 
 def entry_order_metrics(trades):
@@ -158,7 +235,7 @@ def close_dd_pct(curve, start_capital=100_000.0):
 def main():
     keys = sys.argv[1:] or (run_1m.ELIGIBLE_FUTURES + run_1m.ETFS
                             + list(run_1m.BINANCE))
-    results = {name: {"trades": [], "rows": []} for name, _, _ in VARIANTS}
+    results = {name: {"trades": [], "rows": []} for name, _, _, _ in VARIANTS}
     skipped = []
     for key in keys:
         try:
@@ -173,10 +250,13 @@ def main():
             print(f"{key}: EXCLUDED - {excluded['reason']}", flush=True)
             continue
         days, files, tick, note = inputs
-        line = [key]
-        for name, dials, markets in VARIANTS:
+        # The progress line quotes the BASELINE cell and counts the rest:
+        # 28 cells x "name Nt R" is a line nobody reads, and the full
+        # per-market figures are in the JSON for every cell anyway.
+        ran = 0
+        base_line = "-"
+        for name, dials, markets, _props in VARIANTS:
             if markets is not None and key not in markets:
-                line.append(f"{name} -")
                 continue
             trades, summary = run_1m.engine_1m.run_market(
                 days, files, tick, **dials)
@@ -185,12 +265,15 @@ def main():
             summary.update(market=key, note=note, tick=tick)
             results[name]["trades"].extend(trades)
             results[name]["rows"].append(summary)
-            line.append(f"{name} {summary['trades']}t "
-                        f"{summary['net_r_total']}R")
-        print("  |  ".join(line), flush=True)
+            ran += 1
+            if name == BASELINE_NAME:
+                base_line = (f"{summary['trades']}t "
+                             f"{summary['net_r_total']}R")
+        print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells",
+              flush=True)
 
     report = {}
-    for name, dials, markets in VARIANTS:
+    for name, dials, markets, props in VARIANTS:
         trades = sorted(results[name]["trades"],
                         key=lambda t: t["entry_ts"])
         final, max_dd, curve = run_1m.portfolio_replay(trades)
@@ -221,8 +304,13 @@ def main():
         geom = {k: sum(r.get(k, 0) for r in results[name]["rows"])
                 for k in ("refused_wide", "refused_tight", "range_unjudged")}
         report[name] = dict(
+            props=props,
+            slug=variant_slug(name),
+            baseline=(name == BASELINE_NAME),
+            color=COLORS[name],
             dials=dials,
             markets=sorted(markets) if markets is not None else None,
+            markets_run=len(results[name]["rows"]),
             geometry=geom,
             trades=len(trades),
             win_rate=round(100 * wins / len(trades), 1) if trades else None,
@@ -237,7 +325,9 @@ def main():
             exit_mix=mix,
             curve=curve6,
         )
-        print(f"\n{name}: {report[name]['trades']} trades, "
+        print(f"\n{name} [lockout {props['lockout']}, {props['stop']}, "
+              f"{props['band']}, {props['markets']} markets]: "
+              f"{report[name]['trades']} trades, "
               f"wr {report[name]['win_rate']}%, "
               f"net {report[name]['net_r']}R, "
               f"longest losing streak {streak}, "
@@ -257,18 +347,61 @@ def main():
                     min_tested=run_1m.engine_1m.MIN_REVERSALS),
         variants={n: {k: v for k, v in r.items() if k != "curve"}
                   for n, r in report.items()},
-        per_market={n: results[n]["rows"] for n, _, _ in VARIANTS},
-        trades={n: results[n]["trades"] for n, _, _ in VARIANTS},
+        per_market={n: results[n]["rows"] for n, _, _, _ in VARIANTS},
+        trades={n: results[n]["trades"] for n, _, _, _ in VARIANTS},
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
+    write_page(report)
+    print(f"\nwrote {OUT_JSON.name} and {OUT_HTML.name}")
+
+
+def rebuild_page():
+    """Redraw the page from the matrix JSON, with NO backtest.
+
+    The grid is ~9 minutes and the page is the part that gets edited, so
+    a layout or colour change must not cost a data pass. The curves are
+    the only thing the JSON does not carry, and they come back from the
+    stored trades in seconds (`portfolio_replay` + the same 6% solve).
+    Colours are recomputed from the properties rather than read back, so
+    a palette edit lands here too. Usage: `python run_1m_matrix.py
+    --page`.
+    """
+    m = json.loads(OUT_JSON.read_text(encoding="utf-8"))
+    report = {}
+    for name, v in m["variants"].items():
+        trades = sorted(m["trades"][name], key=lambda t: t["entry_ts"])
+        risk6 = solve_risk(trades)
+        _final, _dd, curve = run_1m.portfolio_replay(
+            trades, risk_pct=risk6) if risk6 else run_1m.portfolio_replay(
+            trades)
+        report[name] = dict(v, color=color_for(v["props"]), curve=curve)
+    write_page(report)
+    print(f"redrew {OUT_HTML.name} from {OUT_JSON.name} "
+          f"({len(report)} cells, no backtest)")
+
+
+def write_page(report):
+    """The matrix page: one chart, one table, a checkbox per row."""
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
+    # The row order IS the variant order, and so is the series order: the
+    # checkbox carries its row's index and toggles series[i], so nothing
+    # here may be sorted or filtered on its way to the page.
     head = "".join(
-        f"<tr><td>{n}</td><td>{r['trades']}</td><td>{r['win_rate']}</td>"
+        f"<tr data-i='{i}'{' class=base' if r['baseline'] else ''}>"
+        f"<td><input type='checkbox' class='v' data-i='{i}' checked></td>"
+        f"<td>{n}{' *' if r['baseline'] else ''}</td>"
+        f"<td>{r['props']['lockout']}</td><td>{r['props']['stop']}</td>"
+        f"<td>{r['props']['band']}</td><td>{r['markets_run']}</td>"
+        f"<td>{r['trades']}</td><td>{r['win_rate']}</td>"
         f"<td>{r['net_r']}</td><td><b>{r['longest_losing_streak']}</b></td>"
         f"<td>{r['max_dd_r']}</td><td>{r['max_dd_pct']}%</td>"
         f"<td>{r['max_dd_close_pct']}%</td>"
         f"<td>${r['final_cash']:,.0f}</td>"
-        f"<td>{r['risk_6pct']}%</td>"
+        # A cell whose drawdown never reaches 6% at any bet size has no
+        # solve: it is drawn at 1% and says so rather than printing a
+        # None. Only reachable on a thin sample (a debug run over one
+        # market), never on the published universe.
+        f"<td>{str(r['risk_6pct']) + '%' if r['risk_6pct'] else '- (1%)'}</td>"
         f"<td><b>${r['final_6pct']:,.0f}</b></td>"
         f"<td>{r['exit_mix']['close1']['wins']} / "
         f"{r['exit_mix']['close1']['n'] - r['exit_mix']['close1']['wins']} / "
@@ -278,13 +411,14 @@ def main():
                 + ' / ' + str(r['geometry']['range_unjudged']))
                if (r['geometry']['refused_wide'] + r['geometry']['refused_tight'])
                else ''}</td>"
-        f"<td><i style='background:{COLORS[n]}'></i></td></tr>"
-        for n, r in report.items())
+        f"<td><i style='background:{r['color']}'></i></td></tr>"
+        for i, (n, r) in enumerate(report.items()))
     series = "\n".join(
-        f"chart.addLineSeries({{color:'{COLORS[n]}', lineWidth:2, "
-        f"priceLineVisible:false, lastValueVisible:false}})"
-        f".setData({json.dumps([{'time': t, 'value': v} for t, v in report[n]['curve']])});"
-        for n, _, _ in VARIANTS)
+        f"series.push(chart.addLineSeries({{color:'{r['color']}', "
+        f"lineWidth:2, priceLineVisible:false, lastValueVisible:false}})"
+        f");\nseries[series.length-1].setData("
+        f"{json.dumps([{'time': t, 'value': v} for t, v in r['curve']])});"
+        for r in report.values())
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc v2 - dial matrix</title><style>
 body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
@@ -302,37 +436,63 @@ sans-serif; margin:0; padding:14px; }}
 #tbl td, #tbl th {{ padding:4px 10px; border-bottom:1px solid #ddd;
 text-align:right; }}
 #tbl td:first-child, #tbl th:first-child {{ text-align:left; }}
+#tbl td:nth-child(2), #tbl th:nth-child(2),
+#tbl td:nth-child(3), #tbl th:nth-child(3),
+#tbl td:nth-child(4), #tbl th:nth-child(4),
+#tbl td:nth-child(5), #tbl th:nth-child(5) {{ text-align:left; }}
+/* The four PROPERTY columns are what turns a numbered cell back into a
+   model, so they are boxed off from the metrics beside them. */
+#tbl td:nth-child(6), #tbl th:nth-child(6) {{ border-right:2px solid #bbb; }}
 #tbl td i {{ display:inline-block; width:22px; height:10px; }}
+#tbl tr.off td {{ opacity:.35; }}
+#tbl tr.base td:nth-child(2) {{ font-weight:600; }}
+#ctl {{ margin-top:10px; }}
+#ctl button {{ font:inherit; padding:2px 10px; margin-right:6px; }}
 </style></head><body>
-<b>quickfix1m1dc v2 - the session lockout</b>
+<b>quickfix1m1dc v2 - the dial matrix</b>
 <span style="color:#666"> market-order entries,
 {run_1m.engine_1m.ENTRY_SLIP_TICKS} ticks entry slippage,
 {run_1m.engine_1m.SLIP_STOP_TICKS} on a stop and
 {run_1m.engine_1m.SLIP_SCHEDULED_TICKS} on a settlement exit, 1% risk on
 the level-to-stop distance, no tightening, overnight window blocked, no
-confirmation clause, ladder stop.
-<b>lockout N</b> = at most N ENTRIES per market per session, expiring at
-the session boundary; a position carried in from the previous session
-and stopped intraday does not spend the allowance.
-Every cell carries the ADOPTED baseline of 2026-08-11 (audit s.17): the
-geometry band 0.20/0.50 (refuse an entry whose level-to-stop distance is
-above 0.50 or below 0.20 of the trailing 24h range) on the
-{len(HUMAN_APPROVED)} markets that passed Lode's chart-structure
-inspection of the 1m study (s.16 - never a judgment on a market's
-backtest result).
-Each adopted rule keeps its off/previous state as a cell:
-<b>no geometry cut</b> (dial off), <b>band 0.00-0.50</b> (the lower cut
-published until 2026-08-11; the 0.20 edge is a one-step ridge, s.15c)
-and <b>no market filter</b> (the whole universe).
+confirmation clause.
+Every combination of the four properties is its own engine run, and the
+properties are COLUMNS rather than a name, so the table can be read
+across as well as down.
+<b>lockout</b> = at most N ENTRIES per market per session, expiring at
+the session boundary (a position carried in from the previous session
+and stopped intraday does not spend the allowance).
+<b>stop</b>: <b>4th/5th</b> one tick beyond the 5th reversal (4th when
+only four), <b>hybrid</b> whichever of that and the session's running
+extreme at entry is further away, <b>wick</b> the running extreme alone -
+a tick above the entry day's high for a short, below its low for a long.
+<b>band</b> = the geometry cut: refuse an entry whose level-to-stop
+distance is outside that fraction of the trailing 24h high-low range
+(<b>full</b> = no cut).
+<b>markets</b>: {len(HUMAN_APPROVED)} = the chart-structure inspection's
+universe (audit s.16, never a judgment on a market's backtest result),
+31 = every market that produced a run.
+The published baseline is <b>{BASELINE_NAME}</b> (marked *), and it is an
+ordinary row here.
 Read the losing streak and the drawdown first.</span>
 <div style="color:#666; margin-top:8px"><b style="color:#222">The curves
 are drawn at a constant 6% max drawdown</b> - risk per trade solved per
 cell by bisection (the table's <b>risk @6% DD</b> column), because at one
 shared bet size the tallest curve is partly just the deepest hole that
 cell was allowed to dig. The 1% figures stay in the table beside the
-solved ones.</div>
+solved ones. <b style="color:#222">Colour reads as a family</b>: hue is
+the stop anchor (green 4th/5th, blue hybrid, orange wick), the shade
+within a hue is the band, and the lighter the line the looser the
+lockout. The one 31-market cell is magenta.</div>
 <div id="chart"></div>
-<table id="tbl"><tr><th>variant</th><th>trades</th><th>wr%</th><th>netR</th>
+<div id="ctl"><button id="allon">all on</button>
+<button id="alloff">all off</button>
+<span style="color:#666">- untick a row to drop its curve; the baseline
+too.</span></div>
+<table id="tbl"><tr><th></th><th>variant</th>
+<th>lockout</th><th>stop</th><th>band</th>
+<th title="markets that produced a run in this cell">markets</th>
+<th>trades</th><th>wr%</th><th>netR</th>
 <th>longest losing streak</th><th>max DD (R)</th><th>max DD %</th>
 <th>max DD close %</th><th>final @1%</th>
 <th>risk @6% DD</th><th>final @6% DD</th>
@@ -348,12 +508,30 @@ const chart = LightweightCharts.createChart(
      grid: {{ vertLines: {{ visible: false }},
               horzLines: {{ visible: false }} }},
      timeScale: {{ timeVisible: true }} }});
+const series = [];
 {series}
 chart.timeScale().fitContent();
+// series[i] IS the row with data-i="i" - both are written in variant
+// order and neither list is ever sorted, which is the whole contract
+// between the table and the chart.
+const boxes = [...document.querySelectorAll('#tbl input.v')];
+function apply(cb) {{
+  const i = +cb.dataset.i;
+  series[i].applyOptions({{visible: cb.checked}});
+  cb.closest('tr').classList.toggle('off', !cb.checked);
+}}
+boxes.forEach(cb => cb.addEventListener('change', () => apply(cb)));
+function setAll(on) {{
+  boxes.forEach(cb => {{ cb.checked = on; apply(cb); }});
+}}
+document.getElementById('allon').onclick = () => setAll(true);
+document.getElementById('alloff').onclick = () => setAll(false);
 </script></body></html>"""
     OUT_HTML.write_text(html, encoding="utf-8")
-    print(f"\nwrote {OUT_JSON.name} and {OUT_HTML.name}")
 
 
 if __name__ == "__main__":
-    main()
+    if "--page" in sys.argv[1:]:
+        rebuild_page()
+    else:
+        main()

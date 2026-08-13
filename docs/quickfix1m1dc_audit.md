@@ -365,6 +365,67 @@ for the flattest curve in the book, which is the drawdown-first framing
 this project set in its opening lines. The R-cut page remains the
 research record and its grid still runs the whole universe with no cuts.
 
+## 18. The matrix becomes a full factorial, and its cells get numbers (Lode, 2026-08-13)
+
+The grid was one axis (the lockout) with four cells riding beside it, each
+NAMED for the single dial it moved: `hybrid stop`, `no lockout`, `band
+0.00-0.50`, `no market filter`. That naming works only while every cell is
+one step from the baseline, and it HID THE COMBINATIONS - the table could
+not say what the hybrid stop is worth without the lockout, or whether the
+0.20 lower cut still earns its place under a wick stop. Lode's reading of
+the 2026-08-13 matrix is what prompted it: the hybrid stop was winning on
+levered equity while the cells pushing 6% drawdown were being sized down
+into a flatter curve, which is the resilience question the grid could not
+answer one dial at a time.
+
+So the cells are numbered `variant 1` .. `variant 28` and the four
+PROPERTIES are columns on the page:
+
+| property | values | dial |
+|---|---|---|
+| lockout | 1 / 2 / none | `max_entries_per_session` |
+| stop | 4th/5th / hybrid / wick | `stop_mode` = ladder / ladder_or_extreme / extreme |
+| band | 000-050 / 020-050 / full | the geometry cut, `full` = off |
+| markets | 22 / 31 | the human market filter (s.16) |
+
+27 cells are the full lockout x stop x band cross on the filtered
+universe. The 28th is the filter's off-state, set BY CHOICE at lockout 1 /
+hybrid / 000-050 rather than at the published dials, so it pairs with
+`variant 4`: same lockout, same stop, same band, only the filter differs.
+The old whole-universe cell (published dials on 31 markets) is therefore
+gone; what replaced it isolates the same dial against a different partner.
+
+**`wick` cost no engine change.** Lode's specification - a tick above the
+entry day's high for a short, below its low for a long - IS the existing
+`extreme` mode (s.10): one tick beyond the session's RUNNING extreme at
+entry, which is the only extreme that exists at entry. It does not trail
+afterwards.
+
+Every metric column is unchanged, and the six cells carried over from the
+old grid reproduce to the decimal (`variant 2` = the old `lockout 1` at
+$155,778 and 0.865% risk; `variant 5` = the old `hybrid stop` at $189,793
+and 1.289%), which is the check that the rebuild moved names and not
+numbers. Cost: 625 engine passes against 163, the step from ~4 to ~9
+minutes and the refresh chain from ~12 to ~17, accepted in advance.
+
+Reading the page: every row carries a CHECKBOX (default on, plus all-on /
+all-off) and the baseline can be unticked like anything else, because 28
+static curves are unreadable. Colour is a family - hue is the stop anchor,
+the shade within a hue is the band, lightness is the lockout, magenta is
+the 31-market cell - so a family can be read together and the rest
+switched off. `run_1m_matrix.py --page` redraws the page from the JSON
+with no backtest, since the grid is nine minutes and the page is the part
+that gets edited.
+
+First reading of the full cross (window to 2026-08-11, levered to 6% DD):
+`variant 5` (lockout 1, hybrid, 020-050) leads at $189,793 with the
+shortest losing streak in the book (3), and every wick cell is at the
+bottom of its lockout group - the wider anchor's smaller R denominator is
+not paid for by its win rate. The lockout still matters most through the
+drawdown: at 4th/5th and 020-050 the streak runs 4 (lockout 1), 5
+(lockout 2), 8 (none). No decision is taken here; the grid is the record
+this reads off.
+
 ## 15. The wide-cluster cell, measured (2026-08-10)
 
 Lode asked for the variant s.14 describes, in his own words "really a gamble

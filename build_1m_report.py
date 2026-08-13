@@ -804,6 +804,9 @@ def variant_payload(name):
     trades = sorted(m["trades"][name], key=lambda t: t["entry_ts"])
     return dict(
         strategy=f"quickfix1m1dc [{name}]",
+        # charter's study keys its variant trade lists on this slug, and
+        # every blotter link on the page carries it in ?v=.
+        slug=v.get("slug") or run_1m_matrix.variant_slug(name),
         params=dict(m["params"], activation_utc="07:35",
                     stop="see stop_mode", **v["dials"]),
         portfolio=dict(final=v["final_cash"], max_dd_pct=v["max_dd_pct"],
@@ -868,6 +871,15 @@ def build(data=None, out=None, variant=None):
     # key -> (study url, {trade index in this build: n in the study},
     #         market folder). charter sorts each market's trades by entry,
     #         and its counter is 1-based, so the link lands on the row.
+    #
+    # THE URL MUST NAME THIS PAGE'S VARIANT (2026-08-13, Lode found it).
+    # charter's study holds one trade list per matrix cell now, and `?v=`
+    # picks which. Without it the study fell back to the PUBLISHED blotter
+    # and indexed THAT: a variant page's row drew the baseline's ladder
+    # stop, and wherever the two trade lists diverge the link opened a
+    # different trade entirely (31 of variant 5's 66 rows). The index is
+    # only meaningful inside the list it was counted in.
+    vslug = data.get("slug")
     by_market = {}
     for i, t in enumerate(trades):
         by_market.setdefault(t["market"], []).append(i)
@@ -878,8 +890,10 @@ def build(data=None, out=None, variant=None):
         except (KeyError, StopIteration):
             continue
         order = sorted(idxs, key=lambda i: trades[i]["entry_ts"])
-        links[key] = (f"{STUDY_BASE}?m={folder}",
-                      {i: n + 1 for n, i in enumerate(order)}, folder)
+        url = f"{STUDY_BASE}?m={folder}"
+        if vslug:
+            url += f"&amp;v={vslug}"      # the url goes straight into an href
+        links[key] = (url, {i: n + 1 for n, i in enumerate(order)}, folder)
 
     traded = sum(1 for r in data["markets"] if r["trades"])
     kpis = "".join([

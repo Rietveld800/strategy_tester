@@ -196,6 +196,14 @@ redraws the page from the JSON with NO backtest** (the curves come back
 from the stored trades in seconds, colours are recomputed from the
 properties): nine minutes is too much to spend on a layout edit. The
 whole grid is written up in audit s.18.
+**EVERY CELL IS VISIBLE IN CHARTER TOO** (2026-08-13): charter's 1m study
+reads the matrix JSON directly and ships all 28 trade lists inside each
+market's `__trades.json`, its `?v=<slug>` picks which are drawn (several at
+once, told apart by dash since colour is the outcome), and the Strategy
+trades box gained a `1-minute variants` section with a checkbox per cell.
+Nothing new is exported from here for it -- charter reads
+`quickfix1m1dc_matrix.json` the same way it already read
+`quickfix1m1dc_all.json`, so the matrix run IS the hand-off.
 **THE SESSION LOCKOUT** (`max_entries_per_session`, default 1, Lode
 2026-08-07, audit section 11): at most one ENTRY per market per session,
 expiring at the session boundary. NOT part of rules 1-3 by explicit choice --
@@ -300,7 +308,14 @@ before the close. Carrying only closing balances showed 8.96% under an
 11.20% headline until 2026-08-08. The equity line still plots the close. **Every blotter row links
 into charter's 1m study at that trade** (`trades.html?m=<Market>&t=<n>`,
 1-based, charter sorts each market's trades by entry exactly as the report
-does); the link needs charter's `serve.py` running. The old dark
+does); the link needs charter's `serve.py` running. **A VARIANT PAGE'S LINKS
+CARRY `&v=<slug>`** (2026-08-13, Lode found it on the hybrid-stop page): charter's
+study holds one trade list per matrix cell now, and without `v` it falls back to
+the PUBLISHED blotter *and indexes that* -- the chart drew the ladder stop where
+the report said hybrid, and wherever the two lists diverge the link opened a
+different trade (31 of variant 5's 66 rows). An index is only meaningful inside
+the list it was counted in. `variant_payload()` therefore carries the cell's
+`slug` and `build()` puts it in every row's href. The old dark
 `quickfix1m1dc_equity.html` and `run_1m.build_html` are GONE (2026-08-06) --
 the report says everything they said.
 `build_1m_report.py --variant "variant 5"` builds a report for ANY cell of

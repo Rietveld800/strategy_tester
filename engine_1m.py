@@ -202,9 +202,22 @@ def _active_file(files, ts):
     return live
 
 
+def _ladder(f, side):
+    """The eligible ladder under file f, ordered away from prev_close.
+
+    Split out so `ratio_series` can price a ladder that has not armed yet
+    without restating what a ladder IS. Nothing else about the setup
+    rules moved.
+    """
+    if side == "short":
+        return [lvl for lvl in f.bull if lvl > f.prev_close]
+    return sorted((lvl for lvl in f.bear if lvl < f.prev_close),
+                  reverse=True)
+
+
 def _short_setup(f, run_high):
     """(first, second, stop_anchor) under file f, or None."""
-    ladder = [lvl for lvl in f.bull if lvl > f.prev_close]
+    ladder = _ladder(f, "short")
     if len(ladder) < MIN_LADDER:
         return None
     tested = [lvl for lvl in ladder if lvl <= run_high]
@@ -215,8 +228,7 @@ def _short_setup(f, run_high):
 
 
 def _long_setup(f, run_low):
-    ladder = sorted((lvl for lvl in f.bear if lvl < f.prev_close),
-                    reverse=True)
+    ladder = _ladder(f, "long")
     if len(ladder) < MIN_LADDER:
         return None
     tested = [lvl for lvl in ladder if lvl >= run_low]
@@ -227,6 +239,219 @@ def _long_setup(f, run_low):
 
 
 STOP_MODES = ("ladder", "ladder_or_extreme", "extreme")
+
+
+def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
+    """The geometry ratio at every minute, as change points - ONE SERIES
+    PER REVERSAL SET, each with a second line for the pre-update window.
+
+    The dial in `run_market` only ever asks this question at the minute a
+    trigger fires, so a refused setup leaves no trace anywhere and a day
+    that never came close looks the same as one that missed by a tick
+    (Lode, 2026-08-15, from PA 2026-08-07: 28 consecutive triggers all
+    refused at 0.557 and nothing on the chart said so). This walks the
+    same bars and computes the same number at every minute, so charter's
+    1m study can draw it under and over the price bars.
+
+    IT MUST MIRROR `run_market` or the pane and the blotter will disagree,
+    which is worse than no pane at all: the window is pruned BEFORE this
+    bar is folded into the running extremes and appended only AFTER, so
+    `win` holds bars strictly earlier while run_high / run_low already
+    include this one - the same asymmetry the trigger sees. It clears at a
+    contract splice for the same reason. Hence the shared `_active_file` /
+    `_ladder` / `_short_setup` / `_long_setup` helpers rather than a
+    second copy of the setup rules.
+
+    ONE SERIES PER SIDE, AND NO TIE-BREAK (Lode, 2026-08-16: "we should
+    actually have 2 %R/24hRange panes ... one pane on top of the 1 minute
+    chart, showing the %R/24hRange line calculated for bullish reversals
+    and a pane on the bottom ... calculated for bearish reversals").
+
+      "bull" - the ladder of BULLISH reversals above prev_close. It sits
+               above price, so charter draws it ABOVE the bars. It is the
+               ladder a SHORT setup is built on.
+      "bear" - the ladder of BEARISH reversals below prev_close, drawn
+               BELOW the bars. The LONG side.
+
+    This is not only a display change, it removes a whole class of bug.
+    While one line had to answer for both ladders, something had to pick
+    between them when neither was armed, and every rule for picking is
+    discontinuous somewhere: choosing the NEAREST first reversal made PA
+    2026-05-04 square-wave between 1.273 and 3.764 as price wandered
+    across the midpoint of two ladders 70 points away (s.19e). With a pane
+    each, nothing has to choose, and each line answers exactly one
+    question.
+
+    EACH SIDE CARRIES TWO LINES, because a session opens before its own
+    levels do. A trading session starts the previous evening; the day's
+    Socrates update does not activate until 07:35 UTC:
+
+      "main" - computed from the session's OWN update (`f_day`, the file
+               in force at the session's end), across the WHOLE session
+               including the hours before it activated. Drawn green/red
+               against the band. In the pre-update window this is
+               HINDSIGHT and deliberately so: it is only computable once
+               the update lands, which is what makes the window worth
+               marking.
+      "prev" - computed from the levels that were actually LIVE at that
+               minute (`f_live`), emitted ONLY while `f_live` is not yet
+               `f_day`. Drawn blue, behind. No band verdict and no rule 2:
+               no trade can be taken in that window on either set of
+               levels (Lode: "we're not taking trades in that window
+               anyway ... Also not on the previous reversals"), so
+               colouring it would assert something untrue. Where it runs
+               alone IS the pre-update window.
+
+    THE GATES ON "main" ARE THE VARIANT-INDEPENDENT ones - `entries_allowed`
+    and rule 2 (this side's own verdict) - and where they bite there is a
+    gap rather than a green line, because the pane would otherwise lie by
+    omission: PA 2026-08-11 05:27 carries a perfectly legal 0.4706 and
+    rule 2 had shut that ladder for the day (s.19). The lockout and an
+    open position are NOT applied: both are path-dependent per cell, and a
+    pane needing one series per variant would cost 28x the data.
+
+    RULE 1 IS NOT A GATE. `first` is `ladder[0]` whether or not price has
+    tested anything, so the ratio before a ladder arms IS the ratio its
+    trigger will get; requiring three tested reversals cost 80% of the
+    line and bought nothing (s.19c). Nothing else needs it now that the
+    sides are drawn separately.
+
+    A GAP in "main" carries its REASON instead of a bare null, so hovering
+    one says which gate it was rather than leaving four possibilities:
+      "no-entries"    - the day takes no entries (roll boundary, blackout,
+                        window end)
+      "no-file"       - no levels file has activated yet (start of series)
+      "no-ladder"     - THIS side carries fewer than MIN_LADDER reversals
+      "rule2"         - rule 2 refused THIS side's ladder for this session.
+                        The only reason that is NOT a hole: RULE 2 STOPS
+                        THE TRADE, NOT THE MEASUREMENT (Lode, 2026-08-16),
+                        so the ratio is carried in the "rule2" line beside
+                        it and charter draws that stretch in PURPLE.
+      "short-window"  - fewer than MIN_RANGE_BARS in the trailing window,
+                        so the dial ABSTAINS rather than refuses and an
+                        entry here goes through UNJUDGED. It is 60 minutes
+                        long and it opens every session that follows a
+                        break longer than 24h - every Sunday evening, and
+                        4 of the sample's trades were taken inside one
+                        (s.19a, s.19f).
+
+    Returns {"stop_mode",
+             "bull": {"main":  [[epoch_s, ratio | reason], ...],
+                      "prev":  [[epoch_s, ratio | None], ...],
+                      "rule2": [[epoch_s, ratio | None], ...]},
+             "bear": {...}}. All are CHANGE POINTS - a value holds until
+    the next one. `rule2` carries a value exactly where `main` reads
+    "rule2", so the three never overlap except blue against purple in a
+    pre-update window, which is the honest picture: old levels in blue,
+    the day's own ladder in purple because rule 2 had already shut it.
+    """
+    if stop_mode not in STOP_MODES:
+        raise ValueError(f"stop_mode must be one of {STOP_MODES}")
+
+    def ratio_under(f, side, run_high, run_low, rng, day_open, rule2,
+                    apply_rule2):
+        """(value, rule2_ratio) for this side under one levels file.
+
+        `value` is the ratio, or the reason there is no line. The second
+        item is the ratio ANYWAY when rule 2 is what refused - rule 2
+        stops the trade, it does not stop the measurement (Lode,
+        2026-08-16), and charter draws that stretch in purple.
+        """
+        lad = _ladder(f, side)
+        if len(lad) < MIN_LADDER:
+            return "no-ladder", None
+        first = lad[0]
+        anchor = lad[4] if len(lad) > 4 else lad[3]
+        if side == "short":
+            stop = anchor + tick
+            if stop_mode != "ladder":
+                ext = run_high + tick
+                stop = max(stop, ext) if stop_mode == \
+                    "ladder_or_extreme" else ext
+            rpu = stop - first
+        else:
+            stop = anchor - tick
+            if stop_mode != "ladder":
+                ext = run_low - tick
+                stop = min(stop, ext) if stop_mode == \
+                    "ladder_or_extreme" else ext
+            rpu = first - stop
+        # The window is judged FIRST now: with no usable range there is no
+        # ratio to draw in any colour, so "short-window" outranks "rule2"
+        # in the overlap (the opening bars of a rule-2 session). Both are
+        # untradable either way; only the label moves.
+        if rng is None:
+            return "short-window", None
+        val = round(rpu / rng, decimals)
+        if apply_rule2:
+            key = (f.publish_date, side)
+            if key not in rule2:
+                rule2[key] = (day_open < lad[1] if side == "short"
+                              else day_open > lad[1])
+            if not rule2[key]:
+                return "rule2", val
+        return val, None
+
+    # "bull"/"bear" name the REVERSAL SET, which is what the panes are
+    # labelled by; "short"/"long" name the setup built on it, which is what
+    # the engine calls it. Same thing from the two ends.
+    SIDES = (("bull", "short"), ("bear", "long"))
+    LINES = ("main", "prev", "rule2")
+    out = {name: {k: [] for k in LINES} for name, _ in SIDES}
+    last = {name: {k: "start" for k in LINES} for name, _ in SIDES}
+    win = deque()
+    win_contract = None
+    for day in days:
+        if day.contract != win_contract:
+            win.clear()
+            win_contract = day.contract
+        if not day.bars:
+            continue
+        run_high = run_low = None
+        day_open = day.bars[0][1]
+        rule2 = {}          # one verdict per (ladder, side), as run_market
+        # The session's OWN update: the file in force at its last bar. If
+        # no update landed today (the amber "no Socrates update" stretches
+        # charter already shades) this is just the carried-over file, and
+        # `f_live is f_day` all session - one line, no blue.
+        f_day = _active_file(files, day.bars[-1][0])
+        for bts, _o, h, l, _c in day.bars:
+            cutoff = bts - RANGE_WINDOW
+            while win and win[0][0] < cutoff:
+                win.popleft()
+            run_high = h if run_high is None else max(run_high, h)
+            run_low = l if run_low is None else min(run_low, l)
+            rng = None
+            if len(win) >= MIN_RANGE_BARS:
+                span = max(x[1] for x in win) - min(x[2] for x in win)
+                if span > 0:
+                    rng = span
+            f_live = _active_file(files, bts)
+            stamp = int(bts.timestamp())
+            for name, side in SIDES:
+                r2v = None
+                if not day.entries_allowed:
+                    mv = "no-entries"
+                elif f_day is None:
+                    mv = "no-file"
+                else:
+                    mv, r2v = ratio_under(f_day, side, run_high, run_low,
+                                          rng, day_open, rule2, True)
+                # The blue reference line: only while the day's own update
+                # is not live yet, and never carrying a reason - a gap in
+                # it just means there is nothing to reference.
+                pv = None
+                if f_live is not None and f_live is not f_day:
+                    v, _ = ratio_under(f_live, side, run_high, run_low, rng,
+                                       day_open, rule2, False)
+                    pv = v if isinstance(v, float) else None
+                for line, val in (("main", mv), ("prev", pv),
+                                  ("rule2", r2v)):
+                    if val != last[name][line]:
+                        out[name][line].append([stamp, val])
+                        last[name][line] = val
+            win.append((bts, h, l))
+    return dict(stop_mode=stop_mode, **out)
 
 
 def run_market(days, files, tick, risk_pct=RISK_PCT,

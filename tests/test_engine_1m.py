@@ -11,7 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from engine_1m import Day, LevelsFile, run_market  # noqa: E402
+from engine_1m import (  # noqa: E402
+    Day, LevelsFile, ratio_series, run_market)
 
 TICK = 0.1
 
@@ -512,3 +513,268 @@ def test_carried_position_stopped_intraday_leaves_the_allowance_intact():
     assert trades[0]["reason"] == "stop"
     assert trades[0]["exit_ts"].startswith("2026-06-11")   # stopped today
     assert trades[1]["entry_date"] == "2026-06-11"         # and still traded
+
+
+# --- ratio_series: the %R/24hRange pane's data -----------------------
+# The pane exists to show the minutes the dial REFUSED, which the blotter
+# cannot record (a refused entry leaves no trade). That only helps if the
+# number under the chart is the same number the engine judged, so the
+# binding test is AGREEMENT with run_market at the minutes both can see.
+
+
+def oscillating_bars(day, start_hhmm, n, lo, hi):
+    """n minutes alternating lo/hi, so the trailing window has a RANGE.
+    flat_bars gives a zero range, where the ratio is undefined by rule."""
+    h0, m0 = (int(x) for x in start_hhmm.split(":"))
+    out = []
+    for i in range(n):
+        m = m0 + i
+        t = ts(day, f"{h0 + m // 60:02d}:{m % 60:02d}")
+        p = lo if i % 2 else hi
+        out.append(bar(t, p, p, p, p))
+    return out
+
+
+def history_then_entry():
+    """A day of 120 bars (so the window is judgeable) then the standard
+    short setup the day after."""
+    return [
+        Day(date=date(2026, 6, 9), contract="GCQ6",
+            bars=oscillating_bars(9, "03:00", 120, 98.0, 100.0),
+            settle_ts=ts(9, "17:30"), settle_price=99.0),
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=short_entry_day() + flat_bars(10, "04:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+
+
+def value_at(series, when, line="main", side="bull"):
+    """The series' value at a timestamp: change points hold until the
+    next one, exactly as the chart expands them. A number is a ratio; a
+    string is the reason there is a gap. `side` picks the reversal set -
+    "bull" is the ladder above prev_close, which is the SHORT setup."""
+    cur = None
+    for t, v in series[side][line]:
+        if t > pd.Timestamp(when).timestamp():
+            break
+        cur = v
+    return cur
+
+
+def ratios(series, line="main", side="bull"):
+    return [v for _t, v in series[side][line] if isinstance(v, float)]
+
+
+def test_ratio_series_agrees_with_the_trade_it_judged():
+    days = history_then_entry()
+    trades, _ = run_market(days, [base_file()], TICK)
+    assert len(trades) == 1 and trades[0]["rpu_range_ratio"] is not None
+    ser = ratio_series(days, [base_file()], TICK)
+    assert value_at(ser, trades[0]["entry_ts"]) == \
+        trades[0]["rpu_range_ratio"]
+
+
+def test_ratio_series_reports_the_minutes_no_trade_records():
+    """The refusal case: with the band cutting this setup out there is no
+    trade at all, and the series still carries the number that refused
+    it. This is the whole reason the function exists."""
+    days = history_then_entry()
+    trades, summary = run_market(days, [base_file()], TICK,
+                                 max_rpu_range_ratio=0.10)
+    assert trades == [] and summary["refused_wide"] >= 1
+    ser = ratio_series(days, [base_file()], TICK)
+    assert ratios(ser) and max(ratios(ser)) > 0.10
+
+
+def test_ratio_series_gaps_where_the_dial_cannot_judge():
+    """Fewer than MIN_RANGE_BARS in the trailing window -> no ratio, the
+    weekend-open case where the dial abstains and the entry goes through
+    unjudged. A gap in the line, not a zero."""
+    days = history_then_entry()[1:]          # drop the 120-bar history
+    trades, _ = run_market(days, [base_file()], TICK)
+    assert len(trades) == 1 and trades[0]["rpu_range_ratio"] is None
+    ser = ratio_series(days, [base_file()], TICK)
+    assert not ratios(ser)
+    assert value_at(ser, trades[0]["entry_ts"]) == "short-window"
+
+
+def test_ratio_series_follows_the_stop_anchor():
+    """The stop mode is the only dial the number depends on, which is why
+    three series cover all 30 matrix cells. The session extreme here (102)
+    is INSIDE the ladder stop (102.6), so `extreme` is the tighter one."""
+    days = history_then_entry()
+    ladder = ratio_series(days, [base_file()], TICK, stop_mode="ladder")
+    wick = ratio_series(days, [base_file()], TICK, stop_mode="extreme")
+    assert max(ratios(wick)) < max(ratios(ladder))
+
+
+def test_ratio_series_rejects_an_unknown_stop_mode():
+    import pytest
+    with pytest.raises(ValueError):
+        ratio_series([], [], TICK, stop_mode="nonsense")
+
+
+def test_ratio_series_gates_what_the_band_never_got_to_vote_on():
+    """A NUMBER means the band was the deciding vote. The variant-blind
+    gates come first and leave a REASON, so a minute no trade could have
+    happened in cannot show a legal-looking green value (PA 2026-08-11
+    05:27 carried 0.4706 with no active file and rule 2 against it)."""
+    days = history_then_entry()
+    f = base_file()
+    ser = ratio_series(days, [f], TICK)
+    # Before the file activates (ts(10, "00:00")) there is no ratio.
+    assert value_at(ser, ts(9, "04:00")) == "no-file"
+    # Rule 2: a session opening at/above the second reversal is shut for
+    # that ladder all day, so the whole session is a gap and not a value.
+    gap = [Day(date=date(2026, 6, 9), contract="GCQ6",
+               bars=oscillating_bars(9, "03:00", 120, 98.0, 100.0),
+               settle_ts=ts(9, "17:30"), settle_price=99.0),
+           Day(date=date(2026, 6, 10), contract="GCQ6",
+               bars=[bar(ts(10, "01:00"), 101.0, 101.0, 101.0, 101.0)]
+                    + short_entry_day(),
+               settle_ts=ts(10, "17:30"), settle_price=99.5)]
+    trades, _ = run_market(gap, [f], TICK)
+    assert trades == []                       # open 101.0 >= second 100.5
+    s2 = ratio_series(gap, [f], TICK)
+    assert value_at(s2, ts(10, "03:00")) == "rule2"
+    assert not ratios(s2)
+
+
+def test_ratio_series_gaps_a_day_that_takes_no_entries():
+    days = history_then_entry()
+    days[1].entries_allowed = False
+    ser = ratio_series(days, [base_file()], TICK)
+    assert value_at(ser, ts(10, "03:00")) == "no-entries"
+
+
+def test_ratio_series_draws_the_old_levels_as_a_second_line():
+    """A session opens before its own levels do, and the pane shows both
+    answers there (Lode, 2026-08-16): `main` from the session's OWN update
+    across the whole session, `prev` from the levels actually live at that
+    minute, emitted ONLY until the update activates. Where `prev` runs is
+    exactly the pre-update window."""
+    old = file_at(8, ts(9, "00:00"), bull=[100.0, 100.5, 101.0, 101.5,
+                                           104.5], bear=[90.0],
+                  prev_close=99.0)
+    new = file_at(9, ts(10, "06:00"), bull=BULL5, bear=[90.0],
+                  prev_close=99.0)
+    days = [
+        # The history sits in the EVENING so it is still inside the
+        # trailing 24h at 07:00 the next morning; at 03:00 it would be
+        # pruned and both lines would read short-window instead.
+        Day(date=date(2026, 6, 9), contract="GCQ6",
+            bars=oscillating_bars(9, "20:00", 120, 98.0, 100.0),
+            settle_ts=ts(9, "23:00"), settle_price=99.0),
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=short_entry_day() + flat_bars(10, "07:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+    ]
+    ser = ratio_series(days, [old, new], TICK)
+    # 03:00 is before the 06:00 activation: both lines, and they differ
+    # because the old ladder's 5th reversal sits at 104.5, not 102.5.
+    before_main = value_at(ser, ts(10, "03:00"))
+    before_prev = value_at(ser, ts(10, "03:00"), line="prev")
+    assert isinstance(before_main, float) and isinstance(before_prev, float)
+    assert before_prev > before_main
+    # After the update the blue line stops: there is nothing to reference.
+    assert value_at(ser, ts(10, "07:00"), line="prev") is None
+    assert isinstance(value_at(ser, ts(10, "07:00")), float)
+
+
+def test_ratio_series_has_no_second_line_when_no_update_lands():
+    """No update today (charter's amber 'no Socrates update' stretches):
+    the live file IS the session's own file, so there is one line."""
+    days = history_then_entry()
+    ser = ratio_series(days, [base_file()], TICK)
+    assert all(v is None for _t, v in ser["bull"]["prev"])
+
+
+def test_ratio_series_keeps_the_two_reversal_sets_apart():
+    """PA 2026-05-04, the square wave: price sat between a bull ladder 64
+    points above and a bear ladder 80 below, and ONE line had to answer
+    for both, so something had to choose - and every rule for choosing is
+    discontinuous somewhere. Choosing the nearest first reversal flipped
+    the whole numerator each time price crossed the midpoint, between
+    1.273 and 3.764 (Lode, 2026-08-16). A series PER SIDE removes the
+    choice: each is constant while its own ladder is, whatever price
+    does in between."""
+    f = file_at(9, ts(10, "00:00"),
+                bull=[160.0, 162.0, 163.0, 164.0, 165.0],   # rpu 5.1
+                bear=[ 40.0,  30.0,  25.0,  20.0,  10.0],   # rpu 30.1
+                prev_close=99.0)
+    # Price oscillates across the midpoint of the two first reversals
+    # (100.0), which is exactly what the nearest-first rule flipped on.
+    mid = (160.0 + 40.0) / 2
+    bars = []
+    for i in range(180):
+        p = mid + (6.0 if i % 2 else -6.0)
+        h0, m0 = 3, i
+        bars.append(bar(ts(10, f"{h0 + m0 // 60:02d}:{m0 % 60:02d}"),
+                        p, p + 1, p - 1, p))
+    days = [Day(date=date(2026, 6, 10), contract="GCQ6", bars=bars,
+                settle_ts=ts(10, "17:30"), settle_price=mid)]
+    ser = ratio_series(days, [f], TICK)
+    bull, bear = ratios(ser, side="bull"), ratios(ser, side="bear")
+    assert bull and bear, "expected a line on each side, not a gap"
+    # One ladder is ~6x the other. Each side stays on its own ladder, so
+    # neither line can carry the other's number and neither can step.
+    assert max(bull) / min(bull) < 1.5
+    assert max(bear) / min(bear) < 1.5
+    assert min(bear) > max(bull) * 3
+
+
+def test_ratio_series_bull_is_the_short_ladder_and_bear_the_long():
+    """The panes are named for the REVERSAL SET, the engine for the setup
+    built on it. Getting these crossed would put every number under the
+    wrong pane, so it is pinned: bull = above prev_close = SHORT."""
+    f = file_at(9, ts(10, "00:00"),
+                bull=[100.0, 100.5, 101.0, 101.5, 102.5],   # rpu 2.6
+                bear=[90.0, 85.0, 80.0, 75.0, 60.0],        # rpu 30.1
+                prev_close=99.0)
+    days = [
+        Day(date=date(2026, 6, 9), contract="GCQ6",
+            bars=oscillating_bars(9, "20:00", 120, 98.0, 100.0),
+            settle_ts=ts(9, "23:00"), settle_price=99.0),
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=flat_bars(10, "01:00", 30, 99.0),
+            settle_ts=ts(10, "17:30"), settle_price=99.0),
+    ]
+    ser = ratio_series(days, [f], TICK)
+    rng = 2.0                                  # the oscillation's range
+    assert abs(value_at(ser, ts(10, "01:10"), side="bull")
+               - 2.6 / rng) < 1e-3
+    assert abs(value_at(ser, ts(10, "01:10"), side="bear")
+               - 30.1 / rng) < 1e-3
+
+
+def test_ratio_series_rule2_is_per_side():
+    """Rule 2 shuts ONE ladder for the session. The other side's pane must
+    keep its line - they are separate questions now."""
+    f = file_at(9, ts(10, "00:00"),
+                bull=[100.0, 100.5, 101.0, 101.5, 102.5],
+                bear=[90.0, 85.0, 80.0, 75.0, 60.0], prev_close=99.0)
+    days = [
+        Day(date=date(2026, 6, 9), contract="GCQ6",
+            bars=oscillating_bars(9, "20:00", 120, 98.0, 100.0),
+            settle_ts=ts(9, "23:00"), settle_price=99.0),
+        # Opens at 101.0, at/above the bull ladder's second (100.5), so
+        # rule 2 refuses the SHORT side all day. The bear side is fine.
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=flat_bars(10, "01:00", 30, 101.0),
+            settle_ts=ts(10, "17:30"), settle_price=101.0),
+    ]
+    ser = ratio_series(days, [f], TICK)
+    assert value_at(ser, ts(10, "01:10"), side="bull") == "rule2"
+    assert isinstance(value_at(ser, ts(10, "01:10"), side="bear"), float)
+    # RULE 2 STOPS THE TRADE, NOT THE MEASUREMENT (Lode, 2026-08-16): the
+    # refused side still carries its ratio, in the line charter draws
+    # purple, and it is the SAME number the band would have judged.
+    # rpu 2.6 over a trailing range of 3.0 (the 98-100 history plus the
+    # session's own flat 101.0 bars), the same arithmetic the band uses.
+    r2 = value_at(ser, ts(10, "01:10"), line="rule2", side="bull")
+    assert isinstance(r2, float) and abs(r2 - 2.6 / 3.0) < 1e-3
+    # ... and the side that was NOT refused has no purple line at all.
+    assert value_at(ser, ts(10, "01:10"), line="rule2", side="bear") is None

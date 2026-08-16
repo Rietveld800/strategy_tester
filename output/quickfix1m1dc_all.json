@@ -17,11 +17,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 166347.24,
-    "max_dd_pct": 6.91,
-    "trades": 63,
-    "win_rate": 46.0,
-    "net_r": 53.5
+    "final": 162721.7,
+    "max_dd_pct": 8.94,
+    "trades": 65,
+    "win_rate": 44.6,
+    "net_r": 51.33
   },
   "markets": [
     {
@@ -201,15 +201,15 @@
       "tick": 0.001
     },
     {
-      "trades": 5,
+      "trades": 6,
       "wins": 0,
       "win_rate": 0.0,
-      "net_r_total": -4.64,
-      "final_cash": 95439.85,
-      "return_pct": -4.56,
+      "net_r_total": -5.81,
+      "final_cash": 94327.7,
+      "return_pct": -5.67,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 4,
+        "stop": 5,
         "no_confirm": 0,
         "close1": 1,
         "data_end": 0
@@ -311,15 +311,15 @@
       "tick": 0.25
     },
     {
-      "trades": 3,
+      "trades": 4,
       "wins": 1,
-      "win_rate": 33.3,
-      "net_r_total": -1.68,
-      "final_cash": 98320.05,
-      "return_pct": -1.68,
+      "win_rate": 25.0,
+      "net_r_total": -2.7,
+      "final_cash": 97322.85,
+      "return_pct": -2.68,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 2,
+        "stop": 3,
         "no_confirm": 0,
         "close1": 1,
         "data_end": 0
@@ -2003,6 +2003,52 @@
       "risk_usd": 993.27,
       "pnl_usd": -1007.41,
       "cash_after": 98320.05,
+      "market": "PL"
+    },
+    {
+      "side": "short",
+      "contract": "PAU6",
+      "entry_date": "2026-08-12",
+      "entry_ts": "2026-08-12 12:30:00+00:00",
+      "entry": 1383.0,
+      "stop": 1396.1,
+      "rpu": 12.099999999999909,
+      "entry_first": 1384.0,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2469,
+      "exit_date": "2026-08-12",
+      "exit_ts": "2026-08-12 12:34:00+00:00",
+      "exit": 1396.1,
+      "reason": "stop",
+      "gross_r": -1.0826,
+      "cost_r": 0.0826,
+      "net_r": -1.1653,
+      "risk_usd": 954.4,
+      "pnl_usd": -1112.15,
+      "cash_after": 94327.7,
+      "market": "PA"
+    },
+    {
+      "side": "short",
+      "contract": "PLV6",
+      "entry_date": "2026-08-12",
+      "entry_ts": "2026-08-12 12:30:00+00:00",
+      "entry": 1769.3999999999999,
+      "stop": 1797.6999999999998,
+      "rpu": 28.09999999999991,
+      "entry_first": 1769.6,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.4238,
+      "exit_date": "2026-08-12",
+      "exit_ts": "2026-08-12 12:34:00+00:00",
+      "exit": 1797.6999999999998,
+      "reason": "stop",
+      "gross_r": -1.0071,
+      "cost_r": 0.0071,
+      "net_r": -1.0142,
+      "risk_usd": 983.2,
+      "pnl_usd": -997.2,
+      "cash_after": 97322.85,
       "market": "PL"
     }
   ]

@@ -1353,7 +1353,7 @@
    "reason": "stop",
    "net_r": -1.0142,
    "stop": 1797.6999999999998,
-   "run_files": 7,
+   "run_files": 9,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 1,
    "tests_today": 9,
@@ -1363,7 +1363,7 @@
    "same_day_prior": 0,
    "nth_today": 1,
    "n_today": 1,
-   "episode_n": 3
+   "episode_n": 4
   },
   {
    "i": 56,
@@ -1425,7 +1425,7 @@
    "reason": "close1",
    "net_r": 0.3452,
    "stop": 1797.6999999999998,
-   "run_files": 7,
+   "run_files": 9,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 15,
    "tests_today": 7,
@@ -1435,7 +1435,7 @@
    "same_day_prior": 0,
    "nth_today": 1,
    "n_today": 1,
-   "episode_n": 3
+   "episode_n": 4
   },
   {
    "i": 59,
@@ -1449,7 +1449,7 @@
    "reason": "stop",
    "net_r": -1.1905,
    "stop": 1397.1,
-   "run_files": 7,
+   "run_files": 9,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 28,
    "tests_today": 4,
@@ -1473,7 +1473,7 @@
    "reason": "stop",
    "net_r": -1.1653,
    "stop": 1396.1,
-   "run_files": 4,
+   "run_files": 6,
    "run_start": "2026-08-08 07:35:00+00:00",
    "tests_in_run": 1,
    "tests_today": 1,
@@ -1483,7 +1483,7 @@
    "same_day_prior": 0,
    "nth_today": 1,
    "n_today": 1,
-   "episode_n": 1
+   "episode_n": 2
   },
   {
    "i": 61,
@@ -1521,7 +1521,7 @@
    "reason": "stop",
    "net_r": -1.0142,
    "stop": 1797.6999999999998,
-   "run_files": 7,
+   "run_files": 9,
    "run_start": "2026-08-05 07:35:00+00:00",
    "tests_in_run": 66,
    "tests_today": 11,
@@ -1531,7 +1531,55 @@
    "same_day_prior": 0,
    "nth_today": 1,
    "n_today": 1,
-   "episode_n": 3
+   "episode_n": 4
+  },
+  {
+   "i": 63,
+   "market": "PA",
+   "side": "short",
+   "level": 1384.0,
+   "episode": "PA|short|1384.0|73",
+   "entry_ts": "2026-08-12 12:30:00+00:00",
+   "exit_ts": "2026-08-12 12:34:00+00:00",
+   "entry_date": "2026-08-12",
+   "reason": "stop",
+   "net_r": -1.1653,
+   "stop": 1396.1,
+   "run_files": 6,
+   "run_start": "2026-08-08 07:35:00+00:00",
+   "tests_in_run": 23,
+   "tests_today": 5,
+   "attempt": 2,
+   "prior_losses": 1,
+   "prior_wins": 0,
+   "same_day_prior": 0,
+   "nth_today": 1,
+   "n_today": 1,
+   "episode_n": 2
+  },
+  {
+   "i": 64,
+   "market": "PL",
+   "side": "short",
+   "level": 1769.6,
+   "episode": "PL|short|1769.6|70",
+   "entry_ts": "2026-08-12 12:30:00+00:00",
+   "exit_ts": "2026-08-12 12:34:00+00:00",
+   "entry_date": "2026-08-12",
+   "reason": "stop",
+   "net_r": -1.0142,
+   "stop": 1797.6999999999998,
+   "run_files": 9,
+   "run_start": "2026-08-05 07:35:00+00:00",
+   "tests_in_run": 86,
+   "tests_today": 16,
+   "attempt": 4,
+   "prior_losses": 1,
+   "prior_wins": 1,
+   "same_day_prior": 0,
+   "nth_today": 1,
+   "n_today": 1,
+   "episode_n": 4
   }
  ],
  "episodes": [
@@ -1540,16 +1588,16 @@
    "market": "PL",
    "side": "short",
    "level": 1769.6,
-   "n": 3,
+   "n": 4,
    "wins": 1,
-   "net_r": -1.683,
-   "sequence": "LWL",
+   "net_r": -2.697,
+   "sequence": "LWLL",
    "first": "2026-08-05 08:31:00+00:00",
-   "last": "2026-08-11 09:21:00+00:00",
-   "days": 3,
-   "run_files": 7,
+   "last": "2026-08-12 12:30:00+00:00",
+   "days": 4,
+   "run_files": 9,
    "tests_first": 1,
-   "tests_last": 66
+   "tests_last": 86
   },
   {
    "episode": "CC|long|4082.0|12",
@@ -1582,6 +1630,22 @@
    "run_files": 26,
    "tests_first": 13,
    "tests_last": 70
+  },
+  {
+   "episode": "PA|short|1384.0|73",
+   "market": "PA",
+   "side": "short",
+   "level": 1384.0,
+   "n": 2,
+   "wins": 0,
+   "net_r": -2.331,
+   "sequence": "LL",
+   "first": "2026-08-09 22:00:00+00:00",
+   "last": "2026-08-12 12:30:00+00:00",
+   "days": 2,
+   "run_files": 6,
+   "tests_first": 1,
+   "tests_last": 23
   },
   {
    "episode": "CC|long|2990.0|32",
@@ -1659,25 +1723,9 @@
    "first": "2026-08-07 11:25:00+00:00",
    "last": "2026-08-07 11:25:00+00:00",
    "days": 1,
-   "run_files": 7,
+   "run_files": 9,
    "tests_first": 28,
    "tests_last": 28
-  },
-  {
-   "episode": "PA|short|1384.0|73",
-   "market": "PA",
-   "side": "short",
-   "level": 1384.0,
-   "n": 1,
-   "wins": 0,
-   "net_r": -1.165,
-   "sequence": "L",
-   "first": "2026-08-09 22:00:00+00:00",
-   "last": "2026-08-09 22:00:00+00:00",
-   "days": 1,
-   "run_files": 4,
-   "tests_first": 1,
-   "tests_last": 1
   },
   {
    "episode": "USO|short|73.97|7",

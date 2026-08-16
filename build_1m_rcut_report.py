@@ -23,10 +23,24 @@
 # drawdown rises monotonically with risk, so bisect - applied to
 # run_1m.portfolio_replay, this project's own account.
 #
+# ONE GRID PER STOP ANCHOR (Lode, 2026-08-16). This page used to be the ladder
+# stop alone and said so nowhere, so the band it published read as a fact about
+# the strategy rather than about the 4th/5th stop. The BAND READS THE STOP
+# ANCHOR'S OUTPUT - the ratio's numerator is level-to-stop, so widening the stop
+# to the session extreme moves every cell of the grid (audit s.19: PA 7 Aug went
+# 0.226 -> 0.557 on the hybrid stop, straight through the upper cut). A band's
+# evidence therefore does NOT carry across stop modes, and the only honest way
+# to compare them is to run the whole grid on each. Hence `--stop`, two output
+# stems and two refresh keys; the labels and the dials come from
+# `run_1m_matrix.STOPS`, so the two pages can never disagree with the matrix
+# about what "hybrid" means.
+#
 # RESULTS ARE CACHED AND REUSED. A cell already in the output JSON is not
 # re-run (same engine, same dials, so the pass is deterministic), which is what
 # makes refining the grid cheap: the 0.05 refinement Lode asked for adds ~95
-# passes on top of the 136 already computed instead of redoing all 231.
+# passes on top of the 136 already computed instead of redoing all 231. Each
+# stop anchor has its OWN cache file, and the cache is keyed on the dials, so
+# neither grid can ever be served cells the other computed.
 #
 # HOW TO READ IT, and the cautions are not decoration (audit s.15):
 # - A narrow band holds a few dozen trades. Its win rate is noisy and its
@@ -39,7 +53,8 @@
 # - The best region is a one-step RIDGE, not a smooth optimum: lower 0.00 and
 #   0.10 are identical, lower 0.30 collapses.
 #
-# Usage:  python build_1m_rcut_report.py            # full grid + refinement
+# Usage:  python build_1m_rcut_report.py            # 4th/5th stop, full grid
+#         python build_1m_rcut_report.py --stop hybrid          # hybrid stop
 #         python build_1m_rcut_report.py --step 0.5 --max 1.0   # coarse test
 #         python build_1m_rcut_report.py --no-reuse # ignore the cache
 
@@ -54,21 +69,25 @@ import run_1m
 import run_1m_matrix as mx
 
 HERE = Path(__file__).resolve().parent
-OUT_JSON = HERE / "output" / "quickfix1m1dcRcut.json"
-OUT_HTML = HERE / "output" / "quickfix1m1dcRcut.html"
-# The TRADE cache, and the reason it exists: the metrics are cheap but the
-# engine passes are not (~24s each, 231 of them). Caching the finished cells
-# was not enough - adding the win-streak and open-position metrics on
-# 2026-08-10 needed the trade LISTS, which the cell cache never held, so every
-# pass had to run again. Keeping the trades means any future metric is seconds
-# of arithmetic instead of an hour and a half of backtesting.
-OUT_TRADES = HERE / "output" / "quickfix1m1dcRcut_trades.json"
 CHECKPOINT_EVERY = 25      # rewrite the page mid-run so it can be read early
 
 TARGET_DD = 6.0
 RISK_TOLERANCE = 0.0005
+# Every dial EXCEPT the stop anchor, which is what `--stop` chooses. The
+# published baseline's dials otherwise, so a cell differs from the baseline in
+# the band alone.
 BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
-            stop_mode="ladder", max_entries_per_session=1)
+            max_entries_per_session=1)
+
+# The two grids. `stop_label` is the MATRIX's label for the anchor, so
+# `mx.STOP_MODE_BY_LABEL` supplies the engine dial and this file never spells a
+# stop_mode out; `step` is the key the page's own update button posts to
+# charter's /api/refresh (see trading_system/refresh.EXTRA_STEPS).
+VARIANTS = {
+    "4th5th": dict(stop_label="4th/5th", suffix="4th5th", step="rcut1m"),
+    "hybrid": dict(stop_label="hybrid", suffix="Hybrid", step="rcut1mhybrid"),
+}
+DEFAULT_VARIANT = "4th5th"
 
 # 0.05 refinement where the grid actually turns (Lode, 2026-08-10): the ten
 # best cells all sit at lower 0.20, and the upper cut's plateau runs 0.40-0.70,
@@ -103,6 +122,34 @@ C_BAND, C_REF = "#1b7f45", "#898781"      # band green; muted ink for the refere
 C_DD, C_POS = "#e34948", "#2a78d6"        # slot 8 red; slot 1 blue for exposure
 PANE_H = (360, 150, 130)                  # equity, drawdown, open positions
 PRICE_SCALE_W = 76    # identical on all three panes, so the plots line up
+
+
+def variant(name):
+    """Everything that differs between the two grids: the engine dial, the
+    three output paths and the refresh key its page posts.
+
+    The stop anchor is resolved through `run_1m_matrix.STOP_MODE_BY_LABEL`
+    rather than written here, so `hybrid` on this page is the same dial as
+    `hybrid` in the matrix and in charter's variant list, by construction.
+
+    The third file is the TRADE cache, and the reason it exists: the metrics
+    are cheap but the engine passes are not (~24s each, 231 of them). Caching
+    the finished cells was not enough - adding the win-streak and open-position
+    metrics on 2026-08-10 needed the trade LISTS, which the cell cache never
+    held, so every pass had to run again. Keeping the trades means any future
+    metric is seconds of arithmetic instead of an hour and a half of
+    backtesting.
+    """
+    if name not in VARIANTS:
+        raise SystemExit(f"--stop must be one of {', '.join(VARIANTS)}")
+    v = dict(VARIANTS[name], name=name)
+    v["stop_mode"] = mx.STOP_MODE_BY_LABEL[v["stop_label"]]
+    v["dials"] = dict(BASE, stop_mode=v["stop_mode"])
+    stem = f"quickfix1m1dcRcut{v['suffix']}"
+    v["json"] = HERE / "output" / f"{stem}.json"
+    v["html"] = HERE / "output" / f"{stem}.html"
+    v["trades"] = HERE / "output" / f"{stem}_trades.json"
+    return v
 
 
 def data_fingerprint():
@@ -326,7 +373,12 @@ def main():
     step = float(argv[argv.index("--step") + 1]) if "--step" in argv else 0.10
     top = float(argv[argv.index("--max") + 1]) if "--max" in argv else 1.50
     reuse = "--no-reuse" not in argv
+    v = variant(argv[argv.index("--stop") + 1] if "--stop" in argv
+                else DEFAULT_VARIANT)
+    dials = v["dials"]
     edges = edge_list(step, top)
+    print(f"stop anchor: {v['stop_label']} ({v['stop_mode']}) "
+          f"-> {v['html'].name}", flush=True)
 
     # Reuse TRADES, not finished cells: metrics are recomputed every build, so
     # adding a metric never costs an engine pass again.
@@ -337,10 +389,10 @@ def main():
     # to show that it is stale once it is drawn.
     fingerprint = data_fingerprint()
     tcache = {}
-    if reuse and OUT_TRADES.exists():
+    if reuse and v["trades"].exists():
         try:
-            old = json.loads(OUT_TRADES.read_text(encoding="utf-8"))
-            if old.get("dials") != BASE:
+            old = json.loads(v["trades"].read_text(encoding="utf-8"))
+            if old.get("dials") != dials:
                 print("cache ignored: the dials have changed", flush=True)
             elif old.get("data") != fingerprint:
                 print(f"cache ignored: the 1-minute data has changed since it "
@@ -349,7 +401,7 @@ def main():
             else:
                 tcache = old.get("trades", {})
                 print(f"reusing trades for {len(tcache)} cells from "
-                      f"{OUT_TRADES.name}", flush=True)
+                      f"{v['trades'].name}", flush=True)
         except ValueError:
             pass
 
@@ -375,10 +427,10 @@ def main():
         return loaded
 
     def run(lo, hi):
-        dials = dict(BASE, min_rpu_range_ratio=lo, max_rpu_range_ratio=hi)
+        cell = dict(dials, min_rpu_range_ratio=lo, max_rpu_range_ratio=hi)
         trades = []
         for key, (days, files, tick, note) in markets():
-            tr, _ = run_1m.engine_1m.run_market(days, files, tick, **dials)
+            tr, _ = run_1m.engine_1m.run_market(days, files, tick, **cell)
             for t in tr:
                 t["market"] = key
             trades.extend(tr)
@@ -393,16 +445,23 @@ def main():
           f"{len(combos) - fresh} from cache, {fresh} to backtest "
           f"(~{fresh * 24 / 60:.0f} min)", flush=True)
 
-    OUT_JSON.parent.mkdir(exist_ok=True)
+    v["json"].parent.mkdir(exist_ok=True)
     cells, baseline = {}, None
     t1, done = time.time(), 0
 
     def checkpoint():
         payload = dict(
-            strategy="quickfix1m1dc - ladder-geometry band (R cut)",
+            strategy=f"quickfix1m1dc - ladder-geometry band (R cut), "
+                     f"{v['stop_label']} stop",
             audit_doc="docs/quickfix1m1dc_audit.md (s.15)",
             target_dd=TARGET_DD, step=step, edges=edges,
-            dials=BASE, baseline=baseline,
+            dials=dials, baseline=baseline,
+            # Which grid this is. The page states its stop anchor in the
+            # heading and posts `refresh_step` from its own update button, so a
+            # reader can never take one anchor's band for the other's and the
+            # button can never rebuild the wrong file.
+            variant=v["name"], stop_label=v["stop_label"],
+            stop_mode=v["stop_mode"], refresh_step=v["step"],
             # Stamped so the PAGE can say which data it was computed on. This
             # grid is the only output here that is not rebuilt by the refresh
             # (Lode, 2026-08-12: it has its own button instead), so "when was
@@ -414,12 +473,12 @@ def main():
             # quote its own progress as the cost of a rebuild ("49 bands")
             # and undersell it by a factor of five mid-run.
             n_cells=len(combos),
-            cells={k: v for k, v in cells.items() if v})
-        OUT_JSON.write_text(json.dumps(payload) + "\n", encoding="utf-8")
-        OUT_HTML.write_text(page(payload), encoding="utf-8")
-        OUT_TRADES.write_text(json.dumps(dict(dials=BASE, data=fingerprint,
-                                              trades=tcache)),
-                              encoding="utf-8")
+            cells={k: m for k, m in cells.items() if m})
+        v["json"].write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        v["html"].write_text(page(payload), encoding="utf-8")
+        v["trades"].write_text(json.dumps(dict(dials=dials, data=fingerprint,
+                                               trades=tcache)),
+                               encoding="utf-8")
 
     for i, (lo, hi) in enumerate(combos, 1):
         key = cell_key(lo, hi)
@@ -446,8 +505,9 @@ def main():
                   flush=True)
 
     checkpoint()
-    print(f"\nwrote {OUT_JSON.name}, {OUT_HTML.name} and {OUT_TRADES.name} "
-          f"in {(time.time() - t0) / 60:.0f} min", flush=True)
+    print(f"\nwrote {v['json'].name}, {v['html'].name} and "
+          f"{v['trades'].name} in {(time.time() - t0) / 60:.0f} min",
+          flush=True)
 
 
 def page(p):
@@ -456,8 +516,40 @@ def page(p):
     heat = json.dumps(dict(pivot=HEAT_PIVOT, floor=HEAT_MIN,
                            neg=NEG_RAMP, negInk=NEG_INK,
                            pos=POS_RAMP, posInk=POS_INK))
+    # A page that does not name its stop anchor invites exactly the mistake
+    # this split was made to end (Lode, 2026-08-16), so the anchor is in the
+    # title, in the first sentence and in the definition of 1R.
+    name = p.get("variant", DEFAULT_VARIANT)
+    label = p.get("stop_label", VARIANTS[DEFAULT_VARIANT]["stop_label"])
+    other = "hybrid" if name == "4th5th" else "4th5th"
+    other_html = f"quickfix1m1dcRcut{VARIANTS[other]['suffix']}.html"
+    hand = "python build_1m_rcut_report.py" + (
+        "" if name == DEFAULT_VARIANT else f" --stop {name}")
+    if name == "4th5th":
+        stop_note = ("one tick beyond the <b class=\"k\">5th reversal</b> of "
+                     "the ladder, the 4th when the ladder carries only four. "
+                     "This is the PUBLISHED dial, and the band adopted below "
+                     "was read off this grid.")
+        band_note = ("<b class=\"k\">ADOPTED (Lode): lower 0.20, upper "
+                     "0.50</b> is the published band (upper adopted "
+                     "2026-08-10, audit s.15e; lower raised from 0.00 on "
+                     "2026-08-11, s.17, with the s.15c ridge caution on "
+                     "record).")
+    else:
+        stop_note = ("the ladder stop OR the session's running extreme at "
+                     "entry, <b class=\"k\">whichever is wider</b> "
+                     "(<code>ladder_or_extreme</code>, matrix cell "
+                     "<b class=\"k\">variant 5</b>). NOT the published dial.")
+        band_note = ("The 0.20 / 0.50 band was adopted on the <b "
+                     "class=\"k\">4th/5th</b> grid and does not carry over "
+                     "unchanged: 1R in price IS the numerator of the ratio, "
+                     "so a wider stop pushes every setup up the scale (audit "
+                     "s.19: PA 2026-08-07 reads 0.226 on the ladder stop and "
+                     "0.557 on this one, through the upper cut). This page "
+                     "opens on 0.20 / 0.50 for comparability only - the band "
+                     "for this anchor is whatever THIS grid shows.")
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>quickfix1m1dc - R cut</title><style>
+<title>quickfix1m1dc - R cut ({label} stop)</title><style>
 :root {{
   --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
   --grid:#e1e0d9; --axis:#c3c2b7; --band:{C_BAND}; --ref:{C_REF};
@@ -531,21 +623,22 @@ font-size:12px; box-shadow:0 2px 8px rgba(11,11,11,.12); display:none;
 z-index:9; font-variant-numeric:tabular-nums; }}
 h3 {{ font-size:13px; margin:18px 0 0; }}
 </style></head><body>
-<div id="head"><b>quickfix1m1dc - ladder geometry band</b>
-<span class="note"> Keep only entries whose <b class="k">1R in price
-(level to ladder stop)</b> falls between the two cuts, as a fraction of that
-market's trailing 24-hour high-low range. Every band is its OWN engine run - a
+<div id="head"><b>quickfix1m1dc - ladder geometry band, {label} stop</b>
+<span class="note"> <b class="k">Stop anchor: {label}</b> - {stop_note}
+Keep only entries whose <b class="k">1R in price (level to the {label}
+stop)</b> falls between the two cuts, as a fraction of that market's trailing
+24-hour high-low range. Every band is its OWN engine run - a
 refused entry does not spend the session-lockout allowance, so a band takes
 trades the baseline never reached and is not a slice of it. Each cell is
 levered to a constant <b class="k">{p['target_dd']}% max drawdown</b>, because
 comparing at one bet size flatters whichever band dug the deepest hole.
-<b class="k">ADOPTED (Lode): lower 0.20, upper 0.50</b> is the published
-band (upper adopted 2026-08-10, audit s.15e; lower raised from 0.00 on
-2026-08-11, s.17, with the s.15c ridge caution on record). The published
+{band_note} The published
 baseline also carries the human MARKET FILTER (s.16), which this grid does
 NOT: every cell here runs the whole universe, and "all trades" is the
 pre-adoption engine with no cuts, so this page stays the research record
-the band was read from.</span>
+the band was read from. The other stop anchor has its own grid, built the
+same way and read the same way:
+<a href="{other_html}">{other_html}</a>.</span>
 </div>
 <div id="upd">
   <button id="updbtn" type="button" disabled>Update this grid</button>
@@ -927,9 +1020,11 @@ boot(15);
    is not (Lode, 2026-08-12): it is ~231 engine passes, about ninety minutes,
    which is not a thing to hang off a button somebody presses to see this
    morning's bars. So the control for it lives on the page that shows the
-   result, and it drives the SAME runner - it posts the `rcut1m` step to
+   result, and it drives the SAME runner - it posts this grid's own step key to
    charter's /api/refresh, which is exactly what the rail button posts for the
-   ordinary steps. No second way to build anything.
+   ordinary steps. No second way to build anything. The key comes from the
+   payload (`rcut1m` for the 4th/5th stop, `rcut1mhybrid` for the hybrid one),
+   so a page can only ever rebuild ITSELF.
 
    The server is FOUND, not configured: this file is usually opened straight
    off disk, so it has no origin to infer a port from. serve.py takes the first
@@ -939,7 +1034,7 @@ boot(15);
   const btn = document.getElementById('updbtn');
   const note = document.getElementById('updnote');
   const log = document.getElementById('updlog');
-  const STEP = 'rcut1m';
+  const STEP = '{p.get('refresh_step', 'rcut1m')}';
   let base = null, at = 0;
 
   const say = t => {{ note.innerHTML = t; }};
@@ -1031,7 +1126,7 @@ boot(15);
       return say('built <b class="k">{p.get("built", "unknown")}</b> &middot; '
         + 'to rebuild it from this page, start charter\\'s server '
         + '(<b class="k">python serve.py</b> in ../charter) and reload. '
-        + 'By hand: <b class="k">python build_1m_rcut_report.py</b>.');
+        + 'By hand: <b class="k">{hand}</b>.');
     }}
     base = found.url;
     btn.disabled = false;

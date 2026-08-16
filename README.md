@@ -70,17 +70,34 @@ stopped in its own session draws a **vertical** line on one bar.
 240 s, the hybrid-stop variant 1 s (it reads the matrix JSON), each level study 54 s, the
 chart build ~4 min. The old `strategy` step (`run_pipeline.py`) went with the daily registry.
 
-**`rcut1m` is reachable but deliberately not in a full run** (user, 2026-08-12). The R-cut
-band grid is ~231 engine passes, about **90 minutes**, which is not a thing to hang off a
-button pressed to see this morning's bars. `refresh.EXTRA_STEPS` holds it: `step_for()`
-searches it, `run_all()` never does, so `python refresh.py rcut1m` and `/api/refresh` reach it
-and a plain `python refresh.py` cannot. **`quickfix1m1dcRcut.html` carries its own update
-button**, which posts that step key to charter's `/api/refresh` — the same runner, driven from
-the page that shows the result, so there is no second way to build anything. The page finds
+**`rcut1m` and `rcut1mhybrid` are reachable but deliberately not in a full run** (user,
+2026-08-12). Each R-cut band grid is ~231 engine passes, about **90 minutes**, which is not a
+thing to hang off a button pressed to see this morning's bars. `refresh.EXTRA_STEPS` holds
+them: `step_for()` searches it, `run_all()` never does, so `python refresh.py rcut1m` and
+`/api/refresh` reach them and a plain `python refresh.py` cannot. **Each page carries its own
+update button** (`quickfix1m1dcRcut4th5th.html` posts `rcut1m`,
+`quickfix1m1dcRcutHybrid.html` posts `rcut1mhybrid`, both read from the payload's
+`refresh_step`, so a page can only rebuild itself), which posts that step key to charter's
+`/api/refresh` — the same runner, driven from the page that shows the result, so there is no
+second way to build anything. The page finds
 the server by probing `127.0.0.1:8000..8019` (it is usually opened straight off disk, so it
 has no origin to infer a port from), posts `text/plain` so a `null` origin never triggers a
 CORS preflight, streams the log, and reloads itself when the run finishes. `serve.py` echoes
 `Access-Control-Allow-Origin` for `null` and loopback origins only.
+
+**THERE IS ONE GRID PER STOP ANCHOR** (Lode, 2026-08-16). The page used to be the 4th/5th
+reversal stop alone and said so nowhere, which reads as a fact about the strategy rather than
+about that stop. The band cuts the ratio whose numerator is **1R in price, level to stop**, so
+widening the stop to the session extreme moves every cell of the grid (audit s.19: PA
+2026-08-07 is 0.226 on the ladder stop and 0.557 on the hybrid one, straight through the upper
+cut) — a band's evidence does not carry across stop modes, and the only honest comparison is
+the whole grid on each. `build_1m_rcut_report.py --stop {4th5th|hybrid}`; the anchor's label
+and dial come from `run_1m_matrix.STOPS`, so these pages and the matrix cannot disagree about
+what `hybrid` means. Outputs and trade caches are per anchor
+(`quickfix1m1dcRcut4th5th.*`, `quickfix1m1dcRcutHybrid.*`), each page names its anchor in the
+title and the first sentence, and each links to the other. The published band (0.20 / 0.50)
+was read off the **4th/5th** grid; the hybrid page opens on it for comparability only and says
+so.
 
 **That grid's cache is keyed on the data, not just the band.** It reused every cell from
 whatever window it was first built on, so a rebuild after new bars landed finished in three
@@ -477,9 +494,9 @@ rewrite it here.
 | `engine_1m.py` | The 1-minute engine: rules 1–2 intraday, market-order entry on the first reversal print, ladder-anchored stop, exit at the next settlement. `tests/test_engine_1m.py` covers it. |
 | `run_1m.py` | The backtest and the published baseline: `output/quickfix1m1dc_all.json`, then the report and the charter hand-off. Everything else on this side reads what it writes. |
 | `build_1m_report.py` | `output/quickfix1m1dc_report.html` from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. |
-| `run_1m_matrix.py` | The dial matrix, one pass over the data: every cell one deviation from the published baseline, curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
+| `run_1m_matrix.py` | The dial matrix, one pass over the data: the full lockout x stop x band cross on the filtered universe (`variant 1` .. `variant 27`) plus three appended extras — since 2026-08-16 `variant 28` (4th/5th, band 0.15-0.20) and `variant 29` (hybrid, band 0.25-0.65), the winning band from each stop anchor's R-cut grid, and `variant 30`, the market filter's off-state (lockout 1 / hybrid / 000-050 over all 31 markets, pairing with `variant 4`). Curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
 | `research_1m_levels.py` | The level/entry study, baseline and `--variant "<cell>"`. |
-| `build_1m_rcut_report.py` | The R-cut band grid. ~231 engine passes, ~90 min, **not** in a full refresh: its page has its own update button. Its trade cache is keyed on the dials **and** on `data_fingerprint()`, so it can never republish cells computed on an older window. |
+| `build_1m_rcut_report.py` | The R-cut band grid, **one per stop anchor**: `--stop 4th5th` (default) and `--stop hybrid`, each ~231 engine passes, ~90 min, **not** in a full refresh — each page has its own update button. Its trade cache is per anchor and keyed on the dials **and** on `data_fingerprint()`, so it can never republish cells computed on an older window or under the other stop. |
 | `export_charter_trades_1m.py` | The charter hand-off: `output/charter_trades_quickfix1m1dc.json`, in charter's existing schema. The only owner of that directory now, and it prunes. |
 
 ### Adding a strategy
@@ -1282,7 +1299,7 @@ need to tell overlays apart at a glance ever returns.)
 ```
 venv\Scripts\python.exe run_1m.py                            # backtest -> blotter, report, charter hand-off
 venv\Scripts\python.exe run_1m_matrix.py                     # dial matrix, curves levered to 6% DD
-venv\Scripts\python.exe build_1m_report.py --variant "hybrid stop"
+venv\Scripts\python.exe build_1m_report.py --variant "variant 5"   # any matrix cell, by number
 venv\Scripts\python.exe research_1m_levels.py                # level study, baseline
 venv\Scripts\python.exe research_1m_levels.py --variant "no lockout"
 
@@ -1295,10 +1312,11 @@ or all of it plus the data and the charts with
 `python ../trading_system/refresh.py`, which is what charter's **Update** button runs
 (~12 min). `run_1m.py` must go first: everything else reads what it writes.
 
-**Not in a full run**, ~90 minutes, and it has its own button on its own page:
+**Not in a full run**, ~90 minutes each, and each has its own button on its own page:
 
 ```
-venv\Scripts\python.exe build_1m_rcut_report.py              # the R-cut band grid
+venv\Scripts\python.exe build_1m_rcut_report.py              # R-cut grid, 4th/5th stop
+venv\Scripts\python.exe build_1m_rcut_report.py --stop hybrid   # R-cut grid, hybrid stop
 venv\Scripts\python.exe build_1m_rcut_report.py --no-reuse   # ignore the cache outright
 ```
 

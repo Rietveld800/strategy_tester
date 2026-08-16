@@ -99,13 +99,19 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
-`hybrid1m` -> `levels1m` -> `levels1mnl` -> `charts`, ~17 min. The old
+`hybrid1m` -> `band1m28` -> `band1m29` -> `levels1m` -> `levels1mnl` ->
+`charts`, ~17 min. The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
 2026-08-12: run_1m 111s, matrix 240s, hybrid stop 1s (it reads the matrix JSON),
 each level study 54s. The matrix became the full factorial on 2026-08-13
-(28 cells, 625 engine passes against 163) and now costs ~9 min, which is
-where the chain's ~12 -> ~17 min came from; `hybrid1m` builds `variant 5`
-and `levels1mnl` builds `variant 20`.
+(30 cells since 2026-08-16, 625 engine passes against 163) and now costs
+~9 min, which is
+where the chain's ~12 -> ~17 min came from; `hybrid1m` builds `variant 5`,
+`band1m28` / `band1m29` build the two hand-picked band cells (1s each,
+same reason: they read the matrix JSON), and `levels1mnl` builds
+`variant 20`. A VARIANT WITH A REPORT BELONGS IN THE CHAIN -- a page
+built once ages out of date beside the grid it came from, which is
+exactly what happened to the hybrid stop before it joined the matrix.
 
 **`rcut1m` IS REACHABLE BUT NOT IN A FULL RUN** (user, 2026-08-12: "we're not
 updating quickfix1m1dcRcut.html after clicking button. quickfix1m1dcRcut.html
@@ -114,7 +120,27 @@ about 90 minutes. `refresh.EXTRA_STEPS` holds it: `step_for()` searches it,
 `run_all()` never does, so `refresh.py rcut1m` and `/api/refresh` reach it and
 a plain `refresh.py` cannot. The page's own button posts that key to charter's
 `/api/refresh` -- the SAME runner, driven from the page that shows the result,
-so there is no second way to build anything. It finds the server by probing
+so there is no second way to build anything.
+**THERE ARE TWO OF THEM SINCE 2026-08-16, ONE PER STOP ANCHOR** (Lode:
+"I thought the calculations happened with the 4th/5th reversal stop and
+not the hybrid stop"). They were right - `BASE` carried
+`stop_mode="ladder"` and the page said so nowhere, so its band read as a
+fact about the strategy rather than about that stop. THE BAND READS THE
+STOP ANCHOR'S OUTPUT: the ratio's numerator is level-to-stop, so
+widening the stop moves every cell (audit s.19, PA 2026-08-07 0.226 ->
+0.557), and a band measured on one anchor is not evidence about the
+other. Same script, `--stop 4th5th` (default) / `--stop hybrid`, with the
+label and dial taken from `run_1m_matrix.STOPS` so these pages and the
+matrix cannot disagree about what `hybrid` means. Per anchor: its own
+outputs (`quickfix1m1dcRcut4th5th.*`, `quickfix1m1dcRcutHybrid.*`), its
+own trade cache, its own refresh key (`rcut1m` / `rcut1mhybrid`) carried
+in the payload as `refresh_step` so A PAGE CAN ONLY REBUILD ITSELF, and
+its anchor named in the title, in the first sentence and in the
+definition of 1R. The 0.20/0.50 band was adopted on the 4th/5th grid; the
+hybrid page opens on it for comparability only and says so. The 4th/5th
+page was NOT recomputed in the split - the 231 cells, the `built` stamp
+and the trade cache are the ones that were already there, restamped and
+redrawn. It finds the server by probing
 127.0.0.1:8000..8019 (the page is usually opened straight off disk, so it has no
 origin to infer a port from), posts `text/plain` so a null origin never needs a
 CORS preflight, streams the log, and reloads itself when the run finishes.
@@ -174,17 +200,38 @@ WITHOUT the lockout. So `run_1m_matrix.build_grid()` crosses four
 PROPERTIES and the page prints them as COLUMNS instead of a name --
 lockout (1 / 2 / none) x stop (4th/5th / hybrid / wick) x band
 (000-050 / 020-050 / full) = 27 cells on the filtered universe, plus
-one 31-market cell that Lode set at lockout 1 / hybrid / 000-050 so it
-pairs with `variant 4` rather than with the published dials. **`wick`
+three EXTRA cells appended after them. **`wick`
 IS the engine's existing `extreme` mode** (confirmed by Lode) -- one
 tick beyond the session's running extreme AT ENTRY, which is the only
 extreme that exists at entry -- so this cost NO engine change. Cells are
-`variant 1` .. `variant 28`, the published baseline is **`variant 2`**
+`variant 1` .. `variant 30`, the published baseline is **`variant 2`**
 and it is an ordinary row: every row carries a checkbox (default on,
 plus all-on / all-off) and the baseline can be switched off like any
 other. Colour is a FAMILY, not an identity: hue is the stop anchor,
-the shade within a hue is the band, lightness is the lockout, and the
-31-market cell is magenta. `run_1m_matrix.variant_slug()` owns the
+the shade within a hue is the band, lightness is the lockout, the two
+extra BAND cells take the outermost shade of their own anchor's hue,
+and the one 31-market cell is magenta -- outside every family, because
+what makes it different is not one of those three dials.
+**THE THREE EXTRAS** (all Lode, 2026-08-16): `variant 28` is lockout 1 /
+4th/5th / **0.15-0.20** and `variant 29` is lockout 1 / hybrid /
+**0.25-0.65**, each the best band on its own stop anchor's R-cut grid
+(s.15f), carried here so it is re-measured on every refresh rather than
+resting on the grid it was picked from; both run the FILTERED universe,
+so each reads directly against a factorial row (28 against `variant 2`,
+29 against `variant 5`). `variant 30` is **THE MARKET FILTER'S
+OFF-STATE**, the only cell that leaves the 22-market universe. It WAS
+cell 28 (lockout 1 / hybrid / 000-050, pairing with `variant 4`), the
+band cells took that slot, and it went straight back in as 30 the same
+day -- because a grid whose whole point is that every rule's off-state
+is re-measured on every pass cannot be the place where one of them
+quietly stops being measured. Its dials are the ones it was given
+originally, NOT the published ones, so the `variant 4` pairing still
+holds. THE FACTORIAL'S NUMBERING IS LOAD-BEARING (audit, charter `?v=`
+links, report filenames), so extras are only ever APPENDED --
+neither replacing 28/29 nor appending 30 renumbered anything.
+`run_1m_matrix.band_label()`
+DERIVES the band property from the cuts, so a printed band can never
+disagree with the dials the cell ran. `run_1m_matrix.variant_slug()` owns the
 filename form (`variant 5` -> `_variant_05`) and both consumers import
 it, so a variant page can never land under a name the matrix does not
 use. 625 engine passes against 163: the step went from ~4 to ~9 min and
@@ -196,8 +243,69 @@ redraws the page from the JSON with NO backtest** (the curves come back
 from the stored trades in seconds, colours are recomputed from the
 properties): nine minutes is too much to spend on a layout edit. The
 whole grid is written up in audit s.18.
+**THE GEOMETRY RATIO IS NOW READABLE AT EVERY MINUTE, NOT ONLY AT THE
+TRADES THAT SURVIVED IT** (Lode, 2026-08-15, audit s.19). A refused entry
+leaves NO trade, so the blotter could not say why a setup did not take,
+and PA 2026-08-07 triggered 28 times between 11:25 and 16:17 and was
+turned away 28 times at 0.557 with nothing on the chart to show it.
+`engine_1m.ratio_series()` walks the same bars and computes the same
+number at every armed minute; `run_1m_matrix.py` writes it per market to
+`output/ratio/<KEY>.json` and charter draws it as a pane. Three series
+cover all 30 cells because **the stop anchor is the only dial the number
+depends on** - the lockout and the band decide what to DO with it, never
+what it is - and they are keyed by the page's STOP LABEL (`4th/5th`,
+`hybrid`, `wick`) so charter looks one up straight from `props.stop`.
+**IT RETURNS TWO SERIES, `main` AND `prev`** (Lode, 2026-08-16, audit
+s.19d): a session opens the evening before its own Socrates update
+activates, so in that window two answers exist and the pane shows both.
+`main` is the session's OWN update applied across the WHOLE session
+(green/red, hindsight in that window on purpose - it is only computable
+once the update lands); `prev` is the levels actually live at that
+minute, emitted only until the update activates (blue, behind, NO band
+colour and NO rule 2, because `allow_pre_activation=False` sets
+`f = None` before the entry scan's side loop, so no trade is reachable
+there on ANY levels). Where blue runs alone IS the window; where
+green/red takes over IS the update. Mondays have no blue - that update
+lands Saturday. Agreement is untouched: an entry needs the day's own
+update live, and there `f_live is f_day`.
+**TWO THINGS ARE DELIBERATELY NOT `run_market`'s** (audit s.19c, "we
+like to see the line without gaps"). Rule 1 is NOT applied - `first`
+is `ladder[0]` whether
+or not price has tested anything, so the ratio before a ladder arms IS
+the ratio the trigger gets; requiring three tested reversals cost 80% of
+the line and bought nothing. Rule 1 now only breaks the TIE of which
+ladder is in play (armed side first, else the SMALLER rpu), resolved
+BEFORE rule 2 - resolving it after would answer 2026-08-11 with a bear
+ladder 130 points from price, in green. THE TIE-BREAK MUST BE
+CONTINUOUS AT THE HANDOVER (audit s.19e): picking the NEAREST first
+reversal was not, and PA 2026-05-04 square-waved between 1.273 and
+3.764 as price wandered across the midpoint of two far-away ladders,
+swapping the whole numerator each time. The lower envelope cannot step,
+and needs no threshold tuned. Coverage 8.8% -> ~88%.
+Everything else MUST mirror `run_market` exactly or the pane and the
+blotter disagree, which is worse than no pane: the window is pruned
+BEFORE the bar joins the running extremes and appended only AFTER, and
+it clears at a splice.
+The binding test is agreement - `tests/test_engine_1m.py` asserts the
+series' value at a trade's entry minute EQUALS that trade's recorded
+`rpu_range_ratio`. It is written from the MATRIX pass and not `run_1m.py`
+because that is the pass holding every market's bars already AND the pass
+that ships the trades the pane sits under; a pane built from a different
+run than the trades beside it would be a quiet lie.
+**THREE ANSWERS, ALL DIFFERENT, TO "WHY DIDN'T IT TRADE"** (audit s.19,
+worth knowing before diagnosing the next one): PA 7 and 12 Aug were the
+geometry cut too WIDE; PA 11 Aug 05:27 was neither the band nor the
+lockout but the pre-activation window (no active file until 07:35) and
+then rule 2. And the 7/12 Aug refusals are the HYBRID STOP's doing, not
+the band's - the ratio's numerator is level-to-stop, so widening the stop
+to the session extreme pushes it through the upper cut (0.226 -> 0.557
+on 7 Aug). **The band reads the stop anchor's output**, so a band's
+evidence does not carry across stop modes unchanged. Variant 2 took both
+and lost both. Related open item, NOT decided: 8 trades in the window
+entered at a weekend/holiday open where the trailing window was too short
+to judge, so the band never voted on them (audit s.19a).
 **EVERY CELL IS VISIBLE IN CHARTER TOO** (2026-08-13): charter's 1m study
-reads the matrix JSON directly and ships all 28 trade lists inside each
+reads the matrix JSON directly and ships all 30 trade lists inside each
 market's `__trades.json`, its `?v=<slug>` picks which are drawn (several at
 once, told apart by dash since colour is the outcome), and the Strategy
 trades box gained a `1-minute variants` section with a checkbox per cell.

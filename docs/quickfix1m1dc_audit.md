@@ -378,7 +378,8 @@ levered equity while the cells pushing 6% drawdown were being sized down
 into a flatter curve, which is the resilience question the grid could not
 answer one dial at a time.
 
-So the cells are numbered `variant 1` .. `variant 28` and the four
+So the cells are numbered `variant 1` .. `variant 30` (28 until the
+2026-08-16 changes recorded in s.18b) and the four
 PROPERTIES are columns on the page:
 
 | property | values | dial |
@@ -389,11 +390,12 @@ PROPERTIES are columns on the page:
 | markets | 22 / 31 | the human market filter (s.16) |
 
 27 cells are the full lockout x stop x band cross on the filtered
-universe. The 28th is the filter's off-state, set BY CHOICE at lockout 1 /
-hybrid / 000-050 rather than at the published dials, so it pairs with
+universe. The 28th was the filter's off-state, set BY CHOICE at lockout 1 /
+hybrid / 000-050 rather than at the published dials, so it paired with
 `variant 4`: same lockout, same stop, same band, only the filter differs.
-The old whole-universe cell (published dials on 31 markets) is therefore
-gone; what replaced it isolates the same dial against a different partner.
+The old whole-universe cell (published dials on 31 markets) was therefore
+gone; what replaced it isolated the same dial against a different partner.
+**That cell moved to `variant 30` on 2026-08-16 - see s.18b.**
 
 **`wick` cost no engine change.** Lode's specification - a tick above the
 entry day's high for a short, below its low for a long - IS the existing
@@ -425,6 +427,382 @@ not paid for by its win rate. The lockout still matters most through the
 drawdown: at 4th/5th and 020-050 the streak runs 4 (lockout 1), 5
 (lockout 2), 8 (none). No decision is taken here; the grid is the record
 this reads off.
+
+### 18b. The extra cells: the R-cut winners, and the filter's off-state
+kept (Lode, 2026-08-16)
+
+With one R-cut grid per stop anchor (s.15f), each anchor's best band is a
+number worth watching rather than a cell of a research page nobody
+rebuilds. So two of the grid's extra slots carry them, at the published
+lockout and on the FILTERED universe like every other cell:
+
+| cell | lockout | stop | band | reads against |
+|---|---|---|---|---|
+| `variant 28` | 1 | 4th/5th | **0.15-0.20** | `variant 2`, the published baseline |
+| `variant 29` | 1 | hybrid | **0.25-0.65** | `variant 5`, the hybrid stop at the published band |
+
+Each is ONE band away from the factorial row beside it, which is the
+comparison being asked for; and being in the matrix means each is
+re-measured on every refresh instead of resting on the R-cut grid it was
+read off. Both have a report (`build_1m_report.py --variant "variant 28"`,
+and the `band1m28` / `band1m29` steps in the refresh chain) and a checkbox
+in charter's 1m study, like any other cell.
+
+**The slot they took was the market filter's off-state, and it came
+straight back as `variant 30`** (Lode, same day). Cell 28 had been the
+only 31-market cell in the grid - lockout 1 / hybrid / 000-050, pairing
+with `variant 4` - and losing it contradicted the reason the watch-cells
+were folded into the factorial in the first place: an off-state that is
+re-measured every refresh rather than resting on the sample it was adopted
+on. A grid built on that principle cannot be the place where one rule
+quietly stops being measured, so:
+
+| cell | lockout | stop | band | markets |
+|---|---|---|---|---|
+| `variant 30` | 1 | hybrid | 000-050 | **31 (no market filter)** |
+
+Same dials it always had - deliberately NOT the published ones - so it is
+still `variant 4` with the filter switched off and nothing else. It is
+magenta on the page, outside the three stop-anchor hues, because what
+makes it different is not one of the three dials the colour scheme
+encodes. It has no report page of its own: only its row, its curve and its
+checkbox in charter, which is what it had before.
+
+Two mechanics worth knowing before editing the grid again:
+
+- **The factorial's numbering is load-bearing.** Variants 1-27 are read by
+  number in this audit, in charter's `?v=` links and in every report
+  filename, so extras are only ever APPENDED. Replacing 28 and 29
+  renumbered nothing.
+- **The band property is DERIVED** (`run_1m_matrix.band_label()`), so a
+  cell that prints `015-020` cannot be running 0.20-0.50. That was a real
+  risk once the bands stopped being three fixed strings.
+
+## 19. Why PA refused three setups, and the %R/24hRange pane (Lode, 2026-08-15)
+
+Lode read variant 5 on Palladium and asked why three textbook setups did
+not trade. The engine was traced minute by minute; all three answers are
+different, which is the point of writing them down.
+
+| when (UTC) | why | numbers |
+|---|---|---|
+| 2026-08-07, 28 triggers 11:25-16:17 | geometry cut, TOO WIDE | rpu 25.9 / range 46.5 = **0.557** |
+| 2026-08-11 05:27 | no active levels file, then rule 2 | see below |
+| 2026-08-12, 16 triggers from 12:30 | geometry cut, TOO WIDE | rpu 25.5 / range 49.0 = **0.520** |
+
+7 August is the clean case: the 6 Aug file's ladder is
+`[1386.6, 1390.5, 1392.0, 1395.6, 1396.6]`, the session high 1412.0 tested
+all five, price came back to 1386.6 at 11:25, and the dial refused it 28
+times in a row at the same 0.557. Nothing on the chart said so - which is
+what the pane below is for.
+
+11 August is NOT the band and NOT the lockout, and both mistakes are easy
+to make. Two separate gates: from the 00:17 stop-out to 07:34 there is no
+active file at all (`allow_pre_activation=False` holds entries until the
+day's own update at 07:35), and 05:27 sits inside that; from 07:35 on,
+rule 2 refused every minute because the session opened 1389.5 against a
+second reversal of 1386.6. The lockout had no say - the position stopped
+at 00:17 was an EXIT, and the lockout counts entries (s.11).
+
+**THE HYBRID STOP, NOT THE BAND, IS WHAT REFUSED 7 AND 12 AUGUST.** The
+ratio's numerator is level-to-stop, so widening the stop to the session
+extreme inflates it straight into the upper cut:
+
+| date | v5 stop | rpu -> ratio | v2 stop | rpu -> ratio | v2 outcome |
+|---|---|---|---|---|---|
+| 7 Aug | 1412.5 | 25.9 -> 0.557 refused | 1397.1 | 10.5 -> 0.226 taken | stopped 12:30, -1.19R |
+| 12 Aug | 1409.5 | 25.5 -> 0.520 refused | 1396.1 | 12.1 -> 0.247 taken | stopped 12:34, -1.17R |
+
+PA on this window: variant 2 takes 6 trades for -5.81R, variant 5 takes 4
+for -3.43R. The combination saved money on both. Two dials that each look
+independent are not: **the band reads the stop anchor's output**, so a
+band adopted under the ladder stop is a different filter under the hybrid
+one. Worth remembering before quoting a band's evidence at another cell.
+
+### 19a. The weekend-open blind spot
+
+PA's second trade (2026-08-09 22:00, the Sunday open - three reversals
+touched in the opening minute, closing back below the first) carries
+`R/24h n/a`. The trailing 24h window was EMPTY, so under MIN_RANGE_BARS
+the dial ABSTAINS rather than refuses and the entry goes through
+unjudged. Every session-open trigger after a weekend or holiday does.
+
+Eight trades in the current window, identical in variants 2 and 5:
+
+| market | entry (UTC) | side | net R |
+|---|---|---|---|
+| GC | 2026-03-01 23:00 | short | +2.46 |
+| HG | 2026-03-22 22:30 | long | +0.77 |
+| PA | 2026-08-09 22:00 | short | -1.17 |
+| SI | 2026-08-09 22:02 | short | -1.01 |
+| ZW | 2026-04-27 00:05 | short | -1.47 |
+| CC | 2026-02-17 10:04 | long | -1.03 |
+| CC | 2026-03-02 10:01 | long | +5.14 |
+| URA | 2026-05-18 13:51 | long | -1.03 |
+
+8 trades, +2.70R, 3 winners. Far too few to conclude anything, and no
+change is proposed here - but they are the only trades in the book the
+adopted band never voted on, and Lode's read that "these trades are not
+uncommon" is right: they are a distinct population (the GC one is the
+case he remembered). Open, not decided.
+
+### 19b. The pane
+
+`engine_1m.ratio_series()` walks the same bars and computes the same
+number at EVERY armed minute, not only at the trigger that survived, and
+charter's 1m study draws it under the price bars, 240px tall. Green
+inside the drawn variant's band, red outside it, edges INCLUSIVE on the
+green side because that is exactly what the engine does (refuse when
+`ratio > max`, refuse when `ratio < min`) - 0.50 trades, a hair above
+does not. The band follows the NAVIGATED variant rather than being
+hardcoded at 0.20/0.50, which s.19's stop-anchor finding makes necessary
+rather than tidy.
+
+**A NUMBER MEANS THE BAND WAS THE DECIDING VOTE.** The first draft drew
+the ratio wherever a ladder was armed, and 11 August is what killed it:
+05:27 carries a perfectly ordinary **0.4706**, so the pane would have
+shown a legal green line at the exact minute Lode asked about, where no
+trade was possible for reasons that have nothing to do with the band. So
+the VARIANT-INDEPENDENT gates are applied first - `entries_allowed` and
+rule 2 - and a blocked minute is a GAP carrying its reason
+(`no-entries`, `no-file`, `no-ladder`, `rule2`, `short-window`), named in
+the header when the crosshair is on it. The lockout and an open position
+are deliberately NOT applied: both are path-dependent per cell, and a
+pane needing one series per variant would cost 28x the data to say the
+same thing. What survives is the honest reading - **green means a touch
+here would have been taken, red means the band refused it** - and
+`short-window` is the one gap that is not a refusal at all, which is how
+19a's blind spot becomes visible rather than merely absent.
+
+### 19c. What the line is drawn FROM (Lode, 2026-08-16)
+
+The first build drew a line over **8.8%** of minutes and Lode's read of
+it was one sentence: "why do we see all the gaps ... preferably we like
+to see the line without gaps". Two causes, both wrong for different
+reasons, and neither of them the band:
+
+1. **The pre-update zone was blanked.** Lode's rule, verbatim: "as long
+   as the Socrates update is not in for the day, the existing (latest)
+   reversals count (are in play for the calculation of %R) ... The
+   calculation is on the old, (current), reversals." So `ratio_series`
+   defaults `allow_pre_activation=True` while `run_market`'s entry gate
+   stays False, and that is NOT an inconsistency: from the session open
+   until 07:35 UTC the engine refuses to ENTER on a stale file, but %R
+   is a live property of the levels still in force, and the line simply
+   steps to the new ladder when the update activates. Worth **28-36% of
+   the session** on PA/GC/ES.
+2. **Rule 1 was in the numerator's way, and it never belonged there.**
+   `first` is `tested[0]`, and `tested[0]` IS `ladder[0]` the moment
+   anything is tested at all - so `stop - first` is a property of the
+   FILE and the SIDE, identical before and after the ladder arms.
+   Demanding three tested reversals before drawing anything cost **80%
+   of the line** and bought nothing: the number it would have shown is
+   the number the trigger gets. Rule 1 now only breaks a TIE.
+
+That tie is the one thing the change introduces. With no arming test,
+both a bull and a bear ladder usually qualify at once, so the pane picks
+the ladder IN PLAY: an **armed** side always wins (which is what keeps
+this agreeing with every taken trade), and with neither armed the
+**nearest first reversal** wins - the ladder price would reach first is
+the one the next trigger would be judged on. The order matters and is
+deliberate: the side is chosen BEFORE rule 2, not after. Choosing the
+side that survives rule 2 instead would have answered 2026-08-11 with
+the bear ladder 130 points away from price, painted green.
+
+### 19h. Rule 2 stops the trade, not the measurement (Lode, 2026-08-16)
+
+Lode, on the three remaining gaps in PA's bull pane: "because of rule 2,
+there's no trade setup possible which is exactly right. But that should
+not prevent it of drawing the %R/24hRange line during that period. During
+that period, draw the %R/24hRange lines in purple."
+
+Right, and it is the one gap reason that had a number behind it all
+along. The other four genuinely have none - no ladder, no file, no
+usable window, no entries that day. Rule 2 has a perfectly good ratio;
+what it lacks is a trade. So `ratio_series` returns a THIRD line per
+side, `rule2`, carrying the ratio exactly where `main` reads `"rule2"`,
+and charter draws that stretch in **purple** - a real number nobody could
+have acted on. The gap reasons keep their meaning: a hole is now only
+ever "there is no number here".
+
+One precedence change came with it. The window is judged BEFORE rule 2
+now, because with no usable range there is nothing to draw in any colour;
+in the overlap (the opening bars of a rule-2 session) the label moves
+from `rule2` to `short-window`. Both are untradable either way and no
+trade or figure moves.
+
+Where blue and purple run together - a pre-update window inside a
+rule-2 session, which is exactly PA 6 and 11 August - that is the honest
+picture rather than a clash: **blue is the old levels still in force,
+purple is the day's own ladder with rule 2 already against it.**
+
+The three gaps that prompted this, all measured:
+
+| when | pane | why |
+|---|---|---|
+| 2026-08-06, all session | bull | rule 2: open **1375.50** >= second reversal **1373.6** |
+| 2026-08-11, all session | bull | rule 2: open **1389.50** >= second reversal **1386.6** |
+| 2026-08-10, session open | both | `short-window` |
+
+Two of the three are now purple. Only the third stays a hole, and s.19f
+says why.
+
+### 19g. A pane per reversal set (Lode, 2026-08-16)
+
+"We should actually have 2 %R/24hRange panes ... one pane on top of the
+1 minute chart, showing the %R/24hRange line calculated for bullish
+reversals and a pane on the bottom of the 1m chart with the %R/24hRange
+line, calculated for bearish reversals."
+
+- **bullish reversals** = the ladder above prev_close = the **SHORT**
+  setup. It sits above price, so its pane sits above the bars.
+- **bearish reversals** = the ladder below prev_close = the **LONG**
+  setup, pane below.
+
+Each pane keeps both lines of s.19d (green/red from the session's own
+update, blue behind it for the pre-update window) and its own rule 2
+verdict, since rule 2 shuts one ladder for a session and says nothing
+about the other. Each has its own checkbox under Options; both default
+on, and a saved "off" from the single-pane era is honoured for both.
+
+**This is not only a display change - it deletes the tie-break.** While
+one line had to answer for both ladders, something had to pick between
+them when neither was armed, and every rule for picking is discontinuous
+somewhere: s.19e's square wave was that, and the lower-envelope fix
+merely made it continuous rather than unnecessary. With a pane each,
+nothing chooses, each line answers exactly one question, and rule 1 stops
+being load-bearing anywhere in the pane. Verification is unchanged and
+still binding: each trade's `rpu_range_ratio` equals the value in the
+series for **its own side** at its entry minute - short trades against
+the bull pane, long trades against the bear pane.
+
+### 19f. Can it trade Sundays, and what the 60-minute gap is (Lode, 2026-08-16)
+
+Lode, on the gap between Sunday evening and early Monday: "just that I
+know for sure; can the strategy find trades on Sundays (when the
+%R/24hRange line is between 0.20 and 0.50)?"
+
+**It can trade there, but not because the line is in the band — there is
+no line there and no band test at all.** The gap is `short-window`: the
+trailing 24-hour window holds fewer than `MIN_RANGE_BARS` (60) bars after
+a break longer than a day, so the dial ABSTAINS rather than refuses and
+the entry goes through UNJUDGED. It is exactly **60 minutes** long and it
+opens 19 of PA's sessions - every Sunday evening, plus any session
+following a holiday or a short one (2026-04-17 Thu, 2026-05-28 Wed).
+
+Four of the sample's trades are Sunday (UTC) entries, and all four have
+`rpu_range_ratio` = None:
+
+| market | entry (UTC) | side | net R |
+|---|---|---|---|
+| GC | 2026-03-01 23:00 | short | +2.46 |
+| HG | 2026-03-22 22:30 | long | +0.77 |
+| PA | 2026-08-09 22:00 | short | -1.17 |
+| SI | 2026-08-09 22:02 | short | -1.01 |
+
+Entries by weekday, variant 2: Mon 8, Tue 12, Wed 11, Thu 14, Fri 16,
+**Sun 4**. Note a "Sunday" entry is a MONDAY session - a futures session
+opens the previous evening - and it is reachable at all because Monday's
+Socrates update lands on Saturday, so it is already active at the open
+and the pre-activation gate never bites. The other four unjudged trades
+(ZW, CC x2, URA) sit in the same 60-minute blind spot after other breaks.
+
+So the band has never voted on 8 of the book's trades, and there is no
+setting of it that would have. Recorded, not decided.
+
+### 19e. The square wave, and why the tie-break had to be continuous (Lode, 2026-08-16)
+
+Lode, on the pane at 2026-05-04: "why does the line make a blockwave with
+almost a factor 3 difference in the %R/24hRange result." It was not the
+data and not the band - it was 19c's tie-break, and the numbers say so
+exactly:
+
+| | bull ladder | bear ladder |
+|---|---|---|
+| first reversal | 1607.0 | 1463.4 |
+| rpu (hybrid) | 35.00 | 103.50 |
+| ratio at rng 27.5 | **1.273** | **3.764** |
+
+Price spent the session around 1530-1543, i.e. **64 to 80 points from
+either ladder with a 24-hour range of 27.5**, so neither was armed and
+the tie-break decided. The midpoint of the two first reversals is 1535.2:
+above it the bull ladder is nearer, below it the bear ladder is. Price
+wandered across that line all morning, and each crossing swapped the
+entire numerator - 35.0 for 103.5, a factor of 2.96. A square wave built
+out of nothing but noise.
+
+The lesson is not "add hysteresis". A tie-break between two candidates
+must be **continuous at the handover**, or it will step by the full
+difference between them however it is smoothed - and the first fix was
+the lower envelope (smaller rpu), which has that property.
+
+**The tie-break is now GONE ENTIRELY** (s.19g): with a pane per reversal
+set, nothing has to choose. Each line stays on its own ladder for good,
+and the class of bug closes rather than being managed.
+
+Worth keeping in view: those 1.27 and 3.76 readings are a ladder 70
+points away being priced against a 27-point day. They are outside any
+band by a factor of 2.5 to 7.5, they are not decisions anyone is about
+to make, and they are also what pushes the pane's autoscale to 8.00 and
+squashes the 0.20-0.50 region flat. The line is honest there; it is just
+not interesting there.
+
+### 19d. Two lines, because a session opens before its own levels do (Lode, 2026-08-16)
+
+19c put the pre-update window on the OLD levels. Seeing it drawn, Lode
+asked for both answers instead: "we should actually see 2 lines in this
+window; the usual (green/red) %R/24hRange line based on the calculations
+of the reversals from the new Socrates update and a blue line based on
+the reversal levels of the old reversal levels ... the blue line is in
+the background, the green/red line in front."
+
+So `ratio_series` returns two series:
+
+| | from | drawn | gates |
+|---|---|---|---|
+| `main` | the session's OWN update (`f_day`, the file in force at the session's last bar), across the WHOLE session | green/red against the band, in front | `entries_allowed`, rule 2 |
+| `prev` | the levels actually LIVE at that minute (`f_live`), emitted ONLY until `f_day` activates | blue, behind | none |
+
+In the pre-update window `main` is HINDSIGHT and deliberately so - it is
+only computable once the update lands, which is precisely what makes the
+window worth marking. **Where the blue line runs alone IS the window, and
+where green/red takes over IS the update.**
+
+The blue line carries NO band verdict and NO rule 2, and Lode's own
+reasoning is why: "we're not taking trades in that window anyway, right?
+Also not on the previous (reversals before the update) reversals, right?"
+Both correct, and it is one line of the engine - with
+`allow_pre_activation=False` the entry scan sets `f = None` before the
+side loop runs at all, so no setup is evaluated on ANY levels there.
+Colouring blue against the band would assert a verdict that was never
+reachable. (Mondays have no window and no blue line: that update lands
+Saturday, so it is already active at the session open.)
+
+This does not weaken the blotter agreement. An entry can only happen once
+the day's own update is live, and there `f_live is f_day`, so at every
+real entry minute `main` is the number the engine used - still 294/294.
+
+**AND NOTHING IS CAPPED ANY MORE.** The pane clipped the top of the line
+off at 1.20, which Lode read as the line disappearing: "because we can
+only see the highest value of 1.50 in the %R/24hRange line ... everything
+above is visually cut off". A tall spike squashing the rest is the price
+of removing it, and zooming in undoes that - clipping cannot be undone by
+anything the reader can do.
+
+Result: **88.3% (PA), 89.0% (GC), 84.9% (ES)** of minutes carry a line,
+and what is left is all meaningful - `rule2` 4-8% (whole days where the
+ladder is disqualified), `no-entries` 3-6% (roll boundary, blackout,
+window end), `short-window` ~1% (19a's abstention), `no-file` ~1% (the
+first days of the series). Still 0 both-armed collisions across all 31
+markets. The verification is unchanged and still binding: the series'
+value at the entry minute of all **294** trades across variants 2, 5, 20
+and 28 - three different stop anchors - equals that trade's recorded
+`rpu_range_ratio` exactly.
+
+The ratio the entry arrows used to print as text is gone from the bars:
+it only ever labelled the trades that were TAKEN, which is the half of
+the question nobody needed answering. The navigated trade's own value is
+still spelled out in the header line.
 
 ## 15. The wide-cluster cell, measured (2026-08-10)
 
@@ -601,7 +979,8 @@ the traded range, never fitted to the curve.
 
 ### 15c. The R-cut report, and why the LOWER cut matters (2026-08-10)
 
-`build_1m_rcut_report.py` -> `output/quickfix1m1dcRcut.{json,html}`: pick a
+`build_1m_rcut_report.py` -> `output/quickfix1m1dcRcut4th5th.{json,html}`
+(written as `quickfix1m1dcRcut.*` until the stop-anchor split of s.15f): pick a
 lower and an upper cut in 0.10 steps, see that band's equity curve and metrics
 against all trades. 136 combinations, one engine pass each (56 min; a band is
 its own run, see the top of s.15), every cell levered to 6%.
@@ -666,7 +1045,8 @@ rather than the curve:
 
 The R-cut report was refined to 0.05 steps where the grid turns (lower
 0.10-0.30, upper 0.40-0.70): 21 edges, 231 combinations, every cell levered to
-6%. `build_1m_rcut_report.py` -> `output/quickfix1m1dcRcut.{json,html}`.
+6%. `build_1m_rcut_report.py` -> `output/quickfix1m1dcRcut4th5th.{json,html}`
+(then `quickfix1m1dcRcut.*`; see s.15f).
 
 Best cells, minimum 30 trades, at equal 6% pain:
 
@@ -741,6 +1121,49 @@ re-measured on every pass instead of resting on the sample it was adopted
 on) and `band 0.20-0.50` (the researched optimum, under investigation, not
 adopted). The R-cut report stays the research record; its header carries the
 adopt decision and it opens on the adopted cell.
+
+### 15f. ONE GRID PER STOP ANCHOR (Lode, 2026-08-16)
+
+Lode, reading the page: "I thought the calculations happened with the 4th/5th
+reversal stop and not the hybrid stop." Correct - `BASE` in
+`build_1m_rcut_report.py` carried `stop_mode="ladder"` and nothing in the
+title, the heading or the filename said so. Everything in s.15a-e is therefore
+a statement about the **4th/5th reversal stop**, and reads as a statement about
+the strategy only by omission.
+
+Why that matters rather than being a labelling nicety: **the band reads the
+stop anchor's output**. The ratio's numerator is 1R in price, level to stop, so
+moving the anchor moves every setup along the axis the cuts are drawn on -
+s.19's worked case is PA 2026-08-07, 0.226 on the ladder stop and **0.557** on
+the hybrid one, i.e. inside the adopted band on one anchor and refused by the
+upper cut on the other. A band measured on one anchor is not evidence about the
+other, and no arithmetic on this grid can produce the other grid: a refused
+entry does not spend the session lockout, so the trade lists differ in both
+directions (the same argument as the top of s.15).
+
+So the page split in two, one full grid per anchor, same script:
+
+| page | stop | `stop_mode` | refresh key |
+|---|---|---|---|
+| `quickfix1m1dcRcut4th5th.html` | 4th/5th (published) | `ladder` | `rcut1m` |
+| `quickfix1m1dcRcutHybrid.html` | hybrid (`variant 5`) | `ladder_or_extreme` | `rcut1mhybrid` |
+
+- The label and the dial come from `run_1m_matrix.STOPS`, so `hybrid` here is
+  the same dial as `hybrid` in the matrix and in charter's variant list, by
+  construction rather than by agreement.
+- Each grid has its **own trade cache**, still keyed on the dials and on
+  `data_fingerprint()`, so neither can ever be served the other's cells.
+- Each page carries `refresh_step` in its payload and its update button posts
+  that, so **a page can only rebuild itself**.
+- Each names its anchor in the title, in the first sentence and in the
+  definition of 1R, and links to the other.
+- **The 4th/5th grid was not recomputed.** Its 231 cells, its `built` stamp and
+  its trade cache are the ones that were already there, restamped and redrawn -
+  the split changed which file they live in and what the page says about them,
+  not a single number.
+- The hybrid page opens on 0.20 / 0.50 for comparability and says in the header
+  that the band was adopted on the other grid: the band for this anchor is
+  whatever this grid shows, and that question is now open rather than assumed.
 
 ## 14. Path analysis of the baseline, and the two quality filters (2026-08-09)
 

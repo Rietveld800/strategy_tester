@@ -8,7 +8,7 @@ cell was NAMED for the one dial it moved - "hybrid stop", "no lockout",
 from the baseline, and it hid the combinations: the table could not say
 what the hybrid stop is worth WITHOUT the lockout, or whether the 0.20
 lower cut still earns its place under a wick stop. So the cells are now
-numbered - `variant 1` .. `variant 28` - and the four PROPERTIES are
+numbered - `variant 1` .. `variant 30` - and the four PROPERTIES are
 columns on the page instead of prose in a name:
 
   lockout : 1 / 2 / none        (max_entries_per_session)
@@ -17,16 +17,36 @@ columns on the page instead of prose in a name:
             session's running extreme AT ENTRY, above the high for a
             short and below the low for a long)
   band    : 000-050 / 020-050 / full  (the geometry cut; `full` = dial
-            off)
+            off), plus the hand-picked bands of two extra cells
   markets : 22 (the human market filter, s.16) / 31 (the whole universe)
 
 27 cells are the full cross of lockout x stop x band on the FILTERED
-universe. The 28th is the market filter's off-state, and Lode set it
-deliberately at lockout 1 / hybrid / 000-050 rather than at the
-published dials, so it pairs with variant 4 - same lockout, same stop,
-same band, only the filter differs. The published baseline is
-`variant 2` (lockout 1, 4th/5th, 020-050, 22 markets) and it is an
-ordinary row here: it can be switched off on the chart like any other.
+universe. Cells 28, 29 and 30 are EXTRAS, appended so the factorial's
+numbering never moves:
+
+  variant 28 : lockout 1, 4th/5th, 0.15-0.20, 22 markets
+  variant 29 : lockout 1, hybrid,  0.25-0.65, 22 markets
+  variant 30 : lockout 1, hybrid,  0.00-0.50, 31 markets
+
+28 and 29 carry the band each R-cut grid picked out for its own stop
+anchor at the published lockout (2026-08-16), on the FILTERED universe
+like every other cell, so each is one band away from a factorial row and
+reads against it directly - 28 against variant 2, the published
+baseline, and 29 against variant 5, the hybrid stop at the published
+band.
+
+30 is THE MARKET FILTER'S OFF-STATE, the only cell that leaves the
+22-market universe. It was cell 28 until 2026-08-16, was displaced by
+the band cells, and Lode restored it the same day: an off-state that is
+only re-measured when someone remembers to look is the thing this grid
+exists to prevent. Its dials are the ones it was given originally
+(lockout 1 / hybrid / 000-050, NOT the published dials), so it pairs
+with variant 4 - same lockout, same stop, same band, only the filter
+differs.
+
+The published baseline is `variant 2` (lockout 1,
+4th/5th, 020-050, 22 markets) and it is an ordinary row here: it can be
+switched off on the chart like any other.
 
 Everything not on those four axes stays at the published baseline: no
 tightening, overnight window blocked, no confirmation clause. Read the
@@ -41,7 +61,7 @@ a market-day at 39.4% and +42.51R against the 2nd at 21.4% and -10.39R,
 which is the measurement the lockout rule follows from.
 
 EVERY ROW CARRIES A CHECKBOX (default on, plus all-on / all-off), which
-is what makes 28 curves readable at all: the colours run in families -
+is what makes 30 curves readable at all: the colours run in families -
 hue by stop anchor, shade by band, lightness by lockout - so a family
 can be read together, and anything else is switched off.
 
@@ -69,6 +89,15 @@ import run_1m
 HERE = Path(__file__).resolve().parent
 OUT_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dc_matrix.html"
+# One file per market, keyed by the STOP LABEL this page prints, holding
+# the geometry ratio at every armed minute (engine_1m.ratio_series) so
+# charter's 1m study can draw it as a pane. Written here rather than in
+# run_1m.py because this is the pass that already holds every market's
+# bars in memory AND the pass that ships the trades the pane sits under -
+# a pane built from a different run than the trades beside it would be a
+# quiet lie. Keyed by label, not by engine mode, so charter can look it
+# up straight from a variant's `props.stop` with no second mapping.
+OUT_RATIO = HERE / "output" / "ratio"
 
 # Everything off the four axes sits at the published baseline and never
 # moves: no tightening, overnight window blocked, no confirmation clause.
@@ -88,21 +117,70 @@ LOCKOUTS = [("1", dict(max_entries_per_session=1)),
 STOPS = [("4th/5th", dict(stop_mode="ladder")),
          ("hybrid", dict(stop_mode="ladder_or_extreme")),
          ("wick", dict(stop_mode="extreme"))]
-BANDS = [("000-050", dict(min_rpu_range_ratio=0.00,
-                          max_rpu_range_ratio=0.50)),
-         ("020-050", dict(min_rpu_range_ratio=0.20,
-                          max_rpu_range_ratio=0.50)),
-         ("full", dict(min_rpu_range_ratio=None,
-                       max_rpu_range_ratio=None))]
+# The stop axis is also the only dial the geometry ratio depends on (the
+# lockout and the band decide what to DO with the number, never what it
+# is), so three series cover all 30 cells.
+STOP_MODE_BY_LABEL = {lab: d["stop_mode"] for lab, d in STOPS}
 
-# Colour families, so 28 curves can still be read as a picture: HUE is
+
+def band_label(lo, hi):
+    """`020-050` from the two cuts, `full` when the dial is off.
+
+    DERIVED, never written by hand: the band is the one property whose
+    label could silently disagree with the dials the cell actually ran,
+    and a page that prints `015-020` over a 0.20-0.50 run is worse than
+    no page. Every cell's label comes through here.
+    """
+    if lo is None and hi is None:
+        return "full"
+    return f"{round(lo * 100):03d}-{round(hi * 100):03d}"
+
+
+BAND_CUTS = [(0.00, 0.50), (0.20, 0.50), (None, None)]
+BANDS = [(band_label(lo, hi),
+          dict(min_rpu_range_ratio=lo, max_rpu_range_ratio=hi))
+         for lo, hi in BAND_CUTS]
+
+# Cells OUTSIDE the factorial, appended in this order so the numbering of
+# 1..27 never moves. (stop label, lockout label, lower cut, upper cut,
+# markets label); the dials, the band label and the colour all follow from
+# those five, and "31" is the whole universe (no market filter).
+#
+# 28 and 29 (Lode, 2026-08-16) are each read off their own stop anchor's
+# R-cut grid (audit s.15f) at the published lockout: the best-performing
+# band for that anchor, carried into the matrix so it is re-measured on
+# every refresh instead of resting on the grid it was picked from.
+#
+# 30 is THE MARKET FILTER'S OFF-STATE, restored (Lode, 2026-08-16) after
+# it was displaced from cell 28 the same day. It is the ONLY cell that
+# leaves the filtered universe, and it exists because every rule's
+# off-state is re-measured on every pass rather than resting on the sample
+# it was adopted on - that principle is the reason the watch-cells were
+# folded into the grid at all, and the filter is a rule like the others.
+# Its dials are the ones Lode set for it in the first place (lockout 1 /
+# hybrid / 000-050, NOT the published dials), so it still pairs with
+# `variant 4`: same lockout, same stop, same band, only the filter differs.
+EXTRA_CELLS = [("4th/5th", "1", 0.15, 0.20, "22"),
+               ("hybrid", "1", 0.25, 0.65, "22"),
+               ("hybrid", "1", 0.00, 0.50, "31")]
+
+# Colour families, so 30 curves can still be read as a picture: HUE is
 # the stop anchor, a hue SHIFT is the band, LIGHTNESS is the lockout.
 # Two cells of the same family sit next to each other in colour, which is
 # the comparison the eye is usually making.
 STOP_HUE = {"4th/5th": 145, "hybrid": 215, "wick": 25}
-BAND_SHIFT = {"000-050": -20, "020-050": 0, "full": 20}
+# The three factorial bands sit at -20 / 0 / +20 of their stop's hue; the
+# hand-picked bands of EXTRA_CELLS take the next step out (-40 / +40), so
+# a cell still reads as its stop anchor's family and no two shades land
+# on the same hue (4th/5th 105-165, hybrid 195-255, wick 5-45).
+BAND_SHIFT = {"000-050": -20, "020-050": 0, "full": 20,
+              "015-020": -40, "025-065": 40}
 LOCK_LIGHT = {"1": 32, "2": 46, "none": 61}
-UNFILTERED_HSL = (300, 0.65, 0.45)        # the one cell off the 22-market grid
+# The colour of the one cell that leaves the 22-market universe: the
+# market filter's off-state, `variant 28` until 2026-08-16 and `variant 30`
+# since. Deliberately outside the three stop-anchor hues - it is the one
+# cell whose difference from its neighbour is not a dial on those axes.
+UNFILTERED_HSL = (300, 0.65, 0.45)
 
 
 def color_for(props):
@@ -140,13 +218,18 @@ def variant_slug(name):
 
 
 def build_grid():
-    """The 28 cells: the full lockout x stop x band cross on the filtered
-    universe, then the market filter's off-state.
+    """The 30 cells: the full lockout x stop x band cross on the filtered
+    universe, then the three extras of EXTRA_CELLS.
 
     Returns (name, dials, markets, props) tuples in the numbered order.
-    The 28th cell is at lockout 1 / hybrid / 000-050 BY CHOICE (Lode,
-    2026-08-13), not at the published dials, so it pairs with variant 4:
-    same lockout, same stop, same band, only the filter differs.
+
+    THE FACTORIAL'S NUMBERING IS LOAD-BEARING and must stay put: variants
+    1..27 are read by number in the audit, in charter's `?v=` links and in
+    every report filename, so extras are only ever APPENDED. On 2026-08-16
+    cells 28 and 29 became the winning band of each stop anchor's R-cut
+    grid; that displaced the market filter's off-state, which had been
+    cell 28, and Lode put it back the same day as `variant 30` with the
+    dials it always had. Numbering moved for nobody.
     """
     out = []
     for lock_lab, lock in LOCKOUTS:
@@ -157,12 +240,15 @@ def build_grid():
                 out.append((f"variant {len(out) + 1}",
                             dict(BASE, **lock, **stop, **band),
                             HUMAN_APPROVED, props))
-    out.append((f"variant {len(out) + 1}",
-                dict(BASE, max_entries_per_session=1,
-                     stop_mode="ladder_or_extreme",
-                     min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.50),
-                None, dict(lockout="1", stop="hybrid", band="000-050",
-                           markets="31")))
+    lock_dials = dict(LOCKOUTS)
+    for stop_lab, lock_lab, lo, hi, mkt_lab in EXTRA_CELLS:
+        props = dict(lockout=lock_lab, stop=stop_lab,
+                     band=band_label(lo, hi), markets=mkt_lab)
+        out.append((f"variant {len(out) + 1}",
+                    dict(BASE, **lock_dials[lock_lab],
+                         stop_mode=STOP_MODE_BY_LABEL[stop_lab],
+                         min_rpu_range_ratio=lo, max_rpu_range_ratio=hi),
+                    HUMAN_APPROVED if mkt_lab == "22" else None, props))
     return out
 
 
@@ -251,7 +337,7 @@ def main():
             continue
         days, files, tick, note = inputs
         # The progress line quotes the BASELINE cell and counts the rest:
-        # 28 cells x "name Nt R" is a line nobody reads, and the full
+        # 30 cells x "name Nt R" is a line nobody reads, and the full
         # per-market figures are in the JSON for every cell anyway.
         ran = 0
         base_line = "-"
@@ -269,8 +355,24 @@ def main():
             if name == BASELINE_NAME:
                 base_line = (f"{summary['trades']}t "
                              f"{summary['net_r_total']}R")
-        print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells",
-              flush=True)
+        # The geometry-ratio pane's data: three series, one per stop
+        # anchor, from the bars already loaded. `both_sides` must stay 0 -
+        # the pane reports the wider of two simultaneously armed ladders,
+        # and if that ever starts happening the choice should be made on
+        # purpose rather than discovered later.
+        OUT_RATIO.mkdir(parents=True, exist_ok=True)
+        series = {}
+        for label, mode in STOP_MODE_BY_LABEL.items():
+            s = run_1m.engine_1m.ratio_series(days, files, tick,
+                                              stop_mode=mode)
+            series[label] = {"bull": s["bull"], "bear": s["bear"]}
+        (OUT_RATIO / f"{key}.json").write_text(
+            json.dumps({"market": key, "tick": tick, "series": series},
+                       separators=(",", ":")), encoding="utf-8")
+        n = sum(len(v[side]["main"]) for v in series.values()
+                for side in ("bull", "bear"))
+        print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells"
+              f"  |  ratio {n} pts", flush=True)
 
     report = {}
     for name, dials, markets, props in VARIANTS:
@@ -468,10 +570,17 @@ extreme at entry is further away, <b>wick</b> the running extreme alone -
 a tick above the entry day's high for a short, below its low for a long.
 <b>band</b> = the geometry cut: refuse an entry whose level-to-stop
 distance is outside that fraction of the trailing 24h high-low range
-(<b>full</b> = no cut).
+(<b>full</b> = no cut). Three bands make the cross; <b>variant 28</b>
+(015-020) and <b>variant 29</b> (025-065) are extras, each the band its
+own R-cut grid picked out for that stop anchor at the published lockout,
+carried here so it is re-measured on every refresh.
 <b>markets</b>: {len(HUMAN_APPROVED)} = the chart-structure inspection's
 universe (audit s.16, never a judgment on a market's backtest result),
-31 = every market that produced a run.
+31 = every market that produced a run. <b>variant 30</b> is the market
+filter's OFF-STATE and the only cell that leaves the filtered universe;
+it sits at lockout 1 / hybrid / 000-050 rather than at the published
+dials, so it pairs with <b>variant 4</b> and the filter is the only
+difference between them.
 The published baseline is <b>{BASELINE_NAME}</b> (marked *), and it is an
 ordinary row here.
 Read the losing streak and the drawdown first.</span>
@@ -483,7 +592,10 @@ cell was allowed to dig. The 1% figures stay in the table beside the
 solved ones. <b style="color:#222">Colour reads as a family</b>: hue is
 the stop anchor (green 4th/5th, blue hybrid, orange wick), the shade
 within a hue is the band, and the lighter the line the looser the
-lockout. The one 31-market cell is magenta.</div>
+lockout. The two extra BAND cells take the outermost shade of their own
+anchor's hue, so they still read as part of that family; the one
+31-market cell is magenta, outside every family, because what makes it
+different is not one of those three dials.</div>
 <div id="chart"></div>
 <div id="ctl"><button id="allon">all on</button>
 <button id="alloff">all off</button>

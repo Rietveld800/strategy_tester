@@ -18,3 +18,20 @@ output/quickfix1m1dcRcut*_trades.json
 # run_1m_matrix.py pass, so it would churn megabytes of generated data into
 # a commit on every refresh. Same call as the R-cut cache above.
 output/ratio/
+
+# GENERATED OUTPUT: renderings and bulk research grids (Lode, 2026-08-18).
+# output/ was tracked whole and it was 11.1 MB of an 11.8 MB repo, rewritten
+# by every refresh, so a commit read as ~40,000 lines of regenerated JSON and
+# the code changes were invisible inside it. The .git directory had reached
+# 61 MB against ~0.7 MB of actual source. The test applied: does anyone ever
+# need to READ this at a past commit? An HTML page is a view of the JSON
+# beside it, and the R-cut grids' conclusions live in the audit, so no.
+# What stays tracked is the measured RESULT and the things that are small:
+# quickfix1m1dc_all.json (the blotter), charter_trades_*.json (the hand-off),
+# quickfix1m1dc_levels.json, and published_history.jsonl, which is appended
+# rather than rewritten and carries the history these files were pretending
+# to keep. Regenerate any of the below with the Update button.
+output/*.html
+output/quickfix1m1dcRcut4th5th.json
+output/quickfix1m1dcRcutHybrid.json
+output/quickfix1m1dc_matrix.json

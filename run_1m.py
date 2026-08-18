@@ -45,6 +45,9 @@ DC = HERE / ".." / "data_center"
 ARRAY_ROOT = HERE / ".." / "hyperliquid_bot" / "data" / "array"
 META = DC / "metadata"
 OUT_JSON = HERE / "output" / "quickfix1m1dc_all.json"
+# The one file in output/ that is APPENDED rather than rewritten, and the
+# reason the rest of it can be gitignored: see log_published().
+HISTORY_JSONL = HERE / "output" / "published_history.jsonl"
 # The page is built by build_1m_report.py (the report), and the 2x2 by
 # run_1m_matrix.py, which reads this LIB_PATH.
 LIB_PATH = DC / "scripts" / "lightweight-charts.4.2.3.standalone.js"
@@ -531,6 +534,57 @@ def calendar_fallback(trades):
     return out
 
 
+def log_published(trades, rows, calendar, final, max_dd, total_r, wr):
+    """Append one line per CHANGE to output/published_history.jsonl.
+
+    THE HISTORY THAT THE BIG FILES WERE ONLY PRETENDING TO KEEP (Lode,
+    2026-08-18). `output/` used to be tracked whole - 11.1 MB of the
+    repo's 11.8, rewritten by every refresh, so a commit read as 40,000
+    lines of regenerated JSON and nobody could see what had actually
+    moved. The renderings are ignored now; this is what replaces them:
+    one self-describing line, a few hundred bytes, that diffs.
+
+    SELF-DESCRIBING is the point. A number is only evidence with the
+    dials and the data window beside it, and both have moved under these
+    figures more than once - the band, the stop anchor, the range window,
+    the market filter. A line carries its own, so a row from March still
+    means something in September.
+
+    APPENDED ONLY WHEN SOMETHING CHANGED, timestamp excluded from the
+    comparison: a refresh that finds no new bars produces the same
+    numbers, and logging that would bury the changes in repeats. So the
+    file is a record of what moved, not of how often it was asked.
+    """
+    entry = {
+        # .now("UTC"), not .utcnow(): the latter is deprecated in pandas
+        # and prints a warning into the middle of the refresh log.
+        "run_utc": pd.Timestamp.now("UTC").strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "data_end": calendar[-1].isoformat() if calendar else None,
+        "market_days": len(calendar),
+        "markets": len(rows),
+        "trades": len(trades),
+        "win_rate": wr,
+        "net_r": total_r,
+        "max_dd_pct": round(max_dd, 2),
+        "final_1pct": round(final, 2),
+        "dials": {k: BASELINE[k] for k in sorted(BASELINE)},
+    }
+    prior = None
+    if HISTORY_JSONL.exists():
+        for line in HISTORY_JSONL.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                prior = json.loads(line)
+    if prior is not None:
+        a = {k: v for k, v in prior.items() if k != "run_utc"}
+        b = {k: v for k, v in entry.items() if k != "run_utc"}
+        if a == b:
+            print(f"history: unchanged since {prior['run_utc']}, not logged")
+            return
+    with HISTORY_JSONL.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry) + "\n")
+    print(f"history: appended to {HISTORY_JSONL.name}")
+
+
 def main():
     keys = sys.argv[1:]
     all_trades, rows, skipped, sessions = [], [], [], []
@@ -582,6 +636,7 @@ def main():
               f"{calendar[-1]}{tail}")
 
     OUT_JSON.parent.mkdir(exist_ok=True)
+    log_published(all_trades, rows, calendar, final, max_dd, total_r, wr)
     OUT_JSON.write_text(json.dumps(dict(
         strategy="quickfix1m1dc",
         design_doc="../data_center/docs/backtest_1m_design.md",

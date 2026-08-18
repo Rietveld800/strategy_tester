@@ -3,7 +3,7 @@
 # The R-CUT report (Lode, 2026-08-10): quickfix1m1dc restricted to a BAND of
 # ladder geometry - keep only entries whose level-to-stop distance (1R in
 # price) falls between a lower and an upper fraction of the market's trailing
-# 24-hour high-low range. Pick the two cuts, see that band's equity curve,
+# previous trading day's high-low range. Pick the two cuts, see that band's equity curve,
 # DRAWDOWN and OPEN POSITIONS, its metrics, and a HEATMAP of the whole grid.
 #
 # WHY EVERY BAND NEEDS ITS OWN ENGINE RUN, and therefore why this script is
@@ -76,8 +76,11 @@ RISK_TOLERANCE = 0.0005
 # Every dial EXCEPT the stop anchor, which is what `--stop` chooses. The
 # published baseline's dials otherwise, so a cell differs from the baseline in
 # the band alone.
+# `range_mode` is explicit so the cache key moves with it: the grids
+# cache on the dials, and adopting the trading-day window without saying
+# so here would have every band re-served from clock-built cells.
 BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
-            max_entries_per_session=1)
+            max_entries_per_session=1, range_mode="trading_day")
 
 # The two grids. `stop_label` is the MATRIX's label for the anchor, so
 # `mx.STOP_MODE_BY_LABEL` supplies the engine dial and this file never spells a
@@ -647,7 +650,7 @@ h3 {{ font-size:13px; margin:18px 0 0; }}
 <span class="note"> <b class="k">Stop anchor: {label}</b> - {stop_note}
 Keep only entries whose <b class="k">1R in price (level to the {label}
 stop)</b> falls between the two cuts, as a fraction of that market's trailing
-24-hour high-low range. Every band is its OWN engine run - a
+previous trading day's high-low range (adopted 2026-08-17, audit s.19j; it was a flat 24h of clock before, which held only half a session after a weekend). Every band is its OWN engine run - a
 refused entry does not spend the session-lockout allowance, so a band takes
 trades the baseline never reached and is not a slice of it. Each cell is
 levered to a constant <b class="k">{p['target_dd']}% max drawdown</b>, because

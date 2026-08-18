@@ -138,7 +138,34 @@ MIN_REVERSALS = 3         # tested reversals required (rule 1)
 # Trailing window for the geometry dial. A timedelta, not seconds: bar
 # timestamps arrive as pandas Timestamps and this module stays pandas-free.
 RANGE_WINDOW = timedelta(hours=24)
+# HOW FAR BACK THE WINDOW REACHES (`range_mode`, Lode 2026-08-17):
+#   "clock"       - a flat RANGE_WINDOW of wall clock. The ORIGINAL
+#                   rule, kept for comparison; every figure dated before
+#                   2026-08-17 was produced under it.
+#   "trading_day" - back to the SAME CLOCK TIME ON THE MARKET'S OWN
+#                   PREVIOUS TRADING DATE. On any normal weekday that IS
+#                   24h, bit for bit; after a weekend or a holiday it
+#                   reaches the last day that actually traded. ADOPTED
+#                   2026-08-17 (Lode: "the trading_day approach is more
+#                   correct ... more honest for days following a weekend
+#                   or holiday") and the default here - but every call
+#                   site still passes it EXPLICITLY, because the R-cut
+#                   grids key their cache on the dials and a silent
+#                   default would have them serve clock-built cells.
+# Why it exists: sessions repeat every 24h, so a flat 24h holds exactly
+# one session for every market - GC's 23 hours and LE's 4.6 alike - which
+# is why the clock rule has worked. But when the CALENDAR has a hole it
+# holds only HALF a session (measured 0.42x-0.55x across all 22 markets
+# on post-weekend days, against 0.98x-1.06x for trading_day), and a
+# narrower range means a LARGER ratio, so Monday setups have been pushed
+# toward the upper cut. The gap comes from each market's own `days` list,
+# so nothing here defines a weekend, a timezone or a DST rule.
+RANGE_MODES = ("clock", "trading_day")
 MIN_RANGE_BARS = 60      # below this the geometry dial abstains (see above)
+# The pane's fallback window is the TRADING-DAY window (see RANGE_MODES),
+# used for DISPLAY ONLY and never by the dial: it is full where the clock
+# window is empty, so the Monday open draws instead of leaving a hole in a
+# tradable area (Lode, 2026-08-16).
 MIN_LADDER = 4            # levels the ladder must carry (stop anchor)
 ENTRY_SLIP_TICKS = 2      # market-order entry slippage, in the PRICE
                           # (4 -> 2, Lode 2026-08-06)
@@ -202,6 +229,25 @@ def _active_file(files, ts):
     return live
 
 
+def _window_cutoff(bts, range_mode, prev_gap_days):
+    """The oldest bar time the trailing window may keep.
+
+    `prev_gap_days` is the number of CALENDAR days back to this market's
+    previous trading date, 1 on a normal day. It is taken from the days
+    list, never from a weekday calculation - the market's own sessions are
+    the only authority on when it was shut.
+
+    The cutoff this returns is monotonically non-decreasing over a
+    contract, in BOTH modes, which is what lets the window be pruned with
+    a plain deque: the jump at a gap day moves the cutoff FORWARD (the bar
+    advances by the same days the shift does), never back into bars that
+    were already dropped.
+    """
+    if range_mode == "trading_day":
+        return bts - timedelta(days=prev_gap_days)
+    return bts - RANGE_WINDOW
+
+
 def _ladder(f, side):
     """The eligible ladder under file f, ordered away from prev_close.
 
@@ -241,7 +287,8 @@ def _long_setup(f, run_low):
 STOP_MODES = ("ladder", "ladder_or_extreme", "extreme")
 
 
-def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
+def ratio_series(days, files, tick, stop_mode="ladder",
+                 range_mode="trading_day", decimals=4):
     """The geometry ratio at every minute, as change points - ONE SERIES
     PER REVERSAL SET, each with a second line for the pre-update window.
 
@@ -322,40 +369,52 @@ def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
                         window end)
       "no-file"       - no levels file has activated yet (start of series)
       "no-ladder"     - THIS side carries fewer than MIN_LADDER reversals
-      "rule2"         - rule 2 refused THIS side's ladder for this session.
-                        The only reason that is NOT a hole: RULE 2 STOPS
-                        THE TRADE, NOT THE MEASUREMENT (Lode, 2026-08-16),
-                        so the ratio is carried in the "rule2" line beside
-                        it and charter draws that stretch in PURPLE.
-      "short-window"  - fewer than MIN_RANGE_BARS in the trailing window,
-                        so the dial ABSTAINS rather than refuses and an
-                        entry here goes through UNJUDGED. It is 60 minutes
-                        long and it opens every session that follows a
-                        break longer than 24h - every Sunday evening, and
-                        4 of the sample's trades were taken inside one
-                        (s.19a, s.19f).
+      "rule2"         - rule 2 refused THIS side's ladder for this
+                        session. NOT a hole: RULE 2 STOPS THE TRADE, NOT
+                        THE MEASUREMENT (Lode, 2026-08-16), so the ratio
+                        rides in the "noverdict" line and is drawn PURPLE.
+      "short-window"  - fewer than MIN_RANGE_BARS in the trailing CLOCK
+                        window, so the dial ABSTAINS rather than refuses
+                        and an entry here goes through UNJUDGED. 60 BARS
+                        long, which on a thin Sunday evening is about
+                        three hours, and it opens every session following
+                        a break longer than 24h; 4 of the sample's trades
+                        were taken inside one (s.19a, s.19f). Also NOT a
+                        hole: the ratio rides in "noverdict" off the
+                        FALLBACK window and is drawn PURPLE, because the
+                        area is tradable even though the band never voted
+                        (s.19i).
 
     Returns {"stop_mode",
-             "bull": {"main":  [[epoch_s, ratio | reason], ...],
-                      "prev":  [[epoch_s, ratio | None], ...],
-                      "rule2": [[epoch_s, ratio | None], ...]},
+             "bull": {"main":      [[epoch_s, ratio | reason], ...],
+                      "prev":      [[epoch_s, ratio | None], ...],
+                      "noverdict": [[epoch_s, ratio | None], ...]},
              "bear": {...}}. All are CHANGE POINTS - a value holds until
-    the next one. `rule2` carries a value exactly where `main` reads
-    "rule2", so the three never overlap except blue against purple in a
-    pre-update window, which is the honest picture: old levels in blue,
-    the day's own ladder in purple because rule 2 had already shut it.
+    the next one. `noverdict` carries a value exactly where `main` reads
+    "rule2" or "short-window", so it never overlaps `main`; it can run
+    under `prev`, and that pairing is the honest picture - old levels in
+    blue, the day's own ladder in purple with rule 2 already against it.
     """
     if stop_mode not in STOP_MODES:
         raise ValueError(f"stop_mode must be one of {STOP_MODES}")
+    if range_mode not in RANGE_MODES:
+        raise ValueError(f"range_mode must be one of {RANGE_MODES}")
 
-    def ratio_under(f, side, run_high, run_low, rng, day_open, rule2,
-                    apply_rule2):
-        """(value, rule2_ratio) for this side under one levels file.
+    def ratio_under(f, side, run_high, run_low, rng, rng_fb, day_open,
+                    rule2, apply_rule2):
+        """(value, noverdict_ratio) for this side under one levels file.
 
-        `value` is the ratio, or the reason there is no line. The second
-        item is the ratio ANYWAY when rule 2 is what refused - rule 2
-        stops the trade, it does not stop the measurement (Lode,
-        2026-08-16), and charter draws that stretch in purple.
+        `value` is the ratio, or the reason the band returned no verdict.
+        The second item is the ratio ANYWAY in the two cases where one
+        exists without a verdict, which charter draws in PURPLE:
+
+        * rule 2 shut this ladder for the session - rule 2 stops the
+          TRADE, not the measurement (Lode, 2026-08-16);
+        * the trailing clock window is too short to judge, where the
+          ratio comes off `rng_fb`, the same 24h counted in BARS.
+
+        Both are real numbers the band never voted on, which is exactly
+        what the colour says.
         """
         lad = _ladder(f, side)
         if len(lad) < MIN_LADDER:
@@ -381,7 +440,8 @@ def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
         # in the overlap (the opening bars of a rule-2 session). Both are
         # untradable either way; only the label moves.
         if rng is None:
-            return "short-window", None
+            return "short-window", (round(rpu / rng_fb, decimals)
+                                    if rng_fb else None)
         val = round(rpu / rng, decimals)
         if apply_rule2:
             key = (f.publish_date, side)
@@ -396,15 +456,26 @@ def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
     # labelled by; "short"/"long" name the setup built on it, which is what
     # the engine calls it. Same thing from the two ends.
     SIDES = (("bull", "short"), ("bear", "long"))
-    LINES = ("main", "prev", "rule2")
+    LINES = ("main", "prev", "noverdict")
     out = {name: {k: [] for k in LINES} for name, _ in SIDES}
     last = {name: {k: "start" for k in LINES} for name, _ in SIDES}
     win = deque()
+    # The fallback window, for DISPLAY only: the TRADING-DAY window, which
+    # is full where the clock window is empty. It replaced a flat 1440
+    # bars on 2026-08-17 - that was session-blind, drawing LE's purple
+    # line against a WEEK of range (5.24x its session) while GC got 1.04x.
+    # Cleared at a splice for the same reason as `win`.
+    recent = deque()
     win_contract = None
+    win_prev_date = None
     for day in days:
         if day.contract != win_contract:
             win.clear()
+            recent.clear()
             win_contract = day.contract
+            win_prev_date = None
+        gap_days = (day.date - win_prev_date).days if win_prev_date else 1
+        win_prev_date = day.date
         if not day.bars:
             continue
         run_high = run_low = None
@@ -416,9 +487,12 @@ def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
         # `f_live is f_day` all session - one line, no blue.
         f_day = _active_file(files, day.bars[-1][0])
         for bts, _o, h, l, _c in day.bars:
-            cutoff = bts - RANGE_WINDOW
+            cutoff = _window_cutoff(bts, range_mode, gap_days)
             while win and win[0][0] < cutoff:
                 win.popleft()
+            td_cutoff = _window_cutoff(bts, "trading_day", gap_days)
+            while recent and recent[0][0] < td_cutoff:
+                recent.popleft()
             run_high = h if run_high is None else max(run_high, h)
             run_low = l if run_low is None else min(run_low, l)
             rng = None
@@ -426,6 +500,11 @@ def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
                 span = max(x[1] for x in win) - min(x[2] for x in win)
                 if span > 0:
                     rng = span
+            rng_fb = None
+            if len(recent) >= MIN_RANGE_BARS:
+                span = max(x[1] for x in recent) - min(x[2] for x in recent)
+                if span > 0:
+                    rng_fb = span
             f_live = _active_file(files, bts)
             stamp = int(bts.timestamp())
             for name, side in SIDES:
@@ -436,21 +515,23 @@ def ratio_series(days, files, tick, stop_mode="ladder", decimals=4):
                     mv = "no-file"
                 else:
                     mv, r2v = ratio_under(f_day, side, run_high, run_low,
-                                          rng, day_open, rule2, True)
+                                          rng, rng_fb, day_open, rule2,
+                                          True)
                 # The blue reference line: only while the day's own update
                 # is not live yet, and never carrying a reason - a gap in
                 # it just means there is nothing to reference.
                 pv = None
                 if f_live is not None and f_live is not f_day:
-                    v, _ = ratio_under(f_live, side, run_high, run_low, rng,
-                                       day_open, rule2, False)
+                    v, _ = ratio_under(f_live, side, run_high, run_low,
+                                       rng, rng_fb, day_open, rule2, False)
                     pv = v if isinstance(v, float) else None
                 for line, val in (("main", mv), ("prev", pv),
-                                  ("rule2", r2v)):
+                                  ("noverdict", r2v)):
                     if val != last[name][line]:
                         out[name][line].append([stamp, val])
                         last[name][line] = val
             win.append((bts, h, l))
+            recent.append((bts, h, l))
     return dict(stop_mode=stop_mode, **out)
 
 
@@ -458,7 +539,7 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                start_capital=STARTING_CAPITAL, tighten=True,
                allow_pre_activation=True, confirm=True, stop_mode="ladder",
                max_entries_per_session=1, min_rpu_range_ratio=None,
-               max_rpu_range_ratio=None):
+               max_rpu_range_ratio=None, range_mode="trading_day"):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
@@ -468,6 +549,8 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     """
     if stop_mode not in STOP_MODES:
         raise ValueError(f"stop_mode must be one of {STOP_MODES}")
+    if range_mode not in RANGE_MODES:
+        raise ValueError(f"range_mode must be one of {RANGE_MODES}")
     trades = []
     cash = start_capital
     pos = None
@@ -482,6 +565,7 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                    or max_rpu_range_ratio is not None)
     win = deque()
     win_contract = None
+    win_prev_date = None
     refused_tight = refused_wide = range_unjudged = 0
 
     def book(pos, exit_ts, exit_price, reason):
@@ -525,6 +609,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
         if day.contract != win_contract:      # a splice is not a price move
             win.clear()
             win_contract = day.contract
+            win_prev_date = None
+        gap_days = (day.date - win_prev_date).days if win_prev_date else 1
+        win_prev_date = day.date
 
         run_high = run_low = None
         prev_c = None
@@ -587,7 +674,7 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
 
             # Prune the trailing window to the bars strictly before this
             # minute (it is appended to at the bottom of the loop).
-            cutoff = bts - RANGE_WINDOW
+            cutoff = _window_cutoff(bts, range_mode, gap_days)
             while win and win[0][0] < cutoff:
                 win.popleft()
 

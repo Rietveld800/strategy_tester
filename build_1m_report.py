@@ -44,7 +44,15 @@ from build_equity_html import CSS
 HERE = Path(__file__).resolve().parent
 IN_JSON = HERE / "output" / "quickfix1m1dc_all.json"
 MATRIX_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
-OUT_HTML = HERE / "output" / "quickfix1m1dc_report.html"
+# THE BASELINE REPORT IS NAMED FOR ITS CELL (Lode, 2026-08-18): it is
+# `variant 2`'s report and was called `quickfix1m1dc_report.html`, which
+# said nothing about which dials it ran. DERIVED, not typed - the stem
+# and the slug both come from run_1m_matrix, so the filename cannot drift
+# from whichever cell is the published baseline.
+REPORT_STEM = "quickfix1m1dc_report"
+OUT_HTML = HERE / "output" / (
+    f"{REPORT_STEM}_"
+    f"{run_1m_matrix.variant_slug(run_1m_matrix.BASELINE_NAME)}.html")
 LIB_PATH = (HERE / ".." / "data_center" / "scripts"
             / "lightweight-charts.4.2.3.standalone.js")
 
@@ -323,7 +331,7 @@ def geometry_foot(p):
         return ('<div class="rulefoot"><b>The geometry cut</b> is <b>off</b> '
                 'on this page: every setup is taken whatever its '
                 'level-to-stop distance measures against the trailing '
-                '24-hour range. The published baseline carries the band at '
+                'previous trading day&rsquo;s range. The published baseline carries the band at '
                 '0.20 / 0.50 (adopted, audit s.15e and s.17).</div>')
     band = (f"{lo:.2f} to {hi:.2f}" if lo and hi is not None
             else f"at most {hi:.2f}" if hi is not None
@@ -331,7 +339,7 @@ def geometry_foot(p):
     return (
         '<div class="rulefoot"><b>The geometry cut</b> (adopted, audit '
         's.15e and s.17): an entry is refused unless its <b>level-to-stop '
-        f'distance</b> is <b>{band}</b> of the market\'s trailing 24-hour '
+        f'distance</b> is <b>{band}</b> of the market\'s PREVIOUS TRADING DAY\'s '
         'high-low range. Under the fixed settlement exit a wider ladder has '
         'a mathematically capped payoff against a full -1R downside, so '
         'the upper cut follows from the exit rule and sits on a measured '
@@ -866,8 +874,11 @@ def build(data=None, out=None, variant=None):
         # ("variant 5" -> quickfix1m1dc_report_variant_05.html). A page
         # built here can then never land under a name the matrix does not
         # use.
+        # REPORT_STEM, never OUT_HTML.stem: the baseline's own name now
+        # carries a slug, so stem-chaining would spell
+        # `..._variant_02_variant_05.html`.
         out = OUT_HTML.with_name(
-            f"{OUT_HTML.stem}_{run_1m_matrix.variant_slug(variant)}.html")
+            f"{REPORT_STEM}_{run_1m_matrix.variant_slug(variant)}.html")
     data = data or json.loads(IN_JSON.read_text(encoding="utf-8"))
     out = out or OUT_HTML
     trades = data["trades"]

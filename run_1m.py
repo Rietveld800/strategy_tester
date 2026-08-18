@@ -11,7 +11,8 @@ Levels and prev_close are decoded with the same per-market price codecs
 as the fingerprint (ZN 64ths, ZW/ZC eighths) — the reversal levels in the
 xlsx are in Socrates notation too.
 
-Outputs: output/quickfix1m1dc_all.json, output/quickfix1m1dc_report.html
+Outputs: output/quickfix1m1dc_all.json,
+output/quickfix1m1dc_report_variant_02.html
 (built by build_1m_report.py), console summary.
 Usage: python run_1m.py [KEY ...] (default: all eligible).
 """
@@ -67,7 +68,8 @@ ACTIVATION_UTC = "07:35"
 BASELINE = dict(tighten=False, allow_pre_activation=False,
                 confirm=False, stop_mode="ladder",
                 max_entries_per_session=1,
-                min_rpu_range_ratio=0.20, max_rpu_range_ratio=0.50)
+                min_rpu_range_ratio=0.00, max_rpu_range_ratio=0.60,
+                range_mode="trading_day")
 STAT_SETTLEMENT = 3
 FILES_FROM = date(2025, 12, 20)
 ETF_MATCH_MIN = 0.90

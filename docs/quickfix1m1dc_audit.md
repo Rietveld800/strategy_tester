@@ -210,7 +210,8 @@ worst: ZB -7.02R, ZC -5.85R, FGBL -4.98R, ES -4.72R. Full details:
 output/quickfix1m1dc_matrix.{json,html} (run_1m_matrix.py).
 
 The per-trade REPORT for the inspection round is
-output/quickfix1m1dc_report.html (build_1m_report.py, 2026-08-06): the
+output/quickfix1m1dc_report_variant_02.html (build_1m_report.py,
+2026-08-06; renamed for its cell 2026-08-18): the
 rules and dials, the KPIs, the exit-class anatomy, the full blotter, the
 per-market table and the daily calendar, with every blotter row linking
 into the trade study at that trade. output/quickfix1m1dc_matrix.html
@@ -608,6 +609,203 @@ the one the next trigger would be judged on. The order matters and is
 deliberate: the side is chosen BEFORE rule 2, not after. Choosing the
 side that survives rule 2 instead would have answered 2026-08-11 with
 the bear ladder 130 points away from price, painted green.
+
+### 19k. The bands re-swept, and the grid trimmed (Lode, 2026-08-18)
+
+Both R-cut grids rebuilt from scratch under the adopted trading-day
+window (232 bands each, ~110 min for the hybrid; `range_mode` is in their
+`dials`, so nothing was served from clock-built cache). Ranked at equal
+pain (6% DD, >= 30 trades):
+
+| 4th/5th | t | wr | net R | streak | DD | final@6% |
+|---|---|---|---|---|---|---|
+| 0.00-0.65 | 116 | 38.8% | +52.74 | 6 | 8.76% | 139,551 |
+| 0.00-0.60 | 115 | 38.3% | +52.32 | 6 | 8.76% | 139,191 |
+| *0.20-0.50 (was)* | 85 | 40.0% | +48.57 | 8 | 11.74% | 126,387 |
+
+| hybrid | t | wr | net R | streak | DD | final@6% |
+|---|---|---|---|---|---|---|
+| 0.45-0.55 | 36 | 61.1% | +26.43 | 3 | 2.60% | 178,661 |
+| 0.20-0.65 | 101 | 46.5% | +53.77 | 5 | 6.32% | 161,973 |
+| 0.20-0.60 | 98 | 44.9% | +51.33 | 5 | 6.32% | 158,444 |
+| *0.20-0.50 (was)* | 84 | 42.9% | +45.58 | 5 | 7.62% | 140,350 |
+
+s.19j's prediction held: the UPPER cut is what moved, because the wider
+Monday denominator shifted every ratio down and a ceiling fitted at half
+width was too tight. On the 4th/5th anchor the LOWER cut stops earning
+its place entirely - the leaders sit at 0.00-0.10.
+
+**ADOPTED: 4th/5th 0.00-0.60, hybrid 0.20-0.60.** Deliberately NOT the
+grid's optimum. `0.45-0.55` tops the hybrid table on 36 trades with 48%
+of them one market, which is the trap the page's own `top market share`
+column exists to catch - Lode: "too narrow. We're probably just
+price-fitting when we do that." 0.65 was left alone for sitting on the
+edge of the measured region. Broad beats best when the sample is 100
+trades.
+
+**THE BAND AXIS IS NOW NESTED UNDER THE STOP ANCHOR**, and it had to be:
+`variant 2` and `variant 5` occupy the same slot of the band ladder, so
+one shared axis can only ever give the two anchors the same cuts - and
+the band reads the stop anchor's output (s.19), so a band measured on one
+was never evidence about the other. Each anchor keeps `000-050` and
+`full` as fixed comparison points and carries its own chosen band in the
+middle slot. The cross is still 3x3x3.
+
+**THE THREE EXTRAS ARE GONE** with their reports: `variant 28`,
+`variant 29` and `variant 30`, plus the `variant 20` level study, plus
+the three refresh steps that built them. Variants 1..27 did not move.
+
+### 19j. The window has been half-width on a fifth of all sessions (Lode, 2026-08-17)
+
+Lode, pressing on the Monday case: "Today at Monday 12:00 the window
+should hold 14 hours of mondays trading session and 10 hours of fridays
+session, that's 24 hours together ... why is it holding only 19 hours of
+data?" It was not 19 - that figure was mine, guessed in prose from an
+unmeasured Friday close. Measured, on GC at Monday 12:00 UTC:
+
+```
+2026-01-05   previous trading date 3 days back
+   24h CLOCK   : from Sun 23:00    780 bars = 13.0h of trading
+   TRADING-DAY : from Fri 12:00   1380 bars = 23.0h of trading
+```
+
+GC's session is 22:00->20:59 UTC, span 23.0h (23:00 open in winter, CST).
+So the trading-day window holds a COMPLETE session on a Monday, and
+Lode's arithmetic was right in structure - the weekend and the nightly
+breaks contribute nothing, so "Friday 12:00 to Monday 12:00" contains
+exactly one session's worth of traded minutes.
+
+**THE DEFECT IS MUCH LARGER THAN A GAP AT THE OPEN.** It is not 60 blind
+bars on a Monday morning; the clock window runs at HALF CONTENT for the
+whole session, in every market:
+
+| | normal day | after a weekend/holiday |
+|---|---|---|
+| 24h clock | 1.00x session | **0.42x - 0.55x** |
+| trading day | 1.00x session | **0.98x - 1.06x** |
+
+All 22 markets, from GC's 23-hour session to LE's 4.6-hour one. A
+narrower range is a LARGER ratio, so roughly a fifth of all sessions have
+been judged against half a denominator and pushed toward the upper cut.
+That is a bias in the adopted band, not a cosmetic hole.
+
+**WHY A FLAT 24h WORKED AT ALL**, and this is the part worth keeping:
+sessions repeat every 24 hours, so a 24h window holds exactly ONE SESSION
+for every market regardless of session length - measured 0.90x-1.00x
+across all 22. The clock rule is already session-normalised. It fails
+only where the CALENDAR has a hole, which the clock does not know about.
+
+**WHY NOT A FIXED BAR COUNT** (the first idea, and it is wrong): 1440
+bars holds 1.04x sessions for GC and **5.24x for LE**. Databento emits a
+bar only for minutes that TRADED, so a fixed count spans a variable
+amount of time - LE's "24-hour range" would become a week's. It is the
+bar-count rule that is session-blind, not the clock rule.
+
+**THE RULE ADOPTED FOR MEASUREMENT** is `range_mode="trading_day"`: look
+back to the same clock time on the market's OWN previous trading date.
+The gap comes from that market's `days` list, so nothing anywhere defines
+a weekend, a timezone or a DST rule - Lode's own caution, and the reason
+this shape was chosen over any calendar of holidays.
+
+Validated on GC (step 2 of the agreed plan):
+
+- **170,523 normal-day minutes, 0 different.** On a session whose
+  previous trading date is yesterday the cutoff is the same instant, so
+  the two modes are bit-identical. Three unit tests pin it.
+- gap sessions 0.50x -> 1.00x, all 42,752 minutes of them changed.
+- blind minutes 1.01% -> 0.14%; the residue is the 60 bars after each
+  roll, which no window fixes without comparing prices across a splice.
+- GC blotter at the published dials: 4 trades / +7.75R (clock) against
+  5 / +6.75R (trading_day); `refused_wide` falls 48 -> 14, exactly as the
+  wider denominator predicts.
+
+`variant 31` was `variant 2` with only the window changed - same lockout,
+stop, band and 22 markets - so it read straight against the published
+baseline. Its one and only reading, on the window to 2026-08-17:
+
+| cell | window | trades | wr | net R | streak | max DD | final @6% |
+|---|---|---|---|---|---|---|---|
+| variant 2 | clock | 65 | 44.6% | **51.33** | 6 | 8.94% | 138,865 |
+| variant 31 | trading_day | 66 | 42.4% | 46.40 | **5** | **8.00%** | **139,492** |
+
+```
+geometry:  clock        refused wide 894  tight 281  unjudged 8
+           trading_day  refused wide 858  tight 412  unjudged 0
+```
+
+It splits by metric - net R worse by 4.93R, but the losing streak and the
+drawdown both improve, which is the priority order, and at equal pain it
+finishes ahead. The mechanism is legible in the bookkeeping: the wider
+Monday denominator lowers the ratio, so 131 refusals move from the upper
+cut to the LOWER one, and the 8 unjudged trades become 0 - the band now
+votes on every entry.
+
+**ADOPTED 2026-08-17** (Lode: "the trading_day approach is more correct
+... it's more honest for days following a weekend or holiday"), on the
+principle rather than the table. Every matrix cell runs it, `variant 31`
+is gone (there is nothing left to compare it against) and the page has no
+`window` column. `clock` survives as an engine dial.
+
+**THE BAND IS NOW UNCALIBRATED AND THAT IS THE OPEN ITEM.** 0.20/0.50 was
+fitted against the half-width denominator, and the 281 -> 412 jump in
+lower-cut refusals is that mismatch showing: the lower cut is doing work
+it was never measured for. The 4.93R is most likely the band's, not the
+window's. The R-cut grids (one per stop anchor) are the machinery and
+both cache on the dials, so adding `range_mode` to their `BASE` is what
+forces a full rebuild rather than serving clock-built cells.
+
+### 19i. The band is the cell's own, and the Monday open draws (Lode, 2026-08-16)
+
+Two things, from Lode reading `variant 29` (lockout 1, hybrid, **0.25-0.65**):
+
+**1. The pane was colouring every cell against 0.20/0.50.** "the colors of
+the %R/24hRange line (red/green) and also the dotted vertical 0.20 and
+0.50 lines don't make much sense when the variant 29 uses range
+0.25-0.65." Correct, and it was a lookup table: charter mapped the band
+LABEL through `{000-050, 020-050, full}`, which was every band that
+existed when it was written. The grid then gained two hand-picked cells
+(`015-020`, `025-065`), no entry matched, and the fallback drew somebody
+else's band. Fixed at the source: `load_variants` now carries
+`min_rpu_range_ratio` / `max_rpu_range_ratio` **off the dials the cell
+actually ran**, and the pane colours and places its guides from those. A
+label cannot drift from a dial it is no longer derived from.
+
+It took two passes. The first carried the cuts as far as the payload and
+no further: the viewer builds each DRAWN set from the variant and did not
+copy `band` across, so `nav.band` came back undefined and the pane fell
+through to the PUBLISHED cuts - variant 29 still drawn against 0.20/0.50.
+Lode caught it on the chart after I had called it verified off a
+screenshot of a 1568px-wide price axis. The check that would have caught
+it, and now does, is to sample the DRAWN PIXELS: on 2026-08-07 the bull
+ratio holds 0.557, which is red under 0.20-0.50 and green under
+0.25-0.65, so the colour of that stretch answers the question on its own.
+
+**Lode's own question - "does it mean that the json will become
+heavier?" - answers itself, and no.** Colour is a pure function of the
+ratio and the band, evaluated at paint time; the series ships the same
+bytes whatever band is drawn. It only ever affects green/red, never blue
+and never purple, which is exactly why those two carry no verdict.
+
+**2. The Monday open now draws.** "since there's price action and since
+this is a valid trading area, I think we should be able to draw the
+%R/24hRange line for that area." The hole was `short-window`: the
+trailing window is 24h of WALL CLOCK, so after a weekend it is empty and
+the dial abstains. The ratio's NUMERATOR was never in doubt - only its
+denominator - so the pane now falls back to `FALLBACK_BARS` (1440), the
+same 24 hours counted in BARS, which after a weekend is the previous
+session. PA's Monday open reads **0.26** off it instead of exploding off
+six thin Sunday prints.
+
+It is drawn PURPLE, with the same meaning purple already had: **a real
+ratio the band never voted on.** That keeps the palette at four and the
+promise intact - green and red are verdicts, blue and purple are not -
+and the crosshair still separates the two purple cases by name
+(`(rule 2 refused)` against `(band ABSTAINS - window too short)`).
+
+**THE FALLBACK IS DISPLAY ONLY.** `run_market` still abstains there, the
+8 unjudged trades are still unjudged, and s.19f's measurement stands: put
+this window into the DIAL and 5 of those 8 are refused, costing +5.55R on
+the sample. Drawing a number is not adopting it.
 
 ### 19h. Rule 2 stops the trade, not the measurement (Lode, 2026-08-16)
 

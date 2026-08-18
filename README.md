@@ -65,7 +65,7 @@ stopped in its own session draws a **vertical** line on one bar.
 ### What the Update button builds
 
 `../trading_system/refresh.py`, which is what charter's rail **Update** button runs:
-`data` → `bars` → `strategy1m` → `matrix1m` → `hybrid1m` → `levels1m` → `levels1mnl` →
+`data` → `bars` → `strategy1m` → `matrix1m` → `hybrid1m` → `levels1m` →
 `charts`, about **12 minutes**. Measured 2026-08-12: `run_1m.py` 111 s, `run_1m_matrix.py`
 240 s, the hybrid-stop variant 1 s (it reads the matrix JSON), each level study 54 s, the
 chart build ~4 min. The old `strategy` step (`run_pipeline.py`) went with the daily registry.
@@ -493,7 +493,7 @@ rewrite it here.
 |---|---|
 | `engine_1m.py` | The 1-minute engine: rules 1–2 intraday, market-order entry on the first reversal print, ladder-anchored stop, exit at the next settlement. `tests/test_engine_1m.py` covers it. |
 | `run_1m.py` | The backtest and the published baseline: `output/quickfix1m1dc_all.json`, then the report and the charter hand-off. Everything else on this side reads what it writes — including the **market-day calendar** and the grid helpers every curve here is drawn on (below). |
-| `build_1m_report.py` | `output/quickfix1m1dc_report.html` from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. |
+| `build_1m_report.py` | `output/quickfix1m1dc_report_variant_02.html` (named for its cell) from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. |
 | `run_1m_matrix.py` | The dial matrix, one pass over the data: the full lockout x stop x band cross on the filtered universe (`variant 1` .. `variant 27`) plus three appended extras — since 2026-08-16 `variant 28` (4th/5th, band 0.15-0.20) and `variant 29` (hybrid, band 0.25-0.65), the winning band from each stop anchor's R-cut grid, and `variant 30`, the market filter's off-state (lockout 1 / hybrid / 000-050 over all 31 markets, pairing with `variant 4`). Curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
 | `research_1m_levels.py` | The level/entry study, baseline and `--variant "<cell>"`. |
 | `build_1m_rcut_report.py` | The R-cut band grid, **one per stop anchor**: `--stop 4th5th` (default) and `--stop hybrid`, each ~231 engine passes, ~90 min, **not** in a full refresh — each page has its own update button. Its trade cache is per anchor and keyed on the dials **and** on `data_fingerprint()`, so it can never republish cells computed on an older window or under the other stop. |

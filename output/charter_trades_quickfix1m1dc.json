@@ -8,8 +8,8 @@
   "source": "strategy_tester",
   "starting_capital": 100000.0,
   "risk_pct": 1.0,
-  "n_markets": 18,
-  "n_trades": 65
+  "n_markets": 17,
+  "n_trades": 91
  },
  "markets": {
   "United_States_Oil_Fund_LP": {
@@ -42,6 +42,18 @@
     },
     {
      "side": "short",
+     "entry_date": "2026-03-04",
+     "entry": 90.55,
+     "exit_date": "2026-03-04",
+     "exit": 91.16000000000001,
+     "stop": 91.16000000000001,
+     "target": null,
+     "reason": "stop",
+     "r": -1.068,
+     "bars": null
+    },
+    {
+     "side": "short",
      "entry_date": "2026-03-13",
      "entry": 118.79,
      "exit_date": "2026-03-16",
@@ -54,14 +66,14 @@
     },
     {
      "side": "short",
-     "entry_date": "2026-03-20",
+     "entry_date": "2026-03-19",
      "entry": 121.7,
-     "exit_date": "2026-03-23",
-     "exit": 110.61000000000001,
+     "exit_date": "2026-03-20",
+     "exit": 122.00000000000001,
      "stop": 123.11,
      "target": null,
      "reason": "close1",
-     "r": 7.971,
+     "r": -0.223,
      "bars": null
     },
     {
@@ -74,6 +86,18 @@
      "target": null,
      "reason": "stop",
      "r": -1.029,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-03-31",
+     "entry": 130.14,
+     "exit_date": "2026-03-31",
+     "exit": 130.69,
+     "stop": 130.69,
+     "target": null,
+     "reason": "stop",
+     "r": -1.075,
      "bars": null
     }
    ]
@@ -126,6 +150,18 @@
     },
     {
      "side": "short",
+     "entry_date": "2026-04-01",
+     "entry": 243.42999999999998,
+     "exit_date": "2026-04-01",
+     "exit": 244.085,
+     "stop": 244.085,
+     "target": null,
+     "reason": "stop",
+     "r": -1.165,
+     "bars": null
+    },
+    {
+     "side": "short",
      "entry_date": "2026-04-02",
      "entry": 244.51999999999998,
      "exit_date": "2026-04-02",
@@ -159,6 +195,18 @@
      "reason": "close1",
      "r": 5.748,
      "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-01",
+     "entry": 255.32999999999998,
+     "exit_date": "2026-05-04",
+     "exit": 251.75000000000003,
+     "stop": 257.005,
+     "target": null,
+     "reason": "close1",
+     "r": 2.188,
+     "bars": null
     }
    ]
   },
@@ -176,6 +224,18 @@
      "target": null,
      "reason": "stop",
      "r": -1.01,
+     "bars": null
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-02-02",
+     "entry": 5.841,
+     "exit_date": "2026-02-02",
+     "exit": 5.668900000000001,
+     "stop": 5.668900000000001,
+     "target": null,
+     "reason": "stop",
+     "r": -1.012,
      "bars": null
     },
     {
@@ -200,6 +260,30 @@
      "target": null,
      "reason": "close1",
      "r": 0.771,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-11",
+     "entry": 6.2977,
+     "exit_date": "2026-05-11",
+     "exit": 6.3568999999999996,
+     "stop": 6.3568999999999996,
+     "target": null,
+     "reason": "stop",
+     "r": -1.034,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-08-07",
+     "entry": 6.7276,
+     "exit_date": "2026-08-10",
+     "exit": 6.6160000000000005,
+     "stop": 6.757099999999999,
+     "target": null,
+     "reason": "close1",
+     "r": 3.898,
      "bars": null
     }
    ]
@@ -242,18 +326,6 @@
      "target": null,
      "reason": "close1",
      "r": 1.492,
-     "bars": null
-    },
-    {
-     "side": "long",
-     "entry_date": "2026-02-17",
-     "entry": 3631.0,
-     "exit_date": "2026-02-17",
-     "exit": 3504.0,
-     "stop": 3504.0,
-     "target": null,
-     "reason": "stop",
-     "r": -1.032,
      "bars": null
     },
     {
@@ -336,6 +408,18 @@
     },
     {
      "side": "long",
+     "entry_date": "2026-06-08",
+     "entry": 4347.2,
+     "exit_date": "2026-06-09",
+     "exit": 4282.9,
+     "stop": 4282.9,
+     "target": null,
+     "reason": "stop",
+     "r": -1.006,
+     "bars": null
+    },
+    {
+     "side": "long",
      "entry_date": "2026-06-11",
      "entry": 4103.2,
      "exit_date": "2026-06-12",
@@ -345,6 +429,18 @@
      "reason": "close1",
      "r": 1.879,
      "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-08-06",
+     "entry": 4305.1,
+     "exit_date": "2026-08-07",
+     "exit": 4365.6,
+     "stop": 4365.6,
+     "target": null,
+     "reason": "stop",
+     "r": -1.007,
+     "bars": null
     }
    ]
   },
@@ -352,6 +448,30 @@
    "tick": 0.01,
    "price_decimals": 2,
    "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-02-06",
+     "entry": 63.18,
+     "exit_date": "2026-02-06",
+     "exit": 63.85,
+     "stop": 63.85,
+     "target": null,
+     "reason": "stop",
+     "r": -1.062,
+     "bars": null
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-03-05",
+     "entry": 58.220000000000006,
+     "exit_date": "2026-03-05",
+     "exit": 56.99,
+     "stop": 56.99,
+     "target": null,
+     "reason": "stop",
+     "r": -1.033,
+     "bars": null
+    },
     {
      "side": "long",
      "entry_date": "2026-03-20",
@@ -362,6 +482,60 @@
      "target": null,
      "reason": "stop",
      "r": -1.087,
+     "bars": null
+    }
+   ]
+  },
+  "S_P_500_E_mini": {
+   "tick": 0.25,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-24",
+     "entry": 7176.6,
+     "exit_date": "2026-04-24",
+     "exit": 7197.35,
+     "stop": 7197.35,
+     "target": null,
+     "reason": "stop",
+     "r": -1.049,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-04-27",
+     "entry": 7195.6,
+     "exit_date": "2026-04-27",
+     "exit": 7206.8,
+     "stop": 7206.8,
+     "target": null,
+     "reason": "stop",
+     "r": -1.093,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-05",
+     "entry": 7265.0,
+     "exit_date": "2026-05-05",
+     "exit": 7294.6,
+     "stop": 7294.6,
+     "target": null,
+     "reason": "stop",
+     "r": -1.034,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-08-05",
+     "entry": 7772.5,
+     "exit_date": "2026-08-06",
+     "exit": 7734.750000000001,
+     "stop": 7804.5,
+     "target": null,
+     "reason": "close1",
+     "r": 1.19,
      "bars": null
     }
    ]
@@ -380,6 +554,18 @@
      "target": null,
      "reason": "stop",
      "r": -1.007,
+     "bars": null
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-17",
+     "entry": 28822.6,
+     "exit_date": "2026-07-20",
+     "exit": 28778.75,
+     "stop": 28227.35,
+     "target": null,
+     "reason": "close1",
+     "r": -0.074,
      "bars": null
     }
    ]
@@ -426,6 +612,18 @@
     },
     {
      "side": "long",
+     "entry_date": "2026-06-15",
+     "entry": 578.125,
+     "exit_date": "2026-06-16",
+     "exit": 596.0,
+     "stop": 566.75,
+     "target": null,
+     "reason": "close1",
+     "r": 1.621,
+     "bars": null
+    },
+    {
+     "side": "long",
      "entry_date": "2026-06-30",
      "entry": 578.5,
      "exit_date": "2026-07-01",
@@ -434,6 +632,18 @@
      "target": null,
      "reason": "close1",
      "r": 2.931,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-07-13",
+     "entry": 644.5,
+     "exit_date": "2026-07-14",
+     "exit": 645.0,
+     "stop": 657.875,
+     "target": null,
+     "reason": "close1",
+     "r": -0.058,
      "bars": null
     },
     {
@@ -447,47 +657,29 @@
      "reason": "close1",
      "r": -0.537,
      "bars": null
-    }
-   ]
-  },
-  "S_P_500_E_mini": {
-   "tick": 0.25,
-   "price_decimals": 2,
-   "trades": [
+    },
     {
      "side": "short",
-     "entry_date": "2026-04-27",
-     "entry": 7195.6,
-     "exit_date": "2026-04-27",
-     "exit": 7206.8,
-     "stop": 7206.8,
+     "entry_date": "2026-07-23",
+     "entry": 705.5,
+     "exit_date": "2026-07-23",
+     "exit": 709.375,
+     "stop": 709.375,
      "target": null,
      "reason": "stop",
-     "r": -1.093,
+     "r": -1.296,
      "bars": null
     },
     {
      "side": "short",
-     "entry_date": "2026-05-05",
-     "entry": 7265.0,
-     "exit_date": "2026-05-05",
-     "exit": 7294.6,
-     "stop": 7294.6,
-     "target": null,
-     "reason": "stop",
-     "r": -1.034,
-     "bars": null
-    },
-    {
-     "side": "short",
-     "entry_date": "2026-08-05",
-     "entry": 7772.5,
-     "exit_date": "2026-08-06",
-     "exit": 7734.750000000001,
-     "stop": 7804.5,
+     "entry_date": "2026-07-24",
+     "entry": 705.5,
+     "exit_date": "2026-07-27",
+     "exit": 660.0,
+     "stop": 709.375,
      "target": null,
      "reason": "close1",
-     "r": 1.19,
+     "r": 13.407,
      "bars": null
     }
    ]
@@ -496,6 +688,18 @@
    "tick": 5.000000000000001e-07,
    "price_decimals": 7,
    "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-04-30",
+     "entry": 0.006343,
+     "exit_date": "2026-04-30",
+     "exit": 0.006363499999999999,
+     "stop": 0.006363499999999999,
+     "target": null,
+     "reason": "stop",
+     "r": -1.103,
+     "bars": null
+    },
     {
      "side": "short",
      "entry_date": "2026-05-01",
@@ -522,6 +726,18 @@
     },
     {
      "side": "short",
+     "entry_date": "2026-05-06",
+     "entry": 0.006416,
+     "exit_date": "2026-05-06",
+     "exit": 0.0064385,
+     "stop": 0.0064385,
+     "target": null,
+     "reason": "stop",
+     "r": -1.093,
+     "bars": null
+    },
+    {
+     "side": "short",
      "entry_date": "2026-07-31",
      "entry": 0.0063159999999999996,
      "exit_date": "2026-07-31",
@@ -538,6 +754,18 @@
    "tick": 0.005,
    "price_decimals": 3,
    "trades": [
+    {
+     "side": "long",
+     "entry_date": "2026-05-01",
+     "entry": 97.824,
+     "exit_date": "2026-05-04",
+     "exit": 98.34500000000001,
+     "stop": 97.504,
+     "target": null,
+     "reason": "close1",
+     "r": 1.665,
+     "bars": null
+    },
     {
      "side": "long",
      "entry_date": "2026-05-06",
@@ -576,44 +804,50 @@
     },
     {
      "side": "short",
+     "entry_date": "2026-06-08",
+     "entry": 100.056,
+     "exit_date": "2026-06-09",
+     "exit": 99.97500000000001,
+     "stop": 100.20899999999999,
+     "target": null,
+     "reason": "close1",
+     "r": 0.531,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-19",
+     "entry": 100.61099999999999,
+     "exit_date": "2026-06-22",
+     "exit": 100.73899999999999,
+     "stop": 100.73899999999999,
+     "target": null,
+     "reason": "stop",
+     "r": -1.169,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-06-25",
+     "entry": 101.401,
+     "exit_date": "2026-06-26",
+     "exit": 101.15,
+     "stop": 101.481,
+     "target": null,
+     "reason": "close1",
+     "r": 3.514,
+     "bars": null
+    },
+    {
+     "side": "short",
      "entry_date": "2026-07-28",
-     "entry": 101.39,
+     "entry": 101.401,
      "exit_date": "2026-07-29",
      "exit": 100.68,
      "stop": 101.481,
      "target": null,
      "reason": "close1",
-     "r": 10.071,
-     "bars": null
-    }
-   ]
-  },
-  "Silver_Futures_COMEX": {
-   "tick": 0.005,
-   "price_decimals": 3,
-   "trades": [
-    {
-     "side": "short",
-     "entry_date": "2026-05-12",
-     "entry": 86.071,
-     "exit_date": "2026-05-13",
-     "exit": 87.701,
-     "stop": 87.701,
-     "target": null,
-     "reason": "stop",
-     "r": -1.012,
-     "bars": null
-    },
-    {
-     "side": "short",
-     "entry_date": "2026-08-10",
-     "entry": 63.730000000000004,
-     "exit_date": "2026-08-11",
-     "exit": 66.66,
-     "stop": 66.66,
-     "target": null,
-     "reason": "stop",
-     "r": -1.007,
+     "r": 10.229,
      "bars": null
     }
    ]
@@ -622,6 +856,18 @@
    "tick": 1.0,
    "price_decimals": 0,
    "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-05-06",
+     "entry": 49870.0,
+     "exit_date": "2026-05-06",
+     "exit": 49968.0,
+     "stop": 49968.0,
+     "target": null,
+     "reason": "stop",
+     "r": -1.042,
+     "bars": null
+    },
     {
      "side": "short",
      "entry_date": "2026-05-14",
@@ -696,20 +942,44 @@
     }
    ]
   },
-  "Global_X_Uranium_ETF": {
-   "tick": 0.01,
-   "price_decimals": 2,
+  "Silver_Futures_COMEX": {
+   "tick": 0.005,
+   "price_decimals": 3,
    "trades": [
     {
-     "side": "long",
-     "entry_date": "2026-05-18",
-     "entry": 49.78000000000001,
-     "exit_date": "2026-05-18",
-     "exit": 48.29,
-     "stop": 48.29,
+     "side": "short",
+     "entry_date": "2026-05-12",
+     "entry": 86.071,
+     "exit_date": "2026-05-13",
+     "exit": 87.701,
+     "stop": 87.701,
      "target": null,
      "reason": "stop",
-     "r": -1.034,
+     "r": -1.012,
+     "bars": null
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-05",
+     "entry": 73.354,
+     "exit_date": "2026-06-05",
+     "exit": 71.055,
+     "stop": 71.055,
+     "target": null,
+     "reason": "stop",
+     "r": -1.009,
+     "bars": null
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-06-08",
+     "entry": 69.01,
+     "exit_date": "2026-06-09",
+     "exit": 66.699,
+     "stop": 66.699,
+     "target": null,
+     "reason": "stop",
+     "r": -1.009,
      "bars": null
     }
    ]
@@ -720,6 +990,18 @@
    "trades": [
     {
      "side": "short",
+     "entry_date": "2026-05-18",
+     "entry": 2.986,
+     "exit_date": "2026-05-19",
+     "exit": 3.061,
+     "stop": 3.061,
+     "target": null,
+     "reason": "stop",
+     "r": -1.055,
+     "bars": null
+    },
+    {
+     "side": "short",
      "entry_date": "2026-05-19",
      "entry": 3.044,
      "exit_date": "2026-05-19",
@@ -728,6 +1010,18 @@
      "target": null,
      "reason": "stop",
      "r": -1.095,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-05-29",
+     "entry": 3.2880000000000003,
+     "exit_date": "2026-06-01",
+     "exit": 3.3649999999999998,
+     "stop": 3.3649999999999998,
+     "target": null,
+     "reason": "stop",
+     "r": -1.053,
      "bars": null
     },
     {
@@ -764,6 +1058,18 @@
      "target": null,
      "reason": "close1",
      "r": 5.179,
+     "bars": null
+    },
+    {
+     "side": "long",
+     "entry_date": "2026-07-29",
+     "entry": 2.6919999999999997,
+     "exit_date": "2026-07-30",
+     "exit": 2.758,
+     "stop": 2.6390000000000002,
+     "target": null,
+     "reason": "close1",
+     "r": 1.274,
      "bars": null
     }
    ]
@@ -876,14 +1182,14 @@
     },
     {
      "side": "short",
-     "entry_date": "2026-08-11",
+     "entry_date": "2026-08-10",
      "entry": 1769.3999999999999,
-     "exit_date": "2026-08-12",
-     "exit": 1797.6999999999998,
+     "exit_date": "2026-08-11",
+     "exit": 1754.9,
      "stop": 1797.6999999999998,
      "target": null,
-     "reason": "stop",
-     "r": -1.014,
+     "reason": "close1",
+     "r": 0.512,
      "bars": null
     },
     {

@@ -774,7 +774,58 @@ def test_ratio_series_rule2_is_per_side():
     # purple, and it is the SAME number the band would have judged.
     # rpu 2.6 over a trailing range of 3.0 (the 98-100 history plus the
     # session's own flat 101.0 bars), the same arithmetic the band uses.
-    r2 = value_at(ser, ts(10, "01:10"), line="rule2", side="bull")
+    r2 = value_at(ser, ts(10, "01:10"), line="noverdict", side="bull")
     assert isinstance(r2, float) and abs(r2 - 2.6 / 3.0) < 1e-3
     # ... and the side that was NOT refused has no purple line at all.
-    assert value_at(ser, ts(10, "01:10"), line="rule2", side="bear") is None
+    assert value_at(ser, ts(10, "01:10"), line="noverdict", side="bear") is None
+
+
+# --- range_mode: which window the geometry ratio is measured over -----
+
+
+def gap_days_setup(gap_days):
+    """A history session, then a session `gap_days` later. The gap stands
+    in for a weekend: no bars at all in between."""
+    f = base_file(day_pub=8, activation=ts(9, "00:00"))
+    hist = Day(date=date(2026, 6, 9), contract="GCQ6",
+               bars=oscillating_bars(9, "20:00", 120, 98.0, 100.0),
+               settle_ts=ts(9, "23:00"), settle_price=99.0)
+    later = 9 + gap_days
+    live = Day(date=date(2026, 6, later), contract="GCQ6",
+               bars=flat_bars(later, "20:00", 30, 99.0),
+               settle_ts=ts(later, "23:00"), settle_price=99.0)
+    return [hist, live], [f]
+
+
+def test_range_mode_is_identical_when_the_previous_day_is_yesterday():
+    """THE PROPERTY THAT PROVES IT RIGHT: on a session whose previous
+    trading date is yesterday, the cutoff is the same instant in both
+    modes, so every number must match bit for bit. Verified on the real
+    Gold series too - 170,523 normal-day minutes, 0 different."""
+    days, files = gap_days_setup(1)
+    a = ratio_series(days, files, TICK, range_mode="clock")
+    b = ratio_series(days, files, TICK, range_mode="trading_day")
+    assert a == b
+
+
+def test_trading_day_window_reaches_across_a_gap_where_the_clock_cannot():
+    """A two-day hole is a weekend: the clock window finds nothing and
+    ABSTAINS; the trading-day window reaches the previous trading date and
+    judges normally."""
+    days, files = gap_days_setup(3)
+    clock = ratio_series(days, files, TICK, range_mode="clock")
+    tday = ratio_series(days, files, TICK, range_mode="trading_day")
+    assert value_at(clock, ts(12, "20:10")) == "short-window"
+    assert isinstance(value_at(tday, ts(12, "20:10")), float)
+
+
+def test_range_mode_reaches_run_market_and_rejects_nonsense():
+    days, files = gap_days_setup(1)
+    trades_a, _ = run_market(days, files, TICK, range_mode="clock")
+    trades_b, _ = run_market(days, files, TICK, range_mode="trading_day")
+    assert trades_a == trades_b          # same reason as the first test
+    import pytest
+    with pytest.raises(ValueError):
+        run_market(days, files, TICK, range_mode="nonsense")
+    with pytest.raises(ValueError):
+        ratio_series(days, files, TICK, range_mode="nonsense")

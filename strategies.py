@@ -621,7 +621,7 @@ class Strategy:
 # one published strategy, and it is not a `Strategy` object: it runs on a different engine
 # over different data (`engine_1m.py` + `run_1m.py`, 1-minute bars from ../data_center),
 # so it cannot be a Rule 4 on the daily engine and must not be forced into one. Its report is
-# `output/quickfix1m1dc_report.html` and its charter overlay is written by
+# `output/quickfix1m1dc_report_variant_02.html` and its charter overlay is written by
 # `export_charter_trades_1m.py`.
 #
 # What that means for this file: everything above is INTACT and UNUSED. The cap family, the

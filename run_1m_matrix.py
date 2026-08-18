@@ -8,7 +8,7 @@ cell was NAMED for the one dial it moved - "hybrid stop", "no lockout",
 from the baseline, and it hid the combinations: the table could not say
 what the hybrid stop is worth WITHOUT the lockout, or whether the 0.20
 lower cut still earns its place under a wick stop. So the cells are now
-numbered - `variant 1` .. `variant 30` - and the four PROPERTIES are
+numbered - `variant 1` .. `variant 27` - and the PROPERTIES are
 columns on the page instead of prose in a name:
 
   lockout : 1 / 2 / none        (max_entries_per_session)
@@ -21,32 +21,21 @@ columns on the page instead of prose in a name:
   markets : 22 (the human market filter, s.16) / 31 (the whole universe)
 
 27 cells are the full cross of lockout x stop x band on the FILTERED
-universe. Cells 28, 29 and 30 are EXTRAS, appended so the factorial's
-numbering never moves:
+universe, and since 2026-08-18 that is the WHOLE grid: the three extra
+cells (`variant 28` 015-020, `variant 29` 025-065, `variant 30` the
+market filter's off-state) were removed at Lode's call along with their
+reports. The published baseline is `variant 2` (lockout 1, 4th/5th,
+000-060, 22 markets) and it is an ordinary row here: it can be switched
+off on the chart like any other.
 
-  variant 28 : lockout 1, 4th/5th, 0.15-0.20, 22 markets
-  variant 29 : lockout 1, hybrid,  0.25-0.65, 22 markets
-  variant 30 : lockout 1, hybrid,  0.00-0.50, 31 markets
-
-28 and 29 carry the band each R-cut grid picked out for its own stop
-anchor at the published lockout (2026-08-16), on the FILTERED universe
-like every other cell, so each is one band away from a factorial row and
-reads against it directly - 28 against variant 2, the published
-baseline, and 29 against variant 5, the hybrid stop at the published
-band.
-
-30 is THE MARKET FILTER'S OFF-STATE, the only cell that leaves the
-22-market universe. It was cell 28 until 2026-08-16, was displaced by
-the band cells, and Lode restored it the same day: an off-state that is
-only re-measured when someone remembers to look is the thing this grid
-exists to prevent. Its dials are the ones it was given originally
-(lockout 1 / hybrid / 000-050, NOT the published dials), so it pairs
-with variant 4 - same lockout, same stop, same band, only the filter
-differs.
-
-The published baseline is `variant 2` (lockout 1,
-4th/5th, 020-050, 22 markets) and it is an ordinary row here: it can be
-switched off on the chart like any other.
+THE BAND AXIS IS NESTED UNDER THE STOP ANCHOR (Lode, 2026-08-18), which
+is why the cross is still 3x3x3. Each anchor keeps `000-050` and `full`
+as fixed comparison points and carries its OWN chosen band in the middle
+slot - 4th/5th `000-060`, hybrid `020-060`, wick `020-050` - read off
+that anchor's own re-swept R-cut grid. A shared ladder could not express
+it: `variant 2` and `variant 5` sit in the same slot, so one axis would
+force one band on both anchors, and the band reads the stop anchor's
+output (audit s.19).
 
 Everything not on those four axes stays at the published baseline: no
 tightening, overnight window blocked, no confirmation clause. Read the
@@ -61,7 +50,7 @@ a market-day at 39.4% and +42.51R against the 2nd at 21.4% and -10.39R,
 which is the measurement the lockout rule follows from.
 
 EVERY ROW CARRIES A CHECKBOX (default on, plus all-on / all-off), which
-is what makes 30 curves readable at all: the colours run in families -
+is what makes 27 curves readable at all: the colours run in families -
 hue by stop anchor, shade by band, lightness by lockout - so a family
 can be read together, and anything else is switched off.
 
@@ -102,7 +91,11 @@ OUT_RATIO = HERE / "output" / "ratio"
 
 # Everything off the four axes sits at the published baseline and never
 # moves: no tightening, overnight window blocked, no confirmation clause.
-BASE = dict(tighten=False, allow_pre_activation=False, confirm=False)
+# `range_mode` is stated here rather than left to the engine default so
+# the dials a cell ran are self-describing in the JSON, and so anything
+# that caches on them (the R-cut grids) invalidates when it changes.
+BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
+            range_mode="trading_day")
 HUMAN_APPROVED = run_1m.HUMAN_APPROVED
 
 # The four axes. Each entry is (label, dials it sets); the label is what
@@ -120,7 +113,7 @@ STOPS = [("4th/5th", dict(stop_mode="ladder")),
          ("wick", dict(stop_mode="extreme"))]
 # The stop axis is also the only dial the geometry ratio depends on (the
 # lockout and the band decide what to DO with the number, never what it
-# is), so three series cover all 30 cells.
+# is), so three series cover all 27 cells.
 STOP_MODE_BY_LABEL = {lab: d["stop_mode"] for lab, d in STOPS}
 
 
@@ -137,10 +130,34 @@ def band_label(lo, hi):
     return f"{round(lo * 100):03d}-{round(hi * 100):03d}"
 
 
-BAND_CUTS = [(0.00, 0.50), (0.20, 0.50), (None, None)]
-BANDS = [(band_label(lo, hi),
-          dict(min_rpu_range_ratio=lo, max_rpu_range_ratio=hi))
-         for lo, hi in BAND_CUTS]
+# THE BAND AXIS IS PER STOP ANCHOR (Lode, 2026-08-18). It was one shared
+# ladder, which cannot express what the re-swept grids say: under the
+# trading-day window the two anchors want DIFFERENT cuts, and `variant 2`
+# and `variant 5` sit in the same slot of that ladder, so a shared axis
+# could only ever give them the same band. THE BAND READS THE STOP
+# ANCHOR'S OUTPUT (audit s.19) - a band measured on one anchor was never
+# evidence about the other - so the axis being nested under the stop is
+# the honest shape, not a special case.
+#
+# Slot 0 and slot 2 are the fixed comparison points every anchor keeps
+# (`000-050` and the dial OFF). Slot 1 is that anchor's CHOSEN band, read
+# off its own R-cut grid, and it is the slot the published cells sit in:
+# `variant 2` (4th/5th) and `variant 5` (hybrid). Chosen deliberately
+# BROAD rather than at the grid's optimum - the sweep's best hybrid cell
+# was 0.45-0.55 on 36 trades with 48% of them one market, which is the
+# curve-fitting trap the page warns about (Lode: "too narrow ... we're
+# probably just price-fitting"), and 0.65 was left on the table for being
+# on the edge of the measured region.
+BAND_CUTS_BY_STOP = {
+    "4th/5th": [(0.00, 0.50), (0.00, 0.60), (None, None)],
+    "hybrid":  [(0.00, 0.50), (0.20, 0.60), (None, None)],
+    "wick":    [(0.00, 0.50), (0.20, 0.50), (None, None)],
+}
+BANDS_BY_STOP = {
+    stop: [(band_label(lo, hi),
+            dict(min_rpu_range_ratio=lo, max_rpu_range_ratio=hi))
+           for lo, hi in cuts]
+    for stop, cuts in BAND_CUTS_BY_STOP.items()}
 
 # Cells OUTSIDE the factorial, appended in this order so the numbering of
 # 1..27 never moves. (stop label, lockout label, lower cut, upper cut,
@@ -161,26 +178,30 @@ BANDS = [(band_label(lo, hi),
 # Its dials are the ones Lode set for it in the first place (lockout 1 /
 # hybrid / 000-050, NOT the published dials), so it still pairs with
 # `variant 4`: same lockout, same stop, same band, only the filter differs.
-EXTRA_CELLS = [("4th/5th", "1", 0.15, 0.20, "22"),
-               ("hybrid", "1", 0.25, 0.65, "22"),
-               ("hybrid", "1", 0.00, 0.50, "31")]
+# THE WINDOW IS NO LONGER AN AXIS (Lode, 2026-08-17). `variant 31`
+# measured `trading_day` against the published `clock` baseline for one
+# refresh and the window was adopted on the reading, so every cell runs
+# it and there is nothing left to compare: the cell is gone and the page
+# has no `window` column. The measurement that decided it is audit s.19j;
+# `clock` survives as an engine dial for anyone who needs the old
+# denominator back.
+EXTRA_CELLS = []
 
-# Colour families, so 30 curves can still be read as a picture: HUE is
+# Colour families, so 27 curves can still be read as a picture: HUE is
 # the stop anchor, a hue SHIFT is the band, LIGHTNESS is the lockout.
 # Two cells of the same family sit next to each other in colour, which is
 # the comparison the eye is usually making.
 STOP_HUE = {"4th/5th": 145, "hybrid": 215, "wick": 25}
-# The three factorial bands sit at -20 / 0 / +20 of their stop's hue; the
-# hand-picked bands of EXTRA_CELLS take the next step out (-40 / +40), so
-# a cell still reads as its stop anchor's family and no two shades land
-# on the same hue (4th/5th 105-165, hybrid 195-255, wick 5-45).
-BAND_SHIFT = {"000-050": -20, "020-050": 0, "full": 20,
-              "015-020": -40, "025-065": 40}
+# The three band slots sit at -20 / 0 / +20 of their stop's hue, so a
+# cell still reads as its stop anchor's family and no two shades land on
+# the same hue (4th/5th 105-165, hybrid 195-255, wick 5-45).
+# Slot 0 / slot 1 / slot 2 of a stop's own ladder, so a cell still reads
+# as its anchor's family whatever cuts that anchor chose.
+BAND_SHIFT = {"000-050": -20, "020-050": 0, "000-060": 0, "020-060": 0,
+              "full": 20}
 LOCK_LIGHT = {"1": 32, "2": 46, "none": 61}
-# The colour of the one cell that leaves the 22-market universe: the
-# market filter's off-state, `variant 28` until 2026-08-16 and `variant 30`
-# since. Deliberately outside the three stop-anchor hues - it is the one
-# cell whose difference from its neighbour is not a dial on those axes.
+# Kept for the day a cell leaves the 22-market universe again: it would
+# otherwise wear a stop anchor's hue and read as a dial on those axes.
 UNFILTERED_HSL = (300, 0.65, 0.45)
 
 
@@ -219,23 +240,21 @@ def variant_slug(name):
 
 
 def build_grid():
-    """The 30 cells: the full lockout x stop x band cross on the filtered
-    universe, then the three extras of EXTRA_CELLS.
+    """The 27 cells: the full lockout x stop x band cross, filtered
+    universe, each anchor carrying its own band ladder.
 
     Returns (name, dials, markets, props) tuples in the numbered order.
 
-    THE FACTORIAL'S NUMBERING IS LOAD-BEARING and must stay put: variants
-    1..27 are read by number in the audit, in charter's `?v=` links and in
-    every report filename, so extras are only ever APPENDED. On 2026-08-16
-    cells 28 and 29 became the winning band of each stop anchor's R-cut
-    grid; that displaced the market filter's off-state, which had been
-    cell 28, and Lode put it back the same day as `variant 30` with the
-    dials it always had. Numbering moved for nobody.
+    THE NUMBERING IS LOAD-BEARING and must stay put: variants 1..27 are
+    read by number in the audit, in charter's `?v=` links and in every
+    report filename. Extras are only ever APPENDED, which is what
+    EXTRA_CELLS is for; it is empty since 2026-08-18, when cells 28-30
+    were removed. Nothing below 28 moved when they went.
     """
     out = []
     for lock_lab, lock in LOCKOUTS:
         for stop_lab, stop in STOPS:
-            for band_lab, band in BANDS:
+            for band_lab, band in BANDS_BY_STOP[stop_lab]:
                 props = dict(lockout=lock_lab, stop=stop_lab,
                              band=band_lab, markets="22")
                 out.append((f"variant {len(out) + 1}",
@@ -340,10 +359,10 @@ def main():
         # Every market that loads contributes its trading dates to the
         # market-day calendar the curves are drawn on, whatever any cell
         # made of it - including the nine outside the filtered universe,
-        # since `variant 30` trades them.
+        # since the whole grid runs the filtered universe.
         sessions.append([d.date for d in days])
         # The progress line quotes the BASELINE cell and counts the rest:
-        # 30 cells x "name Nt R" is a line nobody reads, and the full
+        # 27 cells x "name Nt R" is a line nobody reads, and the full
         # per-market figures are in the JSON for every cell anyway.
         ran = 0
         base_line = "-"
@@ -508,7 +527,7 @@ def rebuild_page():
 def write_page(report, calendar):
     """The matrix page: one chart, one table, a checkbox per row."""
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
-    # ONE grid for all 30 curves (Lode, 2026-08-18): resampled to the
+    # ONE grid for all 27 curves (Lode, 2026-08-18): resampled to the
     # market days and stepped, so a quiet fortnight is a flat fortnight
     # instead of a diagonal, and every cell starts and ends on the same
     # x whatever its own first and last trade were. That is what makes
@@ -606,11 +625,14 @@ only four), <b>hybrid</b> whichever of that and the session's running
 extreme at entry is further away, <b>wick</b> the running extreme alone -
 a tick above the entry day's high for a short, below its low for a long.
 <b>band</b> = the geometry cut: refuse an entry whose level-to-stop
-distance is outside that fraction of the trailing 24h high-low range
-(<b>full</b> = no cut). Three bands make the cross; <b>variant 28</b>
-(015-020) and <b>variant 29</b> (025-065) are extras, each the band its
-own R-cut grid picked out for that stop anchor at the published lockout,
-carried here so it is re-measured on every refresh.
+distance is outside that fraction of the PREVIOUS TRADING DAY's high-low range
+(<b>full</b> = no cut). THE BAND LADDER IS THE STOP ANCHOR'S OWN: each
+keeps <b>000-050</b> and <b>full</b> as fixed comparison points and
+carries its chosen band in the middle slot &mdash; 4th/5th
+<b>000-060</b>, hybrid <b>020-060</b>, wick <b>020-050</b> &mdash; read
+off that anchor's own R-cut grid under the trading-day window. A band
+measured on one anchor was never evidence about the other.
+
 <b>markets</b>: {len(HUMAN_APPROVED)} = the chart-structure inspection's
 universe (audit s.16, never a judgment on a market's backtest result),
 31 = every market that produced a run. <b>variant 30</b> is the market
@@ -646,7 +668,7 @@ too.</span></div>
 <th>max DD close %</th><th>final @1%</th>
 <th>risk @6% DD</th><th>final @6% DD</th>
 <th>day-2 win / day-2 loss / stop / abort</th>
-<th title="entries the geometry dial refused / times it abstained for want of a 24h window">geom refused / unjudged</th>
+<th title="entries the geometry dial refused / times it abstained for want of a window. Since the trading-day window was adopted (2026-08-17) it reaches the previous trading date rather than a flat 24h, so it abstains only in the first bars after a contract roll">geom refused / unjudged</th>
 <th></th></tr>{head}</table>
 <script>{lib}</script><script>
 const chart = LightweightCharts.createChart(

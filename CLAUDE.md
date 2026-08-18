@@ -99,19 +99,21 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
-`hybrid1m` -> `band1m28` -> `band1m29` -> `levels1m` -> `levels1mnl` ->
+`hybrid1m` -> `levels1m` ->
 `charts`, ~17 min. The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
 2026-08-12: run_1m 111s, matrix 240s, hybrid stop 1s (it reads the matrix JSON),
 each level study 54s. The matrix became the full factorial on 2026-08-13
-(30 cells since 2026-08-16, 625 engine passes against 163) and now costs
+(27 cells; 30 briefly, until the extras went on 2026-08-18) and now costs
 ~9 min, which is
 where the chain's ~12 -> ~17 min came from; `hybrid1m` builds `variant 5`,
-`band1m28` / `band1m29` build the two hand-picked band cells (1s each,
-same reason: they read the matrix JSON), and `levels1mnl` builds
-`variant 20`. A VARIANT WITH A REPORT BELONGS IN THE CHAIN -- a page
-built once ages out of date beside the grid it came from, which is
-exactly what happened to the hybrid stop before it joined the matrix.
+and `levels1m` builds the baseline study. A VARIANT WITH A REPORT
+BELONGS IN THE CHAIN -- a page built once ages out of date beside the
+grid it came from, which is exactly what happened to the hybrid stop
+before it joined the matrix. THE CHAIN LOST THREE STEPS on 2026-08-18
+(`band1m28`, `band1m29`, `levels1mnl`): Lode removed cells 28-30 and the
+`variant 20` level study, so nothing builds those pages any more and the
+files are deleted rather than left to rot.
 
 **`rcut1m` IS REACHABLE BUT NOT IN A FULL RUN** (user, 2026-08-12: "we're not
 updating quickfix1m1dcRcut.html after clicking button. quickfix1m1dcRcut.html
@@ -204,7 +206,7 @@ three EXTRA cells appended after them. **`wick`
 IS the engine's existing `extreme` mode** (confirmed by Lode) -- one
 tick beyond the session's running extreme AT ENTRY, which is the only
 extreme that exists at entry -- so this cost NO engine change. Cells are
-`variant 1` .. `variant 30`, the published baseline is **`variant 2`**
+`variant 1` .. `variant 27`, the published baseline is **`variant 2`**
 and it is an ordinary row: every row carries a checkbox (default on,
 plus all-on / all-off) and the baseline can be switched off like any
 other. Colour is a FAMILY, not an identity: hue is the stop anchor,
@@ -212,37 +214,26 @@ the shade within a hue is the band, lightness is the lockout, the two
 extra BAND cells take the outermost shade of their own anchor's hue,
 and the one 31-market cell is magenta -- outside every family, because
 what makes it different is not one of those three dials.
-**THE THREE EXTRAS** (all Lode, 2026-08-16): `variant 28` is lockout 1 /
-4th/5th / **0.15-0.20** and `variant 29` is lockout 1 / hybrid /
-**0.25-0.65**, each the best band on its own stop anchor's R-cut grid
-(s.15f), carried here so it is re-measured on every refresh rather than
-resting on the grid it was picked from; both run the FILTERED universe,
-so each reads directly against a factorial row (28 against `variant 2`,
-29 against `variant 5`). `variant 30` is **THE MARKET FILTER'S
-OFF-STATE**, the only cell that leaves the 22-market universe. It WAS
-cell 28 (lockout 1 / hybrid / 000-050, pairing with `variant 4`), the
-band cells took that slot, and it went straight back in as 30 the same
-day -- because a grid whose whole point is that every rule's off-state
-is re-measured on every pass cannot be the place where one of them
-quietly stops being measured. Its dials are the ones it was given
-originally, NOT the published ones, so the `variant 4` pairing still
-holds. THE FACTORIAL'S NUMBERING IS LOAD-BEARING (audit, charter `?v=`
-links, report filenames), so extras are only ever APPENDED --
-neither replacing 28/29 nor appending 30 renumbered anything.
-`run_1m_matrix.band_label()`
-DERIVES the band property from the cuts, so a printed band can never
-disagree with the dials the cell ran. `run_1m_matrix.variant_slug()` owns the
-filename form (`variant 5` -> `_variant_05`) and both consumers import
-it, so a variant page can never land under a name the matrix does not
-use. 625 engine passes against 163: the step went from ~4 to ~9 min and
-the refresh chain from ~12 to ~17 (accepted by Lode in advance). Every
-former watch-cell is still in the grid, now by number: `no geometry cut`
-= `variant 3`, `band 0.00-0.50` = `variant 1`, `hybrid stop` =
-`variant 5`, `no lockout` = `variant 20`. **`run_1m_matrix.py --page`
-redraws the page from the JSON with NO backtest** (the curves come back
-from the stored trades in seconds, colours are recomputed from the
-properties): nine minutes is too much to spend on a layout edit. The
-whole grid is written up in audit s.18.
+**THE GRID IS THE FACTORIAL AND NOTHING ELSE** (Lode, 2026-08-18). The
+three extras are gone -- `variant 28` (015-020), `variant 29` (025-065)
+and `variant 30` (the market filter's off-state) -- with their reports
+deleted and their refresh steps removed. Numbering below 28 did not move
+and never may: variants 1..27 are read by number in the audit, in
+charter's `?v=` links and in every report filename.
+**THE BAND AXIS IS NESTED UNDER THE STOP ANCHOR** (same day). It was one
+shared ladder, which cannot express what the re-swept grids say: each
+anchor wants its own cuts, and `variant 2` and `variant 5` sit in the
+SAME slot, so a shared axis would force one band on both. Each anchor now
+keeps `000-050` and `full` as fixed comparison points and carries its own
+chosen band in the middle slot -- **4th/5th `000-060`, hybrid `020-060`,
+wick `020-050`** -- so the cross is still 3x3x3. Chosen BROAD on purpose:
+the sweep's best hybrid cell was 0.45-0.55 on 36 trades with 48% of them
+one market (Lode: "too narrow ... we're probably just price-fitting"),
+and 0.65 was left alone for sitting on the edge of the measured region.
+`run_1m.BASELINE` follows `variant 2`, so the published band is
+**0.00-0.60**.
+
+
 **THE GEOMETRY RATIO IS NOW READABLE AT EVERY MINUTE, NOT ONLY AT THE
 TRADES THAT SURVIVED IT** (Lode, 2026-08-15, audit s.19). A refused entry
 leaves NO trade, so the blotter could not say why a setup did not take,
@@ -255,8 +246,33 @@ cover all 30 cells because **the stop anchor is the only dial the number
 depends on** - the lockout and the band decide what to DO with it, never
 what it is - and they are keyed by the page's STOP LABEL (`4th/5th`,
 `hybrid`, `wick`) so charter looks one up straight from `props.stop`.
-**IT RETURNS TWO SERIES, `main` AND `prev`** (Lode, 2026-08-16, audit
-s.19d): a session opens the evening before its own Socrates update
+**THE WINDOW HAS BEEN HALF-WIDTH ON A FIFTH OF ALL SESSIONS** (Lode,
+2026-08-17, audit s.19j). A flat 24h of clock holds exactly ONE SESSION
+for every market - GC 23h, LE 4.6h, measured 0.90x-1.00x across all 22 -
+which is why it has worked. But where the CALENDAR has a hole it holds
+only 0.42x-0.55x of a session, and a narrower range is a LARGER ratio, so
+~20% of sessions were judged against half a denominator and pushed toward
+the upper cut. `range_mode` is the dial: `clock` (default, unchanged) or
+`trading_day`, which looks back to the same clock time on the market's
+OWN previous trading date - taken from its `days` list, so nothing
+defines a weekend, a timezone or a DST rule anywhere. On a normal day the
+two are BIT-IDENTICAL (170,523 GC minutes, 0 different, pinned by test);
+after a gap the window goes 0.50x -> 1.00x. A fixed BAR COUNT was the
+wrong idea and is written up: 1440 bars is 1.04x sessions for GC and
+5.24x for LE, because Databento emits a bar only for minutes that traded.
+`variant 31` measures it against `variant 2` on every refresh. NOT
+ADOPTED - and if it is, the band wants a re-sweep, since 0.20/0.50 was
+fitted with Mondays at half width.
+**RULE 2 STOPS THE TRADE, NOT THE MEASUREMENT** (Lode, 2026-08-16, audit
+s.19h). A third line per side, `rule2`, carries the ratio exactly where
+rule 2 shut that ladder for the session, and charter draws it PURPLE - a
+real number nobody could have acted on. It is the only gap reason with a
+number behind it; the rest genuinely have none. The window is judged
+BEFORE rule 2 now (no usable range means nothing to draw in any colour),
+so in the overlap the label moves from `rule2` to `short-window` - both
+untradable, no figure moves.
+**IT RETURNS `main`, `prev` AND `rule2` PER SIDE** (Lode, 2026-08-16,
+audit s.19d): a session opens the evening before its own Socrates update
 activates, so in that window two answers exist and the pane shows both.
 `main` is the session's OWN update applied across the WHOLE session
 (green/red, hindsight in that window on purpose - it is only computable
@@ -396,7 +412,7 @@ the only strategy left, with its own report, its own charter overlay
 pyarrow and pytest for this (requirements.txt updated). Run the tests
 with `venv\Scripts\python.exe -m pytest tests -q`.
 
-**THE REPORT IS `build_1m_report.py` -> `output/quickfix1m1dc_report.html`**
+**THE REPORT IS `build_1m_report.py` -> `output/quickfix1m1dc_report_variant_02.html`**
 (2026-08-06, Lode: "so I can look up the different trades", in the format of
 the daily reports). It rebuilds from `quickfix1m1dc_all.json` alone, no
 backtest, and carries the v2 rule block and dials, the KPI row, the three

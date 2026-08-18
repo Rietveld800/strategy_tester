@@ -413,7 +413,34 @@ the worst drawdown REACHED each day, not the one standing at the bell**, and
 the build warns if the bottom of the pane is not the headline: this is a 1m
 engine resampled to a daily axis, so a session can dig a hole and fill it
 before the close. Carrying only closing balances showed 8.96% under an
-11.20% headline until 2026-08-08. The equity line still plots the close. **Every blotter row links
+11.20% headline until 2026-08-08. The equity line still plots the close.
+**EVERY CURVE IN THIS PROJECT IS A STEP FUNCTION ON THE MARKET DAYS**
+(Lode, 2026-08-18). The balance stands still until a trade closes and
+then jumps, so a line joining consecutive exit balances draws eleven days
+of gain that nothing booked -- "not the correct way of visualising it,
+although also not completely wrong". Two changes, both in
+`run_1m.py` and shared by the report, the matrix and both R-cut pages:
+`lineType: WithSteps` (today's balance held flat to tomorrow, the whole
+move the vertical there), and one point per MARKET DAY out to the LAST
+one instead of stopping at the last exit. **A MARKET DAY IS THE UNION**
+(Lode's choice): a date ANY market in the run was open, because the
+account can move on any of them and the universe holds 22 calendars --
+158 days, 2026-01-02 to 2026-08-14, against GC's own 155. The drawdown
+pane steps for the same reason; the daily calendar and `time in market`
+are on market days too, so weekends no longer dilute the percentage.
+`calendar_union` / `market_day_grid` / `place` / `carry_forward` are
+pinned by `tests/test_equity_grid.py`. **ONLY THE RUNNERS CAN BUILD THE
+CALENDAR**, since only they hold the bars, so `run_1m.py` and
+`run_1m_matrix.py` write it into their JSON as `calendar` and the page
+builders read it from there -- rebuilding it in a page would cost ~100s
+of bar loading to draw a line. A JSON without it falls back to calendar
+days with a printed WARNING rather than failing the refresh chain. What
+this makes visible: a cell that stopped trading early used to be a
+SHORTER line and read as a shorter history (`variant 28`, 18 trades, last
+exit 2026-07-29, ended two weeks before every other cell), and the
+published page ended at the last exit while the data ran on -- now every
+curve on the matrix starts and ends on the same x and the flat tail is
+counted in the chart's subtitle. **Every blotter row links
 into charter's 1m study at that trade** (`trades.html?m=<Market>&t=<n>`,
 1-based, charter sorts each market's trades by entry exactly as the report
 does); the link needs charter's `serve.py` running. **A VARIANT PAGE'S LINKS

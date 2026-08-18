@@ -82,6 +82,7 @@ import colorsys
 import json
 import re
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import run_1m
@@ -322,7 +323,7 @@ def main():
     keys = sys.argv[1:] or (run_1m.ELIGIBLE_FUTURES + run_1m.ETFS
                             + list(run_1m.BINANCE))
     results = {name: {"trades": [], "rows": []} for name, _, _, _ in VARIANTS}
-    skipped = []
+    skipped, sessions = [], []
     for key in keys:
         try:
             inputs, excluded = run_1m.market_inputs(key)
@@ -336,6 +337,11 @@ def main():
             print(f"{key}: EXCLUDED - {excluded['reason']}", flush=True)
             continue
         days, files, tick, note = inputs
+        # Every market that loads contributes its trading dates to the
+        # market-day calendar the curves are drawn on, whatever any cell
+        # made of it - including the nine outside the filtered universe,
+        # since `variant 30` trades them.
+        sessions.append([d.date for d in days])
         # The progress line quotes the BASELINE cell and counts the rest:
         # 30 cells x "name Nt R" is a line nobody reads, and the full
         # per-market figures are in the JSON for every cell anyway.
@@ -374,6 +380,11 @@ def main():
         print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells"
               f"  |  ratio {n} pts", flush=True)
 
+    calendar = run_1m.calendar_union(sessions)
+    if calendar:
+        print(f"\nCALENDAR: {len(calendar)} market days, {calendar[0]} to "
+              f"{calendar[-1]} - every curve is drawn on it and runs to "
+              f"the right-hand date", flush=True)
     report = {}
     for name, dials, markets, props in VARIANTS:
         trades = sorted(results[name]["trades"],
@@ -449,11 +460,16 @@ def main():
                     min_tested=run_1m.engine_1m.MIN_REVERSALS),
         variants={n: {k: v for k, v in r.items() if k != "curve"}
                   for n, r in report.items()},
+        # The market-day grid every curve here is drawn on. It is in the
+        # JSON because the pages built FROM this file draw curves too
+        # (--page, build_1m_report.py --variant) and none of them loads a
+        # single bar; rebuilding it there would cost ~100s to draw a line.
+        calendar=[d.isoformat() for d in calendar],
         per_market={n: results[n]["rows"] for n, _, _, _ in VARIANTS},
         trades={n: results[n]["trades"] for n, _, _, _ in VARIANTS},
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
-    write_page(report)
+    write_page(report, calendar)
     print(f"\nwrote {OUT_JSON.name} and {OUT_HTML.name}")
 
 
@@ -477,14 +493,33 @@ def rebuild_page():
             trades, risk_pct=risk6) if risk6 else run_1m.portfolio_replay(
             trades)
         report[name] = dict(v, color=color_for(v["props"]), curve=curve)
-    write_page(report)
+    calendar = m.get("calendar")
+    if not calendar:
+        calendar = run_1m.calendar_fallback(
+            [t for cell in m["trades"].values() for t in cell])
+        print("WARNING: this matrix JSON predates the market-day calendar. "
+              "The curves are drawn on calendar days and stop at the last "
+              "exit; re-run the matrix to get the real grid.")
+    write_page(report, calendar)
     print(f"redrew {OUT_HTML.name} from {OUT_JSON.name} "
           f"({len(report)} cells, no backtest)")
 
 
-def write_page(report):
+def write_page(report, calendar):
     """The matrix page: one chart, one table, a checkbox per row."""
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
+    # ONE grid for all 30 curves (Lode, 2026-08-18): resampled to the
+    # market days and stepped, so a quiet fortnight is a flat fortnight
+    # instead of a diagonal, and every cell starts and ends on the same
+    # x whatever its own first and last trade were. That is what makes
+    # the lines comparable side by side - a cell that stopped trading in
+    # July used to be a SHORTER line and read as a shorter history.
+    first = min((c[0][0] for c in (r["curve"] for r in report.values()) if c),
+                default=None)
+    grid = run_1m.market_day_grid(
+        calendar,
+        datetime.fromtimestamp(first, tz=timezone.utc).date()
+        if first else date.today())
     # The row order IS the variant order, and so is the series order: the
     # checkbox carries its row's index and toggles series[i], so nothing
     # here may be sorted or filtered on its way to the page.
@@ -517,9 +552,11 @@ def write_page(report):
         for i, (n, r) in enumerate(report.items()))
     series = "\n".join(
         f"series.push(chart.addLineSeries({{color:'{r['color']}', "
-        f"lineWidth:2, priceLineVisible:false, lastValueVisible:false}})"
+        f"lineWidth:2, lineType:LightweightCharts.LineType.WithSteps, "
+        f"priceLineVisible:false, lastValueVisible:false}})"
         f");\nseries[series.length-1].setData("
-        f"{json.dumps([{'time': t, 'value': v} for t, v in r['curve']])});"
+        f"{json.dumps([{'time': run_1m.grid_seconds(d), 'value': v}
+                       for d, v in run_1m.carry_forward(r['curve'], grid)])});"
         for r in report.values())
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc v2 - dial matrix</title><style>

@@ -244,27 +244,24 @@ def exposure(trades):
 DAY = 86400
 
 
-def daily_equity(curve, start_capital=100_000.0):
-    """The equity curve resampled to ONE POINT PER CALENDAR DAY, carried
+def daily_equity(curve, grid, start_capital=100_000.0):
+    """The equity curve resampled to ONE POINT PER MARKET DAY, carried
     forward across days with no exit.
 
-    WHY, and it is not cosmetic (Lode, 2026-08-10): lightweight-charts spaces
-    points by INDEX, not by time. Fed the raw per-exit curve it gave a busy
-    month more width than a quiet one - "months like feb and mei tend to take
-    longer" - so the axis was not a time axis at all and dates repeated. One
-    point per day makes index spacing and time spacing the same thing, which
-    is also what lets the three panes be read against each other."""
-    if not curve:
-        return []
-    by_day = {}
-    for ts, eq in curve:
-        by_day[ts // DAY] = eq          # last equity of that day wins
-    lo, hi = min(by_day), max(by_day)
-    out, last = [((lo - 1) * DAY, start_capital)], start_capital
-    for d in range(lo, hi + 1):
-        last = by_day.get(d, last)
-        out.append((d * DAY, round(last, 2)))
-    return out
+    WHY A DAILY GRID AT ALL, and it is not cosmetic (Lode, 2026-08-10):
+    lightweight-charts spaces points by INDEX, not by time. Fed the raw
+    per-exit curve it gave a busy month more width than a quiet one - "months
+    like feb and mei tend to take longer" - so the axis was not a time axis at
+    all and dates repeated. One point per day makes index spacing and time
+    spacing the same thing, which is also what lets the three panes be read
+    against each other.
+
+    WHY MARKET DAYS AND NOT CALENDAR DAYS (Lode, 2026-08-18): the grid is the
+    days the account could actually move, it is shared by every cell of the
+    grid, and it runs to the LAST one rather than to this cell's last exit -
+    see run_1m. The pane draws it as a STEP for the same reason."""
+    return [(run_1m.grid_seconds(d), v)
+            for d, v in run_1m.carry_forward(curve, grid, start_capital)]
 
 
 def drawdown_series(daily):
@@ -292,8 +289,12 @@ def daily_exposure(pos_series, daily):
     return out
 
 
-def measure(trades):
-    """Metrics for one band, at 1% and levered to TARGET_DD."""
+def measure(trades, grid):
+    """Metrics for one band, at 1% and levered to TARGET_DD.
+
+    `grid` is the market-day axis every cell's panes are drawn on, so two
+    bands can be read against each other without one of them being a
+    shorter line for having stopped trading in July."""
     n = len(trades)
     if not n:
         return None
@@ -310,16 +311,16 @@ def measure(trades):
     else:
         final6, dd6, curve6 = final1, dd1, curve1
     pos_series, pos_max, pos_mean = exposure(trades)
-    # Display grids: one point per calendar day, so the axis is a time axis.
-    d_curve = daily_equity(curve6)
+    # Display grids: one point per market day, so the axis is a time axis.
+    d_curve = daily_equity(curve6, grid)
     d_dd = drawdown_series(d_curve)
     d_pos = daily_exposure(pos_series, d_curve)
     # The daily-close figure for the TABLE is taken at 1% risk, so it sits
     # beside the intraday one on the same basis. Reading it off the levered
     # curve instead just restates the 6% target, which every cell hits by
     # construction and which tells the reader nothing.
-    dd_close = -min((v for _, v in drawdown_series(daily_equity(curve1))),
-                    default=0.0)
+    d_curve1 = daily_equity(curve1, grid)
+    dd_close = -min((v for _, v in drawdown_series(d_curve1)), default=0.0)
     per_market = {}
     for t in trades:
         per_market[t["market"]] = per_market.get(t["market"], 0.0) + t["net_r"]
@@ -388,7 +389,7 @@ def main():
     # week's bars is not an answer to today's question and the page has no way
     # to show that it is stale once it is drawn.
     fingerprint = data_fingerprint()
-    tcache = {}
+    tcache, calendar = {}, []
     if reuse and v["trades"].exists():
         try:
             old = json.loads(v["trades"].read_text(encoding="utf-8"))
@@ -400,6 +401,11 @@ def main():
                       f"cell is a fresh engine pass.", flush=True)
             else:
                 tcache = old.get("trades", {})
+                # The market-day calendar is cached with the trades and on
+                # the same fingerprint, so it can never describe a different
+                # window than they were computed on. A cache written before
+                # it existed has none, and markets() below rebuilds it.
+                calendar = old.get("calendar", [])
                 print(f"reusing trades for {len(tcache)} cells from "
                       f"{v['trades'].name}", flush=True)
         except ValueError:
@@ -477,9 +483,11 @@ def main():
         v["json"].write_text(json.dumps(payload) + "\n", encoding="utf-8")
         v["html"].write_text(page(payload), encoding="utf-8")
         v["trades"].write_text(json.dumps(dict(dials=dials, data=fingerprint,
+                                               calendar=calendar,
                                                trades=tcache)),
                                encoding="utf-8")
 
+    grid = []
     for i, (lo, hi) in enumerate(combos, 1):
         key = cell_key(lo, hi)
         trades = tcache.get(key)
@@ -487,7 +495,19 @@ def main():
             trades = run(lo, hi)
             tcache[key] = trades
             done += 1
-        m = measure(trades)
+        if trades and not grid:
+            # ONE axis for the whole grid, fixed by the FIRST cell - the
+            # uncut baseline, which is combos[0] and so always this one.
+            # Every band is then drawn between the same two dates whatever
+            # its own first and last trade were.
+            if not calendar:
+                calendar = [d.isoformat() for d in run_1m.calendar_union(
+                    [[day.date for day in days]
+                     for _key, (days, _f, _t, _n) in markets()])]
+            grid = run_1m.market_day_grid(calendar, trades[0]["entry_ts"])
+            print(f"CALENDAR: {len(calendar)} market days, grid {grid[0]} to "
+                  f"{grid[-1]}", flush=True)
+        m = measure(trades, grid)
         if lo is None and hi is None:
             baseline = m
         else:
@@ -728,8 +748,14 @@ const cEq = mkChart(elEq, {PANE_H[0]}, false),
       cDD = mkChart(elDD, {PANE_H[1]}, false),
       cPos = mkChart(elPos, {PANE_H[2]}, true);
 const PANES = [cEq, cDD, cPos];
+/* STEP LINES (Lode, 2026-08-18). The balance stands still until a trade
+   closes and then jumps, so it is held flat from one market day to the next
+   and the whole move is the vertical there - a slope between two exits
+   eleven days apart draws eleven days of gain that nothing booked. The
+   drawdown pane is the same curve read against its peak, so it steps too. */
+const STEP = LightweightCharts.LineType.WithSteps;
 const sBand = cEq.addLineSeries({{ color:'{C_BAND}', lineWidth:2,
-  priceLineVisible:false, lastValueVisible:false }});
+  lineType: STEP, priceLineVisible:false, lastValueVisible:false }});
 /* NO REFERENCE CURVE. The "all trades" line used to sit here in grey and it
    was actively misleading: it is a DIFFERENT cut of the grid, so it rises
    while the selected band falls, which reads as the equity going up while the
@@ -746,7 +772,8 @@ const sDD = cDD.addBaselineSeries({{
   bottomFillColor2:'rgba(227,73,72,0.45)',
   topLineColor:'{C_DD}', topFillColor1:'rgba(227,73,72,0)',
   topFillColor2:'rgba(227,73,72,0)',
-  lineWidth:1, priceLineVisible:false, lastValueVisible:false }});
+  lineWidth:1, lineType: STEP,
+  priceLineVisible:false, lastValueVisible:false }});
 // Open positions as BARS, like the other variant reports (Lode).
 const sPos = cPos.addHistogramSeries({{ color:'{C_POS}', base:0,
   priceLineVisible:false, lastValueVisible:false }});

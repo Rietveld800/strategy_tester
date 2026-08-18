@@ -31,7 +31,7 @@ figures run_1m wrote and warns on drift.
 
 import json
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -174,21 +174,39 @@ def solve_risk_pct(trades, target_dd):
     return round((lo + hi) / 2, 3)
 
 
-def daily_series(trades, eod):
+def daily_series(trades, eod, calendar):
+    """The three panes' data, one point per MARKET DAY (see run_1m).
+
+    The grid runs from a market day before the first entry to the LAST
+    MARKET DAY in the calendar, not to the last exit: the account is as
+    up to date as the data is, and a fortnight with no trade in it is a
+    fortnight of flat line rather than the page simply stopping.
+
+    A day's figures are placed with run_1m.place, not by their own date:
+    an exit can print at 23:30 UTC on a Sunday whose TRADING date is the
+    Monday, and dropping it would take the headline drawdown off the pane
+    it is supposed to be the bottom of. Two days landing on one grid day
+    merge - the later balance and peak, the deeper hole.
+    """
     spans = [(pd.Timestamp(t["entry_ts"]).date(),
               pd.Timestamp(t["exit_ts"]).date()) for t in trades]
-    first = min(a for a, _ in spans)
-    last = max(b for _, b in spans)
+    grid = run_1m.market_day_grid(calendar, min(a for a, _ in spans))
+    on_grid = {}
+    for d in sorted(eod):
+        i = run_1m.place(d, grid)
+        prev = on_grid.get(i)
+        value, peak, worst = eod[d]
+        on_grid[i] = (value, peak,
+                      max(worst, prev[2]) if prev else worst)
     days, eq, dd, ddc, openpos = [], [], [], [], []
     value, peak = START_CAPITAL, START_CAPITAL
     # A second, gentler curve next to the worst-reached one: drawdown on the
     # CLOSING balances only, peak and trough both read at the bell. A day
     # that digs and refills before the close does not appear in it.
     peak_close = START_CAPITAL
-    d = date(first.year, first.month, 1)
-    while d <= last:
-        if d in eod:
-            value, peak, worst = eod[d]
+    for i, d in enumerate(grid):
+        if i in on_grid:
+            value, peak, worst = on_grid[i]
         else:
             # Nothing closed, so neither the balance nor the peak moved and
             # the drawdown simply persists.
@@ -199,7 +217,6 @@ def daily_series(trades, eod):
         dd.append(round(worst, 3))
         ddc.append(round((peak_close - value) / peak_close * 100.0, 3))
         openpos.append(sum(1 for a, b in spans if a <= d < b))
-        d += timedelta(days=1)
     return days, eq, dd, ddc, openpos
 
 
@@ -514,21 +531,32 @@ def markets_html(rows, excluded, links):
 
 
 def calendar_html(days, eq, dd, openpos, trades, money_of):
+    """One row per MARKET DAY that did something (see daily_series).
+
+    Activity is filed under the same grid day the money is, through
+    run_1m.place - keying it on the trade's own date instead would hide a
+    Sunday-night stop whose P&L is nevertheless in Monday's capital
+    column, and this table is read against that column.
+    """
+    grid = [date.fromisoformat(d) for d in days]
     ins, outs = {}, {}
     for i, t in enumerate(trades):
-        ins.setdefault(pd.Timestamp(t["entry_ts"]).date(), []).append(i)
-        outs.setdefault(pd.Timestamp(t["exit_ts"]).date(), []).append(i)
+        ins.setdefault(
+            run_1m.place(pd.Timestamp(t["entry_ts"]).date(), grid),
+            []).append(i)
+        outs.setdefault(
+            run_1m.place(pd.Timestamp(t["exit_ts"]).date(), grid),
+            []).append(i)
     rows = []
-    for d, e, drop, op in zip(days, eq, dd, openpos):
-        day = date.fromisoformat(d)
-        if day not in ins and day not in outs and op == 0:
+    for gi, (d, e, drop, op) in enumerate(zip(days, eq, dd, openpos)):
+        if gi not in ins and gi not in outs and op == 0:
             continue
         acts = []
-        for i in ins.get(day, []):
+        for i in ins.get(gi, []):
             acts.append(f'<span style="color:var(--opened)">opened '
                         f'{esc(trades[i]["market"])} {trades[i]["side"]}'
                         f'</span>')
-        for i in outs.get(day, []):
+        for i in outs.get(gi, []):
             t = trades[i]
             acts.append(f'<span style="color:var(--closed)">closed '
                         f'{esc(t["market"])} {signed(t["net_r"])}R '
@@ -583,11 +611,19 @@ PAGE_JS = r"""<script>
     data.forEach(function (d) { by[d.time] = d.value; });
     panes.push({ el: el, chart: c, series: s, by: by });
   }
+  // STEP LINES, not joined dots (Lode, 2026-08-18). The balance stands
+  // still until a trade closes and then jumps, so it is held flat from one
+  // market day to the next and the whole move is the vertical there. A
+  // sloped line between two exits eleven days apart draws eleven days of
+  // gain that nothing booked.
+  var STEP = LightweightCharts.LineType.WithSteps;
   mk('eq', __EQ__, function (c) {
-    return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2 });
+    return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2,
+      lineType: STEP });
   });
   mk('ddc', __DDC__, function (c) {
     return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
+      lineType: STEP,
       priceFormat: { type: 'custom', formatter: pct } });
   });
   mk('op', __OP__, function (c) {
@@ -750,7 +786,8 @@ __BLOTTER__
 <p class="chartnote">__MKTNOTE__</p>
 __MARKETS__
 <div class="section-h">Daily calendar</div>
-<p class="chartnote">Every day that opened, closed or carried a position.
+<p class="chartnote">Every <b>market day</b> that opened, closed or carried a
+position.
 <b style="color:var(--opened)">Purple</b> is a position opened,
 <b style="color:var(--closed)">blue</b> one closed. Capital is the shared
 account at the end of that day; drawdown is the worst it reached at any
@@ -813,6 +850,10 @@ def variant_payload(name):
                        trades=v["trades"], win_rate=v["win_rate"],
                        net_r=v["net_r"]),
         markets=m["per_market"][name], excluded=m.get("excluded", []),
+        # The matrix ran every market, so its calendar is the same one the
+        # baseline page is drawn on - a variant page and the published one
+        # end on the same market day even when their last trades differ.
+        calendar=m.get("calendar"),
         trades=trades)
 
 
@@ -835,7 +876,13 @@ def build(data=None, out=None, variant=None):
 
     risk = data.get("risk_pct", RISK_PCT)
     money_of, eod, final, max_dd = replay(trades, risk)
-    days, eq, dd, ddc, openpos = daily_series(trades, eod)
+    calendar = data.get("calendar")
+    if not calendar:
+        calendar = run_1m.calendar_fallback(trades)
+        print("WARNING: this JSON predates the market-day calendar. The "
+              "panes are drawn on calendar days and stop at the last exit; "
+              "re-run the runner that wrote it for the real grid.")
+    days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar)
     if abs(final - published["final"]) > 0.01:
         print(f"WARNING: replay final ${final:,.2f} against run_1m's "
               f"${published['final']:,.2f}")
@@ -928,7 +975,7 @@ def build(data=None, out=None, variant=None):
         kpi("Average hold", held(avg_hold), "entry to exit"),
         kpi("Max concurrent", f"{max_open}", "positions open at once"),
         kpi("Time in market", f"{in_market:.0f}%",
-            "of days with a position open"),
+            "of market days with a position open"),
     ])
 
     class_rows = class_rows_html(trades)
@@ -973,8 +1020,16 @@ def build(data=None, out=None, variant=None):
         "account, so the returns do not add up to the headline. "
         "<b>Aborts</b> are the no-confirmation exits, <b>settlement</b> "
         "the day-2 rule exits.")
+    last_exit = max(t["exit_ts"] for t in trades)[:10]
     chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
-                f"{risk}% risk per trade")
+                f"{risk}% risk per trade. One point per <b>market day</b> - "
+                f"a day some market in the universe was open - and the line "
+                f"<b>steps</b>: the balance is held flat until a trade "
+                f"closes, and the whole move is the vertical there. It runs "
+                f"to the last market day in the data"
+                + (f", so the flat tail after {last_exit} is a real "
+                   f"{sum(1 for d in days if d > last_exit)} days with "
+                   f"nothing booked." if days[-1] > last_exit else "."))
     footer = (
         f"quickfix1m1dc, built from output/{IN_JSON.name} at the published "
         f"baseline (tighten "

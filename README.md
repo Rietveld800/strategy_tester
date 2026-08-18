@@ -492,12 +492,45 @@ rewrite it here.
 | File | What it does |
 |---|---|
 | `engine_1m.py` | The 1-minute engine: rules 1–2 intraday, market-order entry on the first reversal print, ladder-anchored stop, exit at the next settlement. `tests/test_engine_1m.py` covers it. |
-| `run_1m.py` | The backtest and the published baseline: `output/quickfix1m1dc_all.json`, then the report and the charter hand-off. Everything else on this side reads what it writes. |
+| `run_1m.py` | The backtest and the published baseline: `output/quickfix1m1dc_all.json`, then the report and the charter hand-off. Everything else on this side reads what it writes — including the **market-day calendar** and the grid helpers every curve here is drawn on (below). |
 | `build_1m_report.py` | `output/quickfix1m1dc_report.html` from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. |
 | `run_1m_matrix.py` | The dial matrix, one pass over the data: the full lockout x stop x band cross on the filtered universe (`variant 1` .. `variant 27`) plus three appended extras — since 2026-08-16 `variant 28` (4th/5th, band 0.15-0.20) and `variant 29` (hybrid, band 0.25-0.65), the winning band from each stop anchor's R-cut grid, and `variant 30`, the market filter's off-state (lockout 1 / hybrid / 000-050 over all 31 markets, pairing with `variant 4`). Curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
 | `research_1m_levels.py` | The level/entry study, baseline and `--variant "<cell>"`. |
 | `build_1m_rcut_report.py` | The R-cut band grid, **one per stop anchor**: `--stop 4th5th` (default) and `--stop hybrid`, each ~231 engine passes, ~90 min, **not** in a full refresh — each page has its own update button. Its trade cache is per anchor and keyed on the dials **and** on `data_fingerprint()`, so it can never republish cells computed on an older window or under the other stop. |
 | `export_charter_trades_1m.py` | The charter hand-off: `output/charter_trades_quickfix1m1dc.json`, in charter's existing schema. The only owner of that directory now, and it prunes. |
+
+#### Every curve is a step function on the market days (2026-08-18)
+
+`portfolio_replay` books P&L at exits, so its curve carries **one point per exit** — and a
+chart that joins two of them draws the account climbing smoothly across eleven days on which
+nothing was booked. The balance did not do that: it stood still and then jumped. Lode,
+2026-08-18: *"not the correct way of visualising it, although it's also not completely
+wrong"*. So every page here now plots the same two things, from helpers in `run_1m.py`:
+
+- `lineType: WithSteps` — today's balance held flat until tomorrow, the whole move taken as
+  the vertical there. The drawdown pane is the same curve read against its peak, so it steps
+  too.
+- one point per **market day**, out to the **last** one rather than to that curve's own last
+  exit. A quiet fortnight is a flat fortnight, and the page is as up to date as the data.
+
+**A market day is the union**: a date on which *any* market in the run was open. The account
+can move on any of them, and the published universe holds 22 calendars — GC trades ~23h a
+day, LE ~4.6h, the softs are frozen at Apr 17 — so no single market's calendar is the
+account's. On the current window that is **158 market days, 2026-01-02 to 2026-08-14**,
+against GC's own 155.
+
+Only the runners can build it, since only they hold the bars, so `run_1m.py` and
+`run_1m_matrix.py` write it into their JSON as `calendar` and every page builder reads it
+from there — rebuilding it in a page would cost ~100 s of bar loading to draw a line. A JSON
+written before it existed falls back to calendar days with a printed warning rather than
+breaking the refresh chain. `calendar_union` / `market_day_grid` / `place` / `carry_forward`
+are pinned by `tests/test_equity_grid.py`.
+
+What it makes visible: on the matrix every cell now starts and ends on the same x, where a
+cell that stopped trading early used to be a **shorter line** and read as a shorter history
+(`variant 28`: 18 trades, last exit 2026-07-29, two weeks short of the rest). The report's
+daily calendar and its **time in market** are on market days as well, so weekends no longer
+dilute that percentage.
 
 ### Adding a strategy
 

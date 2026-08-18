@@ -18,7 +18,8 @@ Usage: python run_1m.py [KEY ...] (default: all eligible).
 
 import json
 import sys
-from datetime import date, timedelta
+from bisect import bisect_left
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -365,16 +366,22 @@ def market_inputs(key):
 
 
 def run_market(key, **dials):
-    """One market at the given engine dials (see engine_1m.run_market)."""
+    """One market at the given engine dials (see engine_1m.run_market).
+
+    Returns the market's own trading DATES beside its trades: the curve
+    builders need them (see the market-day grid below) and this is the
+    only pass that holds the bars, so asking for them later would mean
+    loading every market a second time.
+    """
     inputs, excluded = market_inputs(key)
     if inputs is None:
-        return None, excluded
+        return None, excluded, []
     days, files, tick, note = inputs
     trades, summary = engine_1m.run_market(days, files, tick, **dials)
     for t in trades:
         t["market"] = key
     summary.update(market=key, status="OK", note=note, tick=tick)
-    return trades, summary
+    return trades, summary, [d.date for d in days]
 
 
 def portfolio_replay(all_trades, start_capital=100_000.0, risk_pct=1.0):
@@ -410,9 +417,121 @@ def portfolio_replay(all_trades, start_capital=100_000.0, risk_pct=1.0):
     return equity, max_dd, curve
 
 
+# ------------------------------------------------------- the market-day grid
+#
+# AN EQUITY CURVE IS A STEP FUNCTION ON THE MARKET DAYS, NOT A LINE BETWEEN
+# EXITS (Lode, 2026-08-18). portfolio_replay's curve carries ONE POINT PER
+# EXIT, and a chart that simply joins two of them draws the account climbing
+# smoothly across eleven days on which nothing was booked. The balance did
+# not do that: it stood still and then jumped. So every page here plots the
+# same two things - a point on EVERY MARKET DAY, and a STEP line, holding
+# today's balance flat until tomorrow and taking the whole move as a vertical
+# there - and every curve runs to the LAST MARKET DAY instead of to its own
+# last exit, so a page says "nothing since the 12th" rather than just ending.
+#
+# A MARKET DAY IS THE UNION (Lode's choice, same day): a date on which ANY
+# market in the run was open. The account can move on any day some market is
+# open, and there are 22 calendars in the published universe - GC trades ~23h
+# a day, LE ~4.6h, the softs are frozen at Apr 17 - so no single market's
+# calendar is the account's calendar. The union is also what answers "the
+# last market day": the newest date any market traded.
+#
+# Only the RUNNERS can build it, because only they hold the bars. run_1m.py
+# and run_1m_matrix.py write it into their JSON as `calendar`, and the three
+# page builders read it from there rather than loading ~100s of bars to draw
+# a line.
+
+
+def calendar_union(day_lists):
+    """The market-day calendar: every date any market in the run was open."""
+    out = set()
+    for days in day_lists:
+        out.update(days)
+    return sorted(out)
+
+
+def as_dates(calendar):
+    """The `calendar` field back as dates (it travels as ISO strings)."""
+    return [date.fromisoformat(d) if isinstance(d, str) else d
+            for d in calendar]
+
+
+def market_day_grid(calendar, first_entry):
+    """The x axis of a curve: market days from `first_entry` to the last.
+
+    One market day of LEAD-IN, so the line starts at the opening balance
+    rather than at the first trade's result - with a step line that first
+    plateau is the account before it had traded. The far end is the last
+    day in the calendar, never the last exit.
+    """
+    days = as_dates(calendar)
+    if not days:
+        return []
+    if isinstance(first_entry, str):
+        first_entry = date.fromisoformat(first_entry[:10])
+    return days[max(bisect_left(days, first_entry) - 1, 0):]
+
+
+def place(d, grid):
+    """The grid day an event dated `d` belongs to: the first at or after it.
+
+    A stop can trade at 23:30 UTC on a Sunday whose TRADING date is the
+    Monday, and the calendar holds trading dates - so a UTC date is not
+    always ON the grid and an event keyed by it would otherwise be lost.
+    Anything before the grid starts lands on its first day, so nothing a
+    replay booked can fall off the curve.
+    """
+    return min(bisect_left(grid, d), len(grid) - 1)
+
+
+def carry_forward(curve, grid, start_capital=100_000.0):
+    """A per-exit curve resampled onto `grid`, carried across quiet days.
+
+    Returns [(date, value)], the value STANDING at the end of that market
+    day, which is what a step line then holds until the next one. Exits
+    are placed with `place`, not by their UTC date.
+    """
+    if not grid:
+        return []
+    at = {}
+    for ts, value in curve:
+        at[place(datetime.fromtimestamp(ts, tz=timezone.utc).date(),
+                 grid)] = value
+    out, last = [], start_capital
+    for i, d in enumerate(grid):
+        last = at.get(i, last)
+        out.append((d, round(last, 2)))
+    return out
+
+
+def grid_seconds(d):
+    """A grid date as the UTC-midnight epoch second the charts want."""
+    return int(datetime(d.year, d.month, d.day,
+                        tzinfo=timezone.utc).timestamp())
+
+
+def calendar_fallback(trades):
+    """Every CALENDAR day from the first entry to the last exit.
+
+    Only for a JSON written before `calendar` was in it. It is the old
+    grid - weekends and holidays included, and stopping at the last exit
+    rather than at the last market day - so every caller that reaches for
+    it says so on the console. Rebuild the runner's JSON to be rid of it.
+    """
+    if not trades:
+        return []
+    d = date.fromisoformat(min(t["entry_ts"] for t in trades)[:10])
+    last = date.fromisoformat(max(t["exit_ts"] for t in trades)[:10])
+    out = []
+    while d <= last:
+        out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
 def main():
     keys = sys.argv[1:]
-    all_trades, rows, skipped = [], [], []
+    all_trades, rows, skipped, sessions = [], [], [], []
     if not keys:
         universe = ELIGIBLE_FUTURES + ETFS + list(BINANCE)
         keys = [k for k in universe if k in HUMAN_APPROVED]
@@ -422,7 +541,7 @@ def main():
                 print(f"{k}: EXCLUDED - {FILTER_REASON}", flush=True)
     for key in keys:
         try:
-            trades, summary = run_market(key, **BASELINE)
+            trades, summary, dates = run_market(key, **BASELINE)
         except Exception as exc:
             skipped.append({"market": key,
                             "reason": f"{type(exc).__name__}: {exc}"})
@@ -434,11 +553,16 @@ def main():
             continue
         all_trades.extend(trades)
         rows.append(summary)
+        # Every market that RAN counts toward the calendar, including the
+        # ones that never took a trade: the account was open for business
+        # on those days too.
+        sessions.append(dates)
         print(f"{key}: {summary['trades']} trades, wr "
               f"{summary['win_rate']}%, net {summary['net_r_total']}R "
               f"({summary['note']})", flush=True)
 
     all_trades.sort(key=lambda t: t["entry_ts"])
+    calendar = calendar_union(sessions)
     final, max_dd, _curve = portfolio_replay(all_trades)
     total_r = round(sum(t["net_r"] for t in all_trades), 2)
     wins = sum(1 for t in all_trades if t["net_r"] > 0)
@@ -447,6 +571,13 @@ def main():
           f"markets, wr {wr}%, net {total_r}R, final ${final:,.2f} "
           f"({(final / 100_000 - 1) * 100:+.2f}%), max drawdown "
           f"{max_dd:.2f}% at 1% risk")
+    if calendar:
+        # The gap between the two dates is the point of the calendar: the
+        # curve carries on flat to the right-hand one.
+        tail = (f", last exit {max(t['exit_ts'] for t in all_trades)[:10]}"
+                if all_trades else "")
+        print(f"CALENDAR: {len(calendar)} market days, {calendar[0]} to "
+              f"{calendar[-1]}{tail}")
 
     OUT_JSON.parent.mkdir(exist_ok=True)
     OUT_JSON.write_text(json.dumps(dict(
@@ -462,6 +593,10 @@ def main():
         portfolio=dict(final=round(final, 2), max_dd_pct=round(max_dd, 2),
                        trades=len(all_trades), win_rate=wr,
                        net_r=total_r),
+        # The market-day grid every curve on the report is drawn on, and
+        # the only thing in this file that says when the DATA ends rather
+        # than when the last trade did.
+        calendar=[d.isoformat() for d in calendar],
         markets=rows, excluded=skipped, trades=all_trades),
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report

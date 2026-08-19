@@ -691,11 +691,22 @@ def main():
                       f"({old.get('data')} -> {fingerprint}); every file it was "
                       f"built on is still there and no smaller, so the tail is "
                       f"a candidate for splicing. Verified below.", flush=True)
+            elif incremental and not old.get("bars"):
+                # Says the true reason rather than blaming the data. A cache
+                # written before the per-file manifest existed has nothing to
+                # compare against, so its ONE rebuild is unavoidable and every
+                # run after it can splice.
+                print(f"cache ignored: it was built before this grid recorded "
+                      f"a per-file manifest, so there is nothing to check the "
+                      f"new bars against. This rebuild is the last full one; "
+                      f"it writes the manifest, and the next top-up splices a "
+                      f"tail instead.", flush=True)
             else:
                 print(f"cache ignored: the 1-minute data has changed since it "
                       f"was built ({old.get('data')} -> {fingerprint}) in a way "
-                      f"that is not a top-up. Every cell is a fresh engine "
-                      f"pass.", flush=True)
+                      f"that is not a top-up -- a file shrank, vanished, or was "
+                      f"rewritten at the same size. Every cell is a fresh "
+                      f"engine pass.", flush=True)
         except ValueError:
             pass
 

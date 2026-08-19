@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 168563.78,
+    "final": 192147.2,
     "max_dd_pct": 6.17,
-    "trades": 91,
-    "win_rate": 40.7,
-    "net_r": 55.51
+    "trades": 94,
+    "win_rate": 42.6,
+    "net_r": 69.51
   },
   "calendar": [
     "2026-01-02",
@@ -183,7 +183,8 @@
     "2026-08-12",
     "2026-08-13",
     "2026-08-14",
-    "2026-08-17"
+    "2026-08-17",
+    "2026-08-18"
   ],
   "markets": [
     {
@@ -244,7 +245,7 @@
         "close1": 0,
         "data_end": 0
       },
-      "refused_wide": 120,
+      "refused_wide": 129,
       "refused_tight": 0,
       "range_unjudged": 0,
       "market": "6E",
@@ -297,17 +298,17 @@
       "tick": 0.025
     },
     {
-      "trades": 6,
-      "wins": 2,
-      "win_rate": 33.3,
-      "net_r_total": 0.59,
-      "final_cash": 100496.84,
-      "return_pct": 0.5,
+      "trades": 7,
+      "wins": 3,
+      "win_rate": 42.9,
+      "net_r_total": 8.83,
+      "final_cash": 108769.31,
+      "return_pct": 8.77,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 4,
         "no_confirm": 0,
-        "close1": 2,
+        "close1": 3,
         "data_end": 0
       },
       "refused_wide": 15,
@@ -385,17 +386,17 @@
       "tick": 0.5
     },
     {
-      "trades": 2,
-      "wins": 0,
-      "win_rate": 0.0,
-      "net_r_total": -1.08,
-      "final_cash": 98919.48,
-      "return_pct": -1.08,
+      "trades": 3,
+      "wins": 1,
+      "win_rate": 33.3,
+      "net_r_total": 3.42,
+      "final_cash": 103370.31,
+      "return_pct": 3.37,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 1,
         "no_confirm": 0,
-        "close1": 1,
+        "close1": 2,
         "data_end": 0
       },
       "refused_wide": 73,
@@ -473,17 +474,17 @@
       "tick": 0.25
     },
     {
-      "trades": 4,
-      "wins": 2,
-      "win_rate": 50.0,
-      "net_r_total": -1.17,
-      "final_cash": 98823.89,
-      "return_pct": -1.18,
+      "trades": 5,
+      "wins": 3,
+      "win_rate": 60.0,
+      "net_r_total": 0.09,
+      "final_cash": 100068.86,
+      "return_pct": 0.07,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 2,
         "no_confirm": 0,
-        "close1": 2,
+        "close1": 3,
         "data_end": 0
       },
       "refused_wide": 45,
@@ -2810,6 +2811,75 @@
       "pnl_usd": -1012.58,
       "cash_after": 98823.89,
       "market": "PL"
+    },
+    {
+      "side": "short",
+      "contract": "HGU6",
+      "entry_date": "2026-08-17",
+      "entry_ts": "2026-08-17 06:10:00+00:00",
+      "entry": 6.7276,
+      "stop": 6.757099999999999,
+      "rpu": 0.028499999999999304,
+      "entry_first": 6.7286,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.1647,
+      "exit_date": "2026-08-18",
+      "exit_ts": "2026-08-18 17:00:20.948076837+00:00",
+      "exit": 6.492500000000001,
+      "reason": "close1",
+      "gross_r": 8.2491,
+      "cost_r": 0.0175,
+      "net_r": 8.2316,
+      "risk_usd": 1004.97,
+      "pnl_usd": 8272.48,
+      "cash_after": 108769.31,
+      "market": "HG"
+    },
+    {
+      "side": "short",
+      "contract": "PLV6",
+      "entry_date": "2026-08-17",
+      "entry_ts": "2026-08-17 08:07:00+00:00",
+      "entry": 1769.3,
+      "stop": 1797.6999999999998,
+      "rpu": 28.09999999999991,
+      "entry_first": 1769.6,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.5081,
+      "exit_date": "2026-08-18",
+      "exit_ts": "2026-08-18 17:05:16.262986873+00:00",
+      "exit": 1733.8000000000002,
+      "reason": "close1",
+      "gross_r": 1.2633,
+      "cost_r": 0.0036,
+      "net_r": 1.2598,
+      "risk_usd": 988.24,
+      "pnl_usd": 1244.97,
+      "cash_after": 100068.86,
+      "market": "PL"
+    },
+    {
+      "side": "short",
+      "contract": "NQU6",
+      "entry_date": "2026-08-17",
+      "entry_ts": "2026-08-17 12:39:00+00:00",
+      "entry": 30197.05,
+      "stop": 30333.3,
+      "rpu": 135.75,
+      "entry_first": 30197.55,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.4316,
+      "exit_date": "2026-08-18",
+      "exit_ts": "2026-08-18 20:00:21.111608547+00:00",
+      "exit": 29586.000000000004,
+      "reason": "close1",
+      "gross_r": 4.5013,
+      "cost_r": 0.0018,
+      "net_r": 4.4994,
+      "risk_usd": 989.19,
+      "pnl_usd": 4450.83,
+      "cash_after": 103370.31,
+      "market": "NQ"
     }
   ]
 }

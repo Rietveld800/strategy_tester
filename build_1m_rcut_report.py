@@ -53,16 +53,38 @@
 # - The best region is a one-step RIDGE, not a smooth optimum: lower 0.00 and
 #   0.10 are identical, lower 0.30 collapses.
 #
+# NEW BARS RECOMPUTE A TAIL, NOT THE GRID (Lode, 2026-08-19: "updating the grid
+# is time and energy consuming and it's also not always necessary"). Until then
+# one new trading day moved the data fingerprint, which threw away all 232 cells
+# and paid ~90 minutes per grid. Now a top-up recomputes the last handful of days
+# per cell and splices them onto the cached trades, which is minutes.
+#
+# It is allowed to do that only because the engine happens to make it cheap AND
+# checkable: run_market takes a plain list of Days so a tail is a slice; levels
+# are resolved by timestamp, not replayed; and trades are capital-independent in
+# R, with the equity curve rebuilt from the whole spliced list by
+# portfolio_replay, so no equity path leaks across the join.
+#
+# The safety is not "the files look appended". It is that the days either side of
+# the cut are RECOMPUTED FROM THE REAL BARS AND MUST REPRODUCE THE CACHE exactly
+# (verify_overlap); any disagreement abandons the splice and rebuilds everything.
+# That is what catches the cases a file-stamp check cannot see -- a re-download,
+# a roll calendar that re-stitched history, a market joining the universe. The
+# old rule's spirit is intact: a wrong miss costs time, and a wrong hit is not
+# reachable without the engine agreeing with the cache first.
+#
 # Usage:  python build_1m_rcut_report.py            # 4th/5th stop, full grid
 #         python build_1m_rcut_report.py --stop hybrid          # hybrid stop
 #         python build_1m_rcut_report.py --step 0.5 --max 1.0   # coarse test
 #         python build_1m_rcut_report.py --no-reuse # ignore the cache
+#         python build_1m_rcut_report.py --no-incremental  # keep the cache but
+#                                       # never splice: rebuild when bars move
 
 import hashlib
 import json
 import sys
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import run_1m
@@ -70,6 +92,23 @@ import run_1m_matrix as mx
 
 HERE = Path(__file__).resolve().parent
 CHECKPOINT_EVERY = 25      # rewrite the page mid-run so it can be read early
+
+# INCREMENTAL REBUILD (Lode, 2026-08-19). New bars used to throw the whole cache
+# away and pay ~90 minutes per grid; now the tail is recomputed and spliced onto
+# the cached trades. These two numbers are the whole cost/confidence trade:
+#
+# OVERLAP_DAYS are cached market days recomputed on purpose so their trades can
+# be compared against what the cache holds. That comparison IS the safety
+# argument -- see splice_point() and verify_overlap(). More days is a stronger
+# proof and a slower run; five covers a top-up plus a couple of days of slack.
+#
+# PRIME_DAYS run before those and have their trades thrown away. They exist to
+# fill the engine's trailing high-low window and prev_trading_date before the
+# first day whose trades are kept, so a spliced cell is computed against the
+# same primed state a full pass would have had. The window looks back one
+# trading day under range_mode="trading_day", so five is generous.
+OVERLAP_DAYS = 5
+PRIME_DAYS = 5
 
 TARGET_DD = 6.0
 RISK_TOLERANCE = 0.0005
@@ -155,8 +194,8 @@ def variant(name):
     return v
 
 
-def data_fingerprint():
-    """A cheap key for "the 1-minute data the engine would read right now".
+def bars_manifest():
+    """Size and mtime of every bars parquet, per file.
 
     THE CACHE CANNOT BE ALLOWED TO OUTLIVE THE DATA. Cells were keyed on the
     band and the dials alone until 2026-08-12, so a rebuild after new bars
@@ -165,18 +204,178 @@ def data_fingerprint():
     is the one failure mode this page must not have: it is the research record
     the published band was read off.
 
-    Size and mtime of every bars parquet, hashed. Ninety-odd files, ~2 ms, and
-    it errs the safe way: any touch of any file throws the cache away and pays
-    the full ~90 minutes, where the alternative would be showing old numbers as
-    if they were current. It deliberately does NOT try to be clever about which
-    markets a given run reads -- a wrong cache hit costs correctness, a wrong
-    miss costs time.
+    This was a single hash until 2026-08-19 and any touch of any file threw the
+    whole cache away. Kept per file instead, the same information also answers
+    "did the data GROW or did it CHANGE", which is what lets a top-up recompute
+    a tail rather than 232 full passes. Ninety-odd files, ~2 ms.
     """
-    parts = []
+    out = {}
     for p in sorted((run_1m.DC / "data").glob("*/bars/*.parquet")):
         st = p.stat()
-        parts.append(f"{p.parent.parent.name}/{p.name}:{st.st_size}:{int(st.st_mtime)}")
-    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:16]
+        out[f"{p.parent.parent.name}/{p.name}"] = f"{st.st_size}:{int(st.st_mtime)}"
+    return out
+
+
+def manifest_digest(manifest):
+    """The old single-value fingerprint, still what the page stamps as `data`."""
+    joined = "|".join(f"{k}:{v}" for k, v in sorted(manifest.items()))
+    return hashlib.sha1(joined.encode("utf-8")).hexdigest()[:16]
+
+
+def data_only_grew(old, new):
+    """True when every file the cache was built on is either UNTOUCHED or has
+    GROWN, so the new bars are the old ones with a tail appended.
+
+    New files pass: a roll's next contract, or a market's first bars, add days
+    at the end without disturbing what came before.
+
+    Untouched means size AND mtime identical, and the strictness is the point.
+    A file rewritten to the same byte count is refused even though its content
+    has probably not changed, because this screen is the ONLY thing standing
+    between the splice and a rewrite of history OUTSIDE the days verify_overlap
+    recomputes -- that check can only speak for the days either side of the cut.
+    Measured on the real archive before choosing the rule: of 92 bars files, a
+    refresh touched the 22 front contracts it topped up and left 56 sitting on
+    their original mtime from months earlier. So the strict form costs nothing
+    in practice, and where it does fire it costs a rebuild rather than a wrong
+    answer -- the same way round as the all-or-nothing rule it replaced.
+    """
+    if not old or not new:
+        return False
+    for name, stamp in old.items():
+        fresh = new.get(name)
+        if fresh is None:
+            return False
+        if fresh == stamp:
+            continue
+        try:
+            if int(fresh.split(":")[0]) <= int(stamp.split(":")[0]):
+                return False
+        except (ValueError, IndexError):
+            return False
+    return True
+
+
+# THE ENGINE'S OWN BOOKKEEPING, WHICH A SPLICE MUST NOT COMPARE OR KEEP.
+# run_market carries a single account: it seeds `cash` at start_capital and
+# sizes each entry at a percent of it, recording risk_usd, pnl_usd and
+# cash_after per trade. Those three therefore depend on WHERE THE RUN STARTED,
+# not on the trade, so a tail run beginning mid-window disagrees with a full
+# pass on them and on nothing else -- verified against real bars, which found
+# these three differing and all seventeen rule and fill fields, net_r included,
+# identical (tests/test_rcut_incremental.py).
+#
+# Comparing them would have made verify_overlap fail every single time and
+# quietly turned the incremental path off for good. Keeping them would leave a
+# spliced list carrying two different account paths stitched together, which is
+# a number nobody should read. So they are compared away AND dropped before
+# caching. Nothing here reads them: the grid's money comes from
+# portfolio_replay, which re-derives equity from net_r and is capital
+# independent by construction.
+ACCOUNT_FIELDS = ("risk_usd", "pnl_usd", "cash_after")
+
+
+def comparable(t):
+    """A trade reduced to what the engine DECIDED, free of the account path."""
+    return {k: v for k, v in t.items() if k not in ACCOUNT_FIELDS}
+
+
+def trade_key(t):
+    """What identifies a trade across two runs. The entry is decided by bars
+    STRICTLY BEFORE it, so two runs over the same prefix must produce the same
+    keys -- which is what makes disagreement meaningful in verify_overlap."""
+    return (t.get("market"), t["entry_ts"], t["side"])
+
+
+def day_index(calendar, day):
+    """Where an ISO day sits in the market-day calendar. ISO dates sort as
+    strings, so this is a plain bisect and needs no parsing."""
+    lo, hi = 0, len(calendar)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if calendar[mid] < day:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def splice_point(tcache, calendar, first_new):
+    """The calendar index W where cached trades can be cut from fresh ones.
+
+    The rule that makes a splice sound: NO TRADE MAY STRADDLE W. If none does,
+    every cached trade is either wholly before W (keep it) or wholly at/after it
+    (drop it, the tail run recomputes it), and the two halves join with no trade
+    counted twice, dropped, or half-simulated.
+
+    It starts OVERLAP_DAYS before the first new day and walks backwards past any
+    trade that spans the cut, taking that trade's own entry day as the next
+    candidate. Walking back is what handles the engine's forced close: an open
+    position at the end of the cached window was booked with reason "data_end"
+    at that window's last bar, which is an artefact of where the data stopped
+    rather than a trade. It straddles any W at or before its exit, so it is
+    always walked past and always recomputed.
+
+    Returns None when no usable cut exists (it would reach the start of the
+    calendar), which the caller reads as "just rebuild".
+    """
+    w = max(0, first_new - OVERLAP_DAYS)
+    for _ in range(64):                    # a trade spans days, not months
+        if w <= 0:
+            return None
+        wday = calendar[w]
+        earliest = None
+        for trades in tcache.values():
+            for t in trades:
+                if t["entry_date"] < wday <= t["exit_date"]:
+                    if earliest is None or t["entry_date"] < earliest:
+                        earliest = t["entry_date"]
+        if earliest is None:
+            return w
+        moved = day_index(calendar, earliest)
+        if moved >= w:                     # cannot make progress; give up
+            return None
+        w = moved
+    return None
+
+
+def verify_overlap(cached, fresh, w_day, last_cached_day):
+    """Compare a recomputed cell against the cache on the days they share.
+
+    THIS IS THE SAFETY ARGUMENT for incremental rebuilds. data_only_grew() only
+    says the files look appended; this recomputes real days from the real bars
+    and demands the engine produce exactly what the cache holds. If the bars
+    under those days moved -- a re-download, a roll calendar that re-stitched
+    history, a market entering the universe -- the trades diverge here and the
+    caller falls back to a full rebuild. The cost of that proof is already paid:
+    these days are recomputed anyway to prime the engine.
+
+    Trades the cached run closed with "data_end" are excluded from the value
+    comparison and compared by KEY only: their exit was invented by the window
+    ending, and the fresh run -- which can see the next day -- is right to close
+    them somewhere else. splice_point() guarantees such a trade is never kept.
+
+    Returns (ok, detail).
+    """
+    def window(trades):
+        return {trade_key(t): t for t in trades
+                if w_day <= t["entry_date"] <= last_cached_day}
+
+    old, new = window(cached), window(fresh)
+    if old.keys() != new.keys():
+        missing = len(old.keys() - new.keys())
+        extra = len(new.keys() - old.keys())
+        return False, f"{missing} cached trade(s) gone, {extra} new on shared days"
+    for key, was in old.items():
+        if was.get("reason") == "data_end":
+            continue                        # artefact of the old window's end
+        mine, theirs = comparable(was), comparable(new[key])
+        if mine != theirs:
+            fields = [f for f in mine
+                      if f in theirs and mine[f] != theirs[f]]
+            return False, (f"{was.get('market')} {was.get('entry_ts')} differs on "
+                           f"{', '.join(fields[:4]) or 'shape'}")
+    return True, f"{len(old)} trade(s) reproduced exactly"
 
 
 def solve_risk(trades, target=TARGET_DD):
@@ -353,6 +552,74 @@ def measure(trades, grid):
     )
 
 
+def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print):
+    """Recompute the tail of every cached cell and splice it on. None = rebuild.
+
+    Everything that could make this unsound is checked and refused rather than
+    assumed, in the order that costs least: the cached window must be a PREFIX
+    of the new one (anything else is a re-stitch, not a top-up), there must be
+    new days, and a straddle-free cut must exist. Only then does it spend engine
+    passes, and each one is verified against the cache before its result is
+    used.
+    """
+    if not tcache or not old_calendar:
+        return None
+    if list(old_calendar) != list(calendar[:len(old_calendar)]):
+        log("incremental: the cached calendar is not a prefix of the new one "
+            "-- history was re-stitched, so every cell is rebuilt.")
+        return None
+    first_new = len(old_calendar)
+    if first_new >= len(calendar):
+        log("incremental: no new market days, but the bars moved -- rebuilding "
+            "rather than guessing what changed.")
+        return None
+
+    w = splice_point(tcache, calendar, first_new)
+    if w is None:
+        log("incremental: no straddle-free cut in range -- rebuilding.")
+        return None
+
+    w_day, last_cached = calendar[w], old_calendar[-1]
+    prime_day = date.fromisoformat(calendar[max(0, w - PRIME_DAYS)])
+    log(f"incremental: {len(calendar) - first_new} new market day(s) "
+        f"({calendar[first_new]} to {calendar[-1]}). Cutting at {w_day}, "
+        f"priming from {prime_day}: {len(calendar) - w} of {len(calendar)} days "
+        f"per cell, {first_new - w} of them cached days recomputed as the "
+        f"check.")
+
+    fresh_cache, t0 = {}, time.time()
+    for n, (lo, hi) in enumerate(combos, 1):
+        key = cell_key(lo, hi)
+        cached = tcache.get(key)
+        if cached is None:
+            # A cell the cache never held (a finer grid than last time). It has
+            # no tail to splice onto, so it is a normal full pass.
+            fresh_cache[key] = run_cell(lo, hi, None)
+            continue
+        tail = run_cell(lo, hi, prime_day)
+        ok, detail = verify_overlap(cached, tail, w_day, last_cached)
+        if not ok:
+            log(f"incremental ABANDONED at {key}: {detail}. The cached trades "
+                f"do not reproduce from the current bars, so the whole grid is "
+                f"rebuilt.")
+            return None
+        kept = [t for t in cached if t["entry_date"] < w_day]
+        if any(t.get("reason") == "data_end" for t in kept):
+            log(f"incremental ABANDONED at {key}: a forced data_end exit "
+                f"survived the cut, which splice_point should make impossible.")
+            return None
+        spliced = kept + [t for t in tail if t["entry_date"] >= w_day]
+        spliced.sort(key=lambda t: t["entry_ts"])
+        fresh_cache[key] = spliced
+        if n == 1 or n % 25 == 0:
+            per = (time.time() - t0) / n
+            log(f"  [{n}/{len(combos)}] {key}: {len(spliced)} trades "
+                f"({detail})   (~{per * (len(combos) - n) / 60:.0f} min left)")
+    log(f"incremental: {len(fresh_cache)} cells spliced in "
+        f"{(time.time() - t0) / 60:.1f} min.")
+    return fresh_cache
+
+
 def cell_key(lo, hi):
     """Cache/report key for a band. The baseline is (None, None)."""
     if lo is None and hi is None:
@@ -377,6 +644,10 @@ def main():
     step = float(argv[argv.index("--step") + 1]) if "--step" in argv else 0.10
     top = float(argv[argv.index("--max") + 1]) if "--max" in argv else 1.50
     reuse = "--no-reuse" not in argv
+    # `--no-incremental` keeps the cache but refuses the tail splice, so a run
+    # can be forced back to the pre-2026-08-19 behaviour without throwing away
+    # cells that are still exactly valid. `--no-reuse` still overrides both.
+    incremental = reuse and "--no-incremental" not in argv
     v = variant(argv[argv.index("--stop") + 1] if "--stop" in argv
                 else DEFAULT_VARIANT)
     dials = v["dials"]
@@ -391,18 +662,20 @@ def main():
     # either one moving throws all of it away, because a cell computed on last
     # week's bars is not an answer to today's question and the page has no way
     # to show that it is stale once it is drawn.
-    fingerprint = data_fingerprint()
+    manifest = bars_manifest()
+    fingerprint = manifest_digest(manifest)
     tcache, calendar = {}, []
+    # Set when the data moved but looks appended: the cells are stale, yet their
+    # trades are still the right answer for every day before the new ones, so
+    # the tail is recomputed instead of the whole grid. Carries the cache to
+    # splice onto and the calendar it was computed over.
+    pending = None
     if reuse and v["trades"].exists():
         try:
             old = json.loads(v["trades"].read_text(encoding="utf-8"))
             if old.get("dials") != dials:
                 print("cache ignored: the dials have changed", flush=True)
-            elif old.get("data") != fingerprint:
-                print(f"cache ignored: the 1-minute data has changed since it "
-                      f"was built ({old.get('data')} -> {fingerprint}). Every "
-                      f"cell is a fresh engine pass.", flush=True)
-            else:
+            elif old.get("data") == fingerprint:
                 tcache = old.get("trades", {})
                 # The market-day calendar is cached with the trades and on
                 # the same fingerprint, so it can never describe a different
@@ -411,6 +684,18 @@ def main():
                 calendar = old.get("calendar", [])
                 print(f"reusing trades for {len(tcache)} cells from "
                       f"{v['trades'].name}", flush=True)
+            elif (incremental and old.get("trades") and old.get("calendar")
+                  and data_only_grew(old.get("bars"), manifest)):
+                pending = (old["trades"], old["calendar"])
+                print(f"the 1-minute data has grown since this cache was built "
+                      f"({old.get('data')} -> {fingerprint}); every file it was "
+                      f"built on is still there and no smaller, so the tail is "
+                      f"a candidate for splicing. Verified below.", flush=True)
+            else:
+                print(f"cache ignored: the 1-minute data has changed since it "
+                      f"was built ({old.get('data')} -> {fingerprint}) in a way "
+                      f"that is not a top-up. Every cell is a fresh engine "
+                      f"pass.", flush=True)
         except ValueError:
             pass
 
@@ -435,20 +720,47 @@ def main():
                   flush=True)
         return loaded
 
-    def run(lo, hi):
+    def run(lo, hi, first_date=None):
+        """One cell. `first_date` runs only that day onward, for the tail
+        rebuild -- the engine takes a plain list of Days, so a slice is all it
+        takes, and `files` is passed whole because levels are resolved by
+        timestamp (_active_file) rather than replayed in order."""
         cell = dict(dials, min_rpu_range_ratio=lo, max_rpu_range_ratio=hi)
         trades = []
         for key, (days, files, tick, note) in markets():
+            if first_date is not None:
+                days = [d for d in days if d.date >= first_date]
+                if not days:
+                    continue
             tr, _ = run_1m.engine_1m.run_market(days, files, tick, **cell)
             for t in tr:
                 t["market"] = key
-            trades.extend(tr)
+            # Dropped here, once, so a cell means the same thing whether it came
+            # from a full pass or a spliced tail: see ACCOUNT_FIELDS.
+            trades.extend(comparable(t) for t in tr)
         trades.sort(key=lambda t: t["entry_ts"])
         return trades
 
     combos = [(None, None)]          # the baseline rides in the same loop
     combos += [(lo, hi) for i, lo in enumerate(edges) for hi in edges[i + 1:]]
     combos += [(lo, None) for lo in edges]
+
+    # The tail rebuild, if the cache looked appendable. It needs the market data
+    # (so `markets()` pays its ~100s here) and the NEW calendar, which is also
+    # what the equity axis below is drawn on. Any doubt returns None and the
+    # grid falls through to the full rebuild it would have done anyway.
+    if pending is not None:
+        old_trades, old_calendar = pending
+        calendar = [d.isoformat() for d in run_1m.calendar_union(
+            [[day.date for day in days]
+             for _key, (days, _f, _t, _n) in markets()])]
+        spliced = rebuild_tail(old_trades, old_calendar, calendar, combos, run,
+                               log=lambda m: print(m, flush=True))
+        if spliced is None:
+            calendar = []            # rebuilt below, from the same markets()
+        else:
+            tcache = spliced
+
     fresh = sum(1 for lo, hi in combos if cell_key(lo, hi) not in tcache)
     print(f"{len(combos)} combinations over {len(edges)} edges; "
           f"{len(combos) - fresh} from cache, {fresh} to backtest "
@@ -485,7 +797,13 @@ def main():
             cells={k: m for k, m in cells.items() if m})
         v["json"].write_text(json.dumps(payload) + "\n", encoding="utf-8")
         v["html"].write_text(page(payload), encoding="utf-8")
+        # `bars` is the per-file manifest the next run compares against to
+        # decide whether its tail can be spliced; `data` is that manifest's
+        # digest, kept because the page stamps it and an exact match is still
+        # the fast path. A cache written before `bars` existed simply cannot
+        # take the incremental path and rebuilds once.
         v["trades"].write_text(json.dumps(dict(dials=dials, data=fingerprint,
+                                               bars=manifest,
                                                calendar=calendar,
                                                trades=tcache)),
                                encoding="utf-8")

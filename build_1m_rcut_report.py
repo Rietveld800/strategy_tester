@@ -1251,7 +1251,11 @@ hi.add(new Option('no cap', 'inf'));
 const money = v => '$' + Math.round(v).toLocaleString('en-US');
 const keyOf = (a, b) => a.toFixed(2) + '|' + (b === null ? 'inf' : b.toFixed(2));
 
-function rows(m, b) {{
+/* `b` is the ALL-TRADES reference, in whichever universe the selector asks for,
+   and `uname` names it in the header. It followed nothing before, so a table
+   whose two band columns were explicitly labelled still carried a third column
+   silently measured on the whole universe. */
+function rows(m, b, uname) {{
   const R = [
     ['trades', m.trades, b.trades],
     ['wins', m.wins, b.wins],
@@ -1310,7 +1314,8 @@ function rows(m, b) {{
   ];
   return '<tr><th>metric</th><th>band<br><span class="uh">whole universe</span>'
     + '</th><th>band<br><span class="uh">traded universe</span></th>'
-    + '<th>all trades<br><span class="uh">whole universe</span></th></tr>'
+    + '<th>all trades<br><span class="uh">' + (uname || 'whole universe')
+    + '</span></th></tr>'
     + R.map((r, i) => '<tr><td>' + r[0] + '</td><td><b>' + r[1]
         + '</b></td><td class="filt"><b>' + (F[i] ?? '-') + '</b></td>'
         + '<td style="color:var(--muted)">' + r[2]
@@ -1406,18 +1411,37 @@ document.getElementById('hm').addEventListener('mousemove', e => {{
   const td = e.target.closest('td[data-k]');
   if (!td) {{ tip.style.display = 'none'; return; }}
   const m = P.cells[td.dataset.k], k = td.dataset.k.split('|');
-  tip.innerHTML = '<b>' + k[0] + ' to ' + (k[1] === 'inf' ? 'no cap' : k[1])
-    + '</b><br>' + money(m.final_6pct) + ' at ' + (m.risk_6pct ?? '-')
-    + '% risk<br>' + m.trades + ' trades, wr ' + m.win_rate + '%, '
-    + m.net_r + 'R<br>avg ' + m.avg_r + 'R, PF ' + m.profit_factor
-    + '<br>streaks ' + m.longest_winning_streak + 'W / '
-    + m.longest_losing_streak + 'L, pos&le;' + m.pos_max
-    + '<br>top market ' + m.top_market + ' ' + (m.top_market_share ?? '-')
-    + '%'
-    + (m.filtered
-        ? '<br><span class="uh">traded universe: ' + money(m.filtered.final_6pct)
-          + ', ' + m.filtered.trades + ' trades, ' + m.filtered.net_r + 'R</span>'
-        : '<br><span class="uh">traded universe: no trades</span>');
+  /* THE TOOLTIP FOLLOWS THE SELECTOR, like the map it sits on and the panes
+     below it (Lode, 2026-08-21). It used to read the whole universe always,
+     with the traded figure appended as a footnote - so hovering a cell drawn
+     from 22 markets reported the trade count and win rate of 31. Same defect
+     as the panes had, one surface later: every number on this page answers the
+     question the selector asks, and the OTHER universe is the footnote. */
+  const filt = universe() === 'filtered';
+  const sel = filt ? m.filtered : m;
+  const other = filt ? m : m.filtered;
+  const otherName = filt ? 'whole universe' : 'traded universe';
+  const head = '<b>' + k[0] + ' to ' + (k[1] === 'inf' ? 'no cap' : k[1])
+    + '</b>';
+  if (!sel) {{
+    tip.innerHTML = head + '<br><span class="uh">no trades on the traded '
+      + 'universe</span><br><span class="uh">' + otherName + ': '
+      + money(other.final_6pct) + ', ' + other.trades + ' trades</span>';
+  }} else {{
+    tip.innerHTML = head
+      + '<br>' + money(sel.final_6pct) + ' at ' + (sel.risk_6pct ?? '-')
+      + '% risk<br>' + sel.trades + ' trades, wr ' + sel.win_rate + '%, '
+      + sel.net_r + 'R<br>avg ' + sel.avg_r + 'R, PF ' + sel.profit_factor
+      + '<br>streaks ' + sel.longest_winning_streak + 'W / '
+      + sel.longest_losing_streak + 'L, pos&le;' + sel.pos_max
+      + '<br>top market ' + sel.top_market + ' '
+      + (sel.top_market_share ?? '-') + '%'
+      + (other
+          ? '<br><span class="uh">' + otherName + ': '
+            + money(other.final_6pct) + ', ' + other.trades + ' trades, '
+            + other.net_r + 'R</span>'
+          : '<br><span class="uh">' + otherName + ': no trades</span>');
+  }}
   tip.style.display = 'block';
   tip.style.left = Math.min(e.clientX + 14, innerWidth - 230) + 'px';
   tip.style.top = (e.clientY + 14) + 'px';
@@ -1454,9 +1478,12 @@ function show() {{
   sBand.setData(series.curve.map(c => ({{time:c[0], value:c[1]}})));
   sDD.setData(series.dd.map(c => ({{time:c[0], value:c[1]}})));
   sPos.setData(series.pos.map(c => ({{time:c[0], value:c[1]}})));
-  tbl.innerHTML = rows(m, P.baseline);
   const uname = universe() === 'filtered'
     ? 'traded universe (market filter)' : 'whole universe (research record)';
+  /* The all-trades reference, in the SAME universe the rest of this view is in. */
+  const ref = (universe() === 'filtered' && P.baseline.filtered)
+    ? P.baseline.filtered : P.baseline;
+  tbl.innerHTML = rows(m, ref, uname);
   risk.textContent = (series.levered
     ? ('bet ' + series.risk_6pct + '% per trade for ' + P.target_dd
        + '% drawdown  ->  ' + money(series.final_6pct))
@@ -1475,8 +1502,6 @@ function show() {{
      the whole of show() with it - empty panes and an unbuilt table, while the
      identical call from the console a second later worked (2026-08-10). Data
      lands first; the range is cosmetic and can retry. */
-  const ref = (universe() === 'filtered' && P.baseline.filtered)
-    ? P.baseline.filtered : P.baseline;
   const t0 = Math.min(series.pos[0][0], series.curve[0][0], ref.curve[0][0]);
   const t1 = Math.max(series.pos[series.pos.length - 1][0],
     series.curve[series.curve.length - 1][0],

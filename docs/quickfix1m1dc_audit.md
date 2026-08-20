@@ -298,6 +298,73 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 20. The R-cut grid reports BOTH universes (Lode, 2026-08-20)
+
+Lode: *"the results don't match and it's not because of the difference in max
+%DD calculation vs 1% risk fixed... looks like something with the grid
+calculation is off."*
+
+**Nothing was off. The grid answered a different question, and the page did not
+say so where it mattered.** The hybrid grid's `0.20-0.60` cell read **$166,627**
+against the matrix's **$223,146** for the same band and the same dials. The
+grid's engine runs use `ELIGIBLE_FUTURES + ETFS` - **31 markets, no filter** -
+while variant 5 trades `HUMAN_APPROVED`, **22 markets** (s.16). That was
+deliberate and documented in the page's own note and in s.17 (*"its grid still
+runs the whole universe with no cuts"*), because the band was originally read
+from the unfiltered record.
+
+**It reconciles exactly.** Filtering the grid's own cached trades for that cell
+to the 22-market universe reproduces the matrix to the decimal:
+
+| | trades | win | net R | max DD |
+|---|---|---|---|---|
+| grid cell as built (31 markets) | 100 | 46.0% | +56.79R | 6.32% |
+| the same cell, filtered to the traded 22 | **79** | **50.6%** | **+62.44R** | **4.45%** |
+| matrix variant 5 | **79** | **50.6%** | **+62.44R** | **4.45%** |
+
+The nine excluded markets contribute 21 trades worth **-5.66R** (ZC -1.15,
+SB -3.23, ZB -2.91, WEAT -2.58, BTC +4.11, FGBL +0.11). **The lost R is the
+small half of it.** They also deepen the drawdown 4.45% -> 6.32%, so the bet
+size that reaches 6% collapses from **1.356% to 0.947%**, and the levered
+equity with it. A cell can lose a sixth of its final figure to markets that
+barely move its R.
+
+**The band selection survives, and that was the thing worth checking.**
+Re-ranking every cell on the traded universe:
+
+| | top cell | adopted band |
+|---|---|---|
+| as built (31 markets) | `0.45\|0.55` | `0.20\|0.60` **4th of 187** |
+| traded universe (22) | `0.45\|0.55` | `0.20\|0.60` **4th of 183** |
+
+Same rank, same winner, near-identical top five - and the winner is the
+31-trade `0.45|0.55` cell already rejected as the curve-fitting trap (s.15c).
+4th/5th behaves the same: `0.00|0.60` ranks 4th, above it only the
+known-identical `0.00`/`0.10` pairs differing by 0.36%. **The published bands
+were not chosen on a misleading ranking.** What was misleading was the equity
+figure quoted from the page.
+
+**FIXED BY REPORTING BOTH, not by changing what the grid runs.** Every cell now
+carries a `filtered` block - the same trades with the market filter applied -
+shown as a third column in the detail table, in the tooltip, and behind a
+heatmap selector that chooses which universe it colours. The grid keeps its
+meaning as the record the band was read from; the number a reader will
+naturally compare against the matrix is present and labelled.
+
+**It cost no engine passes.** The trade cache tags every trade with its market,
+so the filtered metrics are arithmetic over trades already on disk - which is
+why a ninety-minute grid gained a column in seconds.
+
+**The lesson worth keeping.** The disclosure existed and was accurate, and it
+still failed: it was a sentence in a paragraph while the trap was a number in a
+table. **A caveat has to live on the figure it qualifies.** The person who wrote
+the market filter is the one it caught.
+
+Not affected: the live engine. Its block took variant 05's dials from
+`run_1m_matrix.build_grid()` and its expected-behaviour record from the matrix
+trades - 79 signals, 17 markets, +62.44R, verified to contain no excluded
+market.
+
 ## 16. The human market filter (Lode, 2026-08-11)
 
 Lode reviewed every market we currently hold 1m data for, by eye on the 1m

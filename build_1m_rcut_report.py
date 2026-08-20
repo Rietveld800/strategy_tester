@@ -112,6 +112,41 @@ PRIME_DAYS = 5
 
 TARGET_DD = 6.0
 RISK_TOLERANCE = 0.0005
+
+# THE TRADED UNIVERSE, BESIDE THE RESEARCH RECORD (Lode, 2026-08-20).
+#
+# This grid runs the WHOLE universe with no market filter, deliberately: it is the
+# record the band was read from, and the note in the page has always said so. But the
+# published strategy trades `run_1m.HUMAN_APPROVED` (22 of 31 markets, audit s.16),
+# so every equity figure here answers a question about a universe nobody trades - and
+# it sits unlabelled next to the identical metric on pages that DO use the traded set.
+#
+# The trap is real and it caught the person who wrote the decision: on 2026-08-20 the
+# hybrid grid's 0.20-0.60 cell read $166,627 against the matrix's $223,146 for what
+# looked like the same band. Same arithmetic, different universe. Filtering the grid's
+# own cached trades reproduces the matrix EXACTLY - 79 trades, 50.6%, +62.44R, 4.45%
+# DD - so nothing was wrong except which question the number answered.
+#
+# What the nine excluded markets do to that cell: 21 extra trades worth -5.66R, which
+# also deepens the drawdown 4.45% -> 6.32%, so the bet size that reaches 6% collapses
+# from 1.356% to 0.947% and the final equity with it. The loss of R is the small half;
+# the drawdown is what does the damage.
+#
+# So BOTH are computed and both are shown. The research record keeps its meaning and
+# the number a reader will naturally compare is present and labelled. It costs no
+# engine passes at all - the trade cache tags every trade with its market, so the
+# filtered metrics are arithmetic over trades already in hand, which is why this could
+# be added to a grid that takes ninety minutes to build without rebuilding it.
+FILTERED_LABEL = "traded universe (market filter, s.16)"
+UNFILTERED_LABEL = "research record (whole universe, no filter)"
+
+#: The filtered copy KEEPS its series (curve, drawdown, exposure). They were stripped
+#: at first to spare a payload already around 2.4 MB, on the reasoning that a column
+#: needs numbers rather than curves - which was wrong in the way that matters: the
+#: panes then drew the whole universe whatever the selector said, so switching to the
+#: traded universe changed every number on the page except the picture of it (Lode,
+#: 2026-08-20). A chart that does not follow its own control is worse than no control.
+SERIES_FIELDS = ()
 # Every dial EXCEPT the stop anchor, which is what `--stop` chooses. The
 # published baseline's dials otherwise, so a cell differs from the baseline in
 # the band alone.
@@ -620,6 +655,20 @@ def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print):
     return fresh_cache
 
 
+def filtered_metrics(trades, grid):
+    """The same cell, measured on the markets the strategy actually trades.
+
+    Returns None when the filter leaves nothing - a cell can be entirely made of
+    markets the filter excludes, and an empty cell must read as empty rather than as
+    a zero that looks like a result.
+    """
+    kept = [t for t in trades if t.get("market") in run_1m.HUMAN_APPROVED]
+    measured = measure(kept, grid)
+    if measured is None:
+        return None
+    return {k: v for k, v in measured.items() if k not in SERIES_FIELDS}
+
+
 def cell_key(lo, hi):
     """Cache/report key for a band. The baseline is (None, None)."""
     if lo is None and hi is None:
@@ -792,6 +841,9 @@ def main():
             # heading and posts `refresh_step` from its own update button, so a
             # reader can never take one anchor's band for the other's and the
             # button can never rebuild the wrong file.
+            # THIS anchor's adopted band, so the page can open on it without a
+            # literal that goes stale the next time a band is adopted.
+            adopted=list(mx.BAND_CUTS_BY_STOP[v["stop_label"]][1]),
             variant=v["name"], stop_label=v["stop_label"],
             stop_mode=v["stop_mode"], refresh_step=v["step"],
             # Stamped so the PAGE can say which data it was computed on. This
@@ -840,6 +892,8 @@ def main():
             print(f"CALENDAR: {len(calendar)} market days, grid {grid[0]} to "
                   f"{grid[-1]}", flush=True)
         m = measure(trades, grid)
+        if m is not None:
+            m["filtered"] = filtered_metrics(trades, grid)
         if lo is None and hi is None:
             baseline = m
         else:
@@ -882,24 +936,33 @@ def page(p):
                      "the ladder, the 4th when the ladder carries only four. "
                      "This is the PUBLISHED dial, and the band adopted below "
                      "was read off this grid.")
-        band_note = ("<b class=\"k\">ADOPTED (Lode): lower 0.20, upper "
-                     "0.50</b> is the published band (upper adopted "
-                     "2026-08-10, audit s.15e; lower raised from 0.00 on "
-                     "2026-08-11, s.17, with the s.15c ridge caution on "
-                     "record).")
+        band_note = ("<b class=\"k\">ADOPTED (Lode): lower 0.00, upper "
+                     "0.60</b> is the published band for this anchor (audit "
+                     "s.19k, 2026-08-18). It replaced 0.20 / 0.50 - upper "
+                     "adopted 2026-08-10 s.15e, lower raised from 0.00 on "
+                     "2026-08-11 s.17 - when both grids were re-swept under "
+                     "the trading-day window: the wider Monday denominator "
+                     "shifted every ratio DOWN, so a ceiling fitted at half a "
+                     "session was too tight, and on this anchor the LOWER cut "
+                     "stopped earning its place at all (the leaders sit at "
+                     "0.00-0.10). Chosen BROAD rather than at the grid's "
+                     "optimum, which is the s.15c ridge caution applied.")
     else:
         stop_note = ("the ladder stop OR the session's running extreme at "
                      "entry, <b class=\"k\">whichever is wider</b> "
                      "(<code>ladder_or_extreme</code>, matrix cell "
                      "<b class=\"k\">variant 5</b>). NOT the published dial.")
-        band_note = ("The 0.20 / 0.50 band was adopted on the <b "
-                     "class=\"k\">4th/5th</b> grid and does not carry over "
-                     "unchanged: 1R in price IS the numerator of the ratio, "
-                     "so a wider stop pushes every setup up the scale (audit "
-                     "s.19: PA 2026-08-07 reads 0.226 on the ladder stop and "
-                     "0.557 on this one, through the upper cut). This page "
-                     "opens on 0.20 / 0.50 for comparability only - the band "
-                     "for this anchor is whatever THIS grid shows.")
+        band_note = ("<b class=\"k\">ADOPTED (Lode): lower 0.20, upper "
+                     "0.60</b> is this anchor's own band (audit s.19k, "
+                     "2026-08-18) - it no longer borrows the 4th/5th one, and "
+                     "it could not: 1R in price IS the numerator of the "
+                     "ratio, so a wider stop pushes every setup up the scale "
+                     "(audit s.19: PA 2026-08-07 reads 0.226 on the ladder "
+                     "stop and 0.557 on this one, through the upper cut). "
+                     "Deliberately NOT the grid's optimum - <b class=\"k\">"
+                     "0.45-0.55</b> tops this table on 36 trades with 48% of "
+                     "them in one market, which is the trap the <b class=\"k"
+                     "\">top market share</b> column exists to catch.")
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc - R cut ({label} stop)</title><style>
 :root {{
@@ -957,6 +1020,11 @@ font-variant-numeric:tabular-nums; }}
 #tbl td, #tbl th {{ padding:4px 10px; border-bottom:1px solid var(--grid);
 text-align:right; }}
 #tbl td:first-child, #tbl th:first-child {{ text-align:left; }}
+/* The traded-universe column is the one a reader should compare against the
+   matrix and the variant report, so it is inked like the band column rather
+   than greyed like the reference. */
+#tbl td.filt {{ color:var(--ink); }}
+.uh {{ color:var(--muted); font-weight:400; font-size:11px; }}
 .hm {{ border-collapse:separate; border-spacing:2px; margin-top:6px;
 font-variant-numeric:tabular-nums; font-size:11px; }}
 .hm th {{ color:var(--ink-2); font-weight:600; padding:2px 5px;
@@ -985,10 +1053,21 @@ trades the baseline never reached and is not a slice of it. Each cell is
 levered to a constant <b class="k">{p['target_dd']}% max drawdown</b>, because
 comparing at one bet size flatters whichever band dug the deepest hole.
 {band_note} The published
-baseline also carries the human MARKET FILTER (s.16), which this grid does
-NOT: every cell here runs the whole universe, and "all trades" is the
-pre-adoption engine with no cuts, so this page stays the research record
-the band was read from. The other stop anchor has its own grid, built the
+baseline also carries the human MARKET FILTER (s.16), which this grid's
+ENGINE RUNS do NOT: every cell here is computed on the whole universe, and
+"all trades" is the pre-adoption engine with no cuts, so this page stays the
+research record the band was read from. <b class="k">Since 2026-08-20 every
+cell is ALSO reported on the traded universe</b> - the same trades with the
+market filter applied - because the whole-universe equity figure sits next
+to the identical metric on the matrix and the variant report, which do carry
+the filter, and comparing them is a mistake the page used to invite. It
+caught the author of the filter: the hybrid grid's 0.20-0.60 cell read
+$166,627 against the matrix's $223,146 for what looked like the same band.
+Nothing was wrong but the question - the nine excluded markets add trades
+that lose a little R and deepen the drawdown, so the bet size reaching {p['target_dd']}%
+falls and the final equity with it. The table shows both columns, the
+tooltip carries the traded figure, and the <b class="k">heatmap</b> selector
+above chooses which universe it colours. The other stop anchor has its own grid, built the
 same way and read the same way:
 <a href="{other_html}">{other_html}</a>.</span>
 </div>
@@ -1004,6 +1083,10 @@ same way and read the same way:
 <div id="bar">
   <label>lower cut <select id="lo"></select></label>
   <label>upper cut <select id="hi"></select></label>
+  <label>heatmap <select id="uni">
+    <option value="filtered">traded universe (market filter)</option>
+    <option value="whole">whole universe (research record)</option>
+  </select></label>
   <span id="risk" class="note"></span>
 </div>
 <div id="panes">
@@ -1022,9 +1105,14 @@ same way and read the same way:
   <div class="pane" id="chartPos"></div>
 </div>
 
-<h3>Final equity at {p['target_dd']}% drawdown - the whole grid</h3>
+<h3>Final equity at {p['target_dd']}% drawdown - every band in the grid</h3>
 <div class="note">Rows are the lower cut, columns the upper. Click a cell to
-load it. Blank = the upper cut is not above the lower.</div>
+load it. Blank = the upper cut is not above the lower.
+<b class="k">"Every band" is about the BANDS, not the markets</b> - which
+universe these figures are measured on is the <b class="k">heatmap</b>
+selector above, and the legend below the map names it. The phrase used to
+read "the whole grid", which was fine until the page could show two
+universes and "whole" started reading as "whole universe".</div>
 <div id="hm"></div>
 <div id="hmlegend"></div>
 <div id="tip"></div>
@@ -1198,9 +1286,34 @@ function rows(m, b) {{
      b.exit_mix.stop + ' / ' + b.exit_mix.close1 + ' / '
        + b.exit_mix.no_confirm],
   ];
-  return '<tr><th>metric</th><th>band</th><th>all trades</th></tr>'
-    + R.map(r => '<tr><td>' + r[0] + '</td><td><b>' + r[1]
-        + '</b></td><td style="color:var(--muted)">' + r[2]
+  /* THE THIRD COLUMN: the same band on the markets the strategy actually trades.
+     This grid runs the whole universe on purpose (it is the record the band was
+     read from), but the published strategy trades 22 of 31 - so without this
+     column the equity figure here invites a comparison against the matrix and the
+     variant report that it cannot support. Blank where the filter leaves the cell
+     empty, never zero: an empty cell must read as empty. */
+  const f = m.filtered;
+  const fv = (get, dash) => f ? get(f) : (dash ?? '-');
+  const F = [
+    fv(x => x.trades), fv(x => x.wins), fv(x => x.win_rate), fv(x => x.net_r),
+    fv(x => x.avg_r), fv(x => x.profit_factor),
+    fv(x => x.avg_win + ' / ' + x.avg_loss),
+    fv(x => x.longest_winning_streak), fv(x => x.longest_losing_streak),
+    fv(x => x.pos_max), fv(x => x.pos_mean), fv(x => x.max_dd_r),
+    fv(x => x.max_dd_pct + '%'), fv(x => x.max_dd_close_pct + '%'),
+    fv(x => money(x.final_1pct)),
+    fv(x => x.risk_6pct ? x.risk_6pct + '%' : 'never reaches it'),
+    fv(x => money(x.final_6pct)), fv(x => x.markets),
+    fv(x => x.top_market + ' (' + (x.top_market_share ?? '-') + '%)'),
+    fv(x => x.exit_mix.stop + ' / ' + x.exit_mix.close1 + ' / '
+            + x.exit_mix.no_confirm),
+  ];
+  return '<tr><th>metric</th><th>band<br><span class="uh">whole universe</span>'
+    + '</th><th>band<br><span class="uh">traded universe</span></th>'
+    + '<th>all trades<br><span class="uh">whole universe</span></th></tr>'
+    + R.map((r, i) => '<tr><td>' + r[0] + '</td><td><b>' + r[1]
+        + '</b></td><td class="filt"><b>' + (F[i] ?? '-') + '</b></td>'
+        + '<td style="color:var(--muted)">' + r[2]
         + '</td></tr>').join('');
 }}
 
@@ -1210,8 +1323,16 @@ function rows(m, b) {{
    dollars wide and the winning side is ninety - a symmetric scale would spend
    half its colours on almost nothing. The value is printed in every cell, so
    colour is never the only channel. ---- */
-const vals = Object.values(P.cells).filter(Boolean).map(m => m.final_6pct);
-const vMin = Math.min(...vals), vMax = Math.max(...vals);
+/* RECOMPUTED PER UNIVERSE. The scale is anchored to the largest value it is
+   actually drawing; keeping the whole-universe maximum while showing filtered
+   numbers would wash the whole map toward the pale end and quietly understate
+   every cell. */
+let vMax = 0;
+function rescale() {{
+  const vals = Object.values(P.cells).filter(Boolean)
+    .map(valueOf).filter(v => v !== null);
+  vMax = vals.length ? Math.max(...vals) : H.pivot;
+}}
 function colorFor(v) {{
   if (v < H.pivot) {{
     // From a FIXED floor, so the reds mean the same money on every rebuild.
@@ -1226,7 +1347,21 @@ function colorFor(v) {{
   return [H.pos[i], H.posInk[i]];
 }}
 
+/* WHICH UNIVERSE THE HEATMAP SHOWS. The grid is built on the whole universe - it
+   is the research record the band was read from - and the strategy trades 22 of 31
+   (audit s.16). Both are real answers to different questions, so the page asks
+   which one you want rather than picking silently. */
+function universe() {{
+  const el = document.getElementById('uni');
+  return el && el.value === 'whole' ? 'whole' : 'filtered';
+}}
+function valueOf(m) {{
+  if (universe() === 'whole') return m.final_6pct;
+  return m.filtered ? m.filtered.final_6pct : null;
+}}
+
 function drawHeat() {{
+  rescale();
   const ups = P.edges.map(e => e.toFixed(2)).concat(['inf']);
   let h = '<table class="hm"><tr><th class="rowh">lower \\\\ upper</th>'
     + ups.map(u => '<th>' + (u === 'inf' ? 'none' : u) + '</th>').join('')
@@ -1237,10 +1372,14 @@ function drawHeat() {{
       const k = l.toFixed(2) + '|' + u;
       const m = P.cells[k];
       if (!m) {{ h += '<td class="empty"></td>'; continue; }}
-      const [bg, fg] = colorFor(m.final_6pct);
+      /* The heatmap follows the universe toggle, because the headline number is
+         the one that gets compared and quoted. A cell the filter empties is drawn
+         blank rather than as a zero. */
+      const v = valueOf(m);
+      if (v === null) {{ h += '<td class="empty"></td>'; continue; }}
+      const [bg, fg] = colorFor(v);
       h += '<td data-k="' + k + '" style="background:' + bg
-        + ';color:' + fg + '">'
-        + Math.round(m.final_6pct / 1000) + 'k</td>';
+        + ';color:' + fg + '">' + Math.round(v / 1000) + 'k</td>';
     }}
     h += '</tr>';
   }}
@@ -1252,9 +1391,13 @@ function drawHeat() {{
     + ' break-even</span>';
   H.pos.forEach(c => {{ lg += '<span class="sw" style="background:' + c
     + '"></span>'; }});
+  const bl = universe() === 'filtered' && P.baseline.filtered
+    ? P.baseline.filtered.final_6pct : P.baseline.final_6pct;
   lg += '<span style="margin-left:6px">' + money(vMax)
-    + '</span><span style="margin-left:14px">all trades: '
-    + money(P.baseline.final_6pct) + '</span>';
+    + '</span><span style="margin-left:14px">all trades: ' + money(bl)
+    + '</span><span style="margin-left:14px" class="uh">heatmap: '
+    + (universe() === 'filtered' ? 'traded universe, 22 markets'
+                                 : 'whole universe, no market filter') + '</span>';
   document.getElementById('hmlegend').innerHTML = lg;
 }}
 
@@ -1270,7 +1413,11 @@ document.getElementById('hm').addEventListener('mousemove', e => {{
     + '<br>streaks ' + m.longest_winning_streak + 'W / '
     + m.longest_losing_streak + 'L, pos&le;' + m.pos_max
     + '<br>top market ' + m.top_market + ' ' + (m.top_market_share ?? '-')
-    + '%';
+    + '%'
+    + (m.filtered
+        ? '<br><span class="uh">traded universe: ' + money(m.filtered.final_6pct)
+          + ', ' + m.filtered.trades + ' trades, ' + m.filtered.net_r + 'R</span>'
+        : '<br><span class="uh">traded universe: no trades</span>');
   tip.style.display = 'block';
   tip.style.left = Math.min(e.clientX + 14, innerWidth - 230) + 'px';
   tip.style.top = (e.clientY + 14) + 'px';
@@ -1298,14 +1445,23 @@ function show() {{
     'the upper cut must be above the lower cut');
   const m = P.cells[keyOf(a, bv)];
   if (!m) return clear('this combination was not computed');
-  sBand.setData(m.curve.map(c => ({{time:c[0], value:c[1]}})));
-  sDD.setData(m.dd.map(c => ({{time:c[0], value:c[1]}})));
-  sPos.setData(m.pos.map(c => ({{time:c[0], value:c[1]}})));
+  /* THE PANES FOLLOW THE SELECTOR. Whichever universe the heatmap is showing is
+     the one drawn here, so the picture and the numbers can never disagree. */
+  const series = universe() === 'filtered' ? m.filtered : m;
+  if (!series) return clear(
+    'this band takes no trades on the traded universe - switch the heatmap to the '
+    + 'research record to see it on the whole universe');
+  sBand.setData(series.curve.map(c => ({{time:c[0], value:c[1]}})));
+  sDD.setData(series.dd.map(c => ({{time:c[0], value:c[1]}})));
+  sPos.setData(series.pos.map(c => ({{time:c[0], value:c[1]}})));
   tbl.innerHTML = rows(m, P.baseline);
-  risk.textContent = m.levered
-    ? ('bet ' + m.risk_6pct + '% per trade for ' + P.target_dd
-       + '% drawdown  ->  ' + money(m.final_6pct))
-    : ('never reaches ' + P.target_dd + '% drawdown - shown at 1% risk');
+  const uname = universe() === 'filtered'
+    ? 'traded universe (market filter)' : 'whole universe (research record)';
+  risk.textContent = (series.levered
+    ? ('bet ' + series.risk_6pct + '% per trade for ' + P.target_dd
+       + '% drawdown  ->  ' + money(series.final_6pct))
+    : ('never reaches ' + P.target_dd + '% drawdown - shown at 1% risk'))
+    + '   -   panes show the ' + uname;
   document.querySelectorAll('.hm td.sel').forEach(
     td => td.classList.remove('sel'));
   const cell = document.querySelector(
@@ -1319,10 +1475,12 @@ function show() {{
      the whole of show() with it - empty panes and an unbuilt table, while the
      identical call from the console a second later worked (2026-08-10). Data
      lands first; the range is cosmetic and can retry. */
-  const t0 = Math.min(m.pos[0][0], m.curve[0][0], P.baseline.curve[0][0]);
-  const t1 = Math.max(m.pos[m.pos.length - 1][0],
-    m.curve[m.curve.length - 1][0],
-    P.baseline.curve[P.baseline.curve.length - 1][0]);
+  const ref = (universe() === 'filtered' && P.baseline.filtered)
+    ? P.baseline.filtered : P.baseline;
+  const t0 = Math.min(series.pos[0][0], series.curve[0][0], ref.curve[0][0]);
+  const t1 = Math.max(series.pos[series.pos.length - 1][0],
+    series.curve[series.curve.length - 1][0],
+    ref.curve[ref.curve.length - 1][0]);
   const applyRange = tries => {{
     try {{
       syncing = true;
@@ -1335,6 +1493,10 @@ function show() {{
   requestAnimationFrame(() => applyRange(5));
 }}
 lo.onchange = hi.onchange = show;
+/* The toggle redraws the map and the legend. The selected band's table and panes
+   show BOTH universes already, so they do not need redrawing - only the heatmap
+   has to choose one. */
+document.getElementById('uni').onchange = () => {{ drawHeat(); show(); }};
 // Defaults from the edges that EXIST: a coarse grid has no 0.20 option, and
 // setting a missing value leaves the select empty and the page on an error row.
 function nearest(sel, want) {{
@@ -1348,9 +1510,11 @@ function nearest(sel, want) {{
 }}
 function init() {{
   drawHeat();
-  // Open on the ADOPTED band (0.20/0.50, s.15e + s.17).
-  lo.value = nearest(lo, 0.20);
-  hi.value = nearest(hi, 0.50);
+  /* Open on THIS anchor's adopted band, carried in the payload rather than
+     hardcoded: the two grids adopted different bands (4th/5th 0.00-0.60, hybrid
+     0.20-0.60, audit s.19k) and a single literal here was stale for both. */
+  lo.value = nearest(lo, P.adopted ? P.adopted[0] : 0.20);
+  hi.value = nearest(hi, P.adopted && P.adopted[1] !== null ? P.adopted[1] : 0.60);
   if (parseFloat(hi.value) <= parseFloat(lo.value)) hi.value = 'inf';
   show();
   if (!sBand.data().length) throw new Error('no series data drawn');

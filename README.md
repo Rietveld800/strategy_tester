@@ -66,13 +66,19 @@ stopped in its own session draws a **vertical** line on one bar.
 
 `../trading_system/refresh.py`, which is what charter's rail **Update** button runs:
 `data` → `bars` → `strategy1m` → `matrix1m` → `hybrid1m` → `levels1m` →
-`charts`, about **12 minutes**. Measured 2026-08-12: `run_1m.py` 111 s, `run_1m_matrix.py`
-240 s, the hybrid-stop variant 1 s (it reads the matrix JSON), each level study 54 s, the
-chart build ~4 min. The old `strategy` step (`run_pipeline.py`) went with the daily registry.
+`charts`, roughly **8-17 minutes** on a normal day. Measured 2026-08-21: `run_1m.py`
+~110 s, `run_1m_matrix.py` ~4-12 min depending on how many markets' files moved (it
+carries a per-market cache with a tail splice — see its module docstring — and prints
+cached/spliced counts plus a `TIMING:` line), the hybrid-stop variant 1 s (it reads the
+matrix JSON), the level study ~55 s, the chart build ~70 s. The old `strategy` step
+(`run_pipeline.py`) went with the daily registry; the measured runtime record is
+`../trading_system/refresh_runtime_plan.md`.
 
 **`rcut1m` and `rcut1mhybrid` are reachable but deliberately not in a full run** (user,
-2026-08-12). Each R-cut band grid is ~231 engine passes, about **90 minutes**, which is not a
-thing to hang off a button pressed to see this morning's bars. `refresh.EXTRA_STEPS` holds
+2026-08-12). A FULL R-cut band grid is ~232 engine passes, about **93 minutes**, which is
+not a thing to hang off a button pressed to see this morning's bars — though since
+2026-08-19 a click usually costs far less: unchanged data is an exact hit in seconds and
+grown data splices a tail in ~20 minutes. `refresh.EXTRA_STEPS` holds
 them: `step_for()` searches it, `run_all()` never does, so `python refresh.py rcut1m` and
 `/api/refresh` reach them and a plain `python refresh.py` cannot. **Each page carries its own
 update button** (`quickfix1m1dcRcut4th5th.html` posts `rcut1m`,
@@ -99,14 +105,25 @@ title and the first sentence, and each links to the other. The published band (0
 was read off the **4th/5th** grid; the hybrid page opens on it for comparability only and says
 so.
 
-**That grid's cache is keyed on the data, not just the band.** It reused every cell from
-whatever window it was first built on, so a rebuild after new bars landed finished in three
-seconds and republished a stale grid beside a fresh baseline — measured, not hypothetical.
-`data_fingerprint()` hashes size and mtime of every bars parquet (~90 files, ~2 ms) and any
-change throws the whole cache away. It errs the safe way on purpose: a wrong cache **hit**
-costs correctness, a wrong **miss** costs time. The payload carries `built`, `data` and
-`n_cells`, and the page prints the build time, so a stale grid is visible rather than assumed
-fresh.
+**That grid's cache is keyed on the data, not just the band — and since 2026-08-19 it
+SPLICES rather than starting over.** It once reused every cell from whatever window it was
+first built on, so a rebuild after new bars landed finished in three seconds and republished
+a stale grid beside a fresh baseline — measured, not hypothetical. The cure was a single
+data fingerprint that threw the whole cache away on any touch; the current form is finer:
+`bars_manifest()` stamps size and mtime of every bars parquet per file, an unchanged
+manifest is an exact hit, files that only GREW make the tail a splice candidate
+(`rebuild_tail` reruns each cell from five primed days before the cut and
+`verify_overlap` demands the recomputed overlap reproduce the cache trade for trade —
+any disagreement rebuilds the grid in full), and anything else rebuilds outright. Two
+boundary rules keep phantoms out (2026-08-21): the old window's last day is never
+compared (its `entries_allowed` flag flips when the calendar grows), and the cache
+carries `market_days` — per-market calendars — so a growth the UNION calendar hides
+(a second refresh filling the newest day in for the markets that lacked it) still
+places its cut per market (`market_gains`) instead of costing ~93 minutes. It still
+errs the safe way on purpose: a wrong cache **hit** costs correctness, a wrong **miss**
+costs time, and every refusal names its reason in the log. The payload carries `built`,
+`data` and `n_cells`, and the page prints the build time, so a stale grid is visible
+rather than assumed fresh.
 
 ---
 
@@ -494,9 +511,9 @@ rewrite it here.
 | `engine_1m.py` | The 1-minute engine: rules 1–2 intraday, market-order entry on the first reversal print, ladder-anchored stop, exit at the next settlement. `tests/test_engine_1m.py` covers it. |
 | `run_1m.py` | The backtest and the published baseline: `output/quickfix1m1dc_all.json`, then the report and the charter hand-off. Everything else on this side reads what it writes — including the **market-day calendar** and the grid helpers every curve here is drawn on (below). |
 | `build_1m_report.py` | `output/quickfix1m1dc_report_variant_02.html` (named for its cell) from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. |
-| `run_1m_matrix.py` | The dial matrix, one pass over the data: the full lockout x stop x band cross on the filtered universe (`variant 1` .. `variant 27`) plus three appended extras — since 2026-08-16 `variant 28` (4th/5th, band 0.15-0.20) and `variant 29` (hybrid, band 0.25-0.65), the winning band from each stop anchor's R-cut grid, and `variant 30`, the market filter's off-state (lockout 1 / hybrid / 000-050 over all 31 markets, pairing with `variant 4`). Curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
+| `run_1m_matrix.py` | The dial matrix: the full lockout x stop x band cross on the filtered universe (`variant 1` .. `variant 27`; the three extra cells were retired 2026-08-18, and each anchor's band ladder carries its own chosen middle slot). Since 2026-08-21 it is incremental per market (`output/quickfix1m1dc_matrix_cache.json`, `--no-reuse` to bypass): unchanged markets are reused whole, grown ones rerun only the tail with the overlap verified, and rows/account fields are derived canonically from the cached trades so no mode can drift. Curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
 | `research_1m_levels.py` | The level/entry study, baseline and `--variant "<cell>"`. |
-| `build_1m_rcut_report.py` | The R-cut band grid, **one per stop anchor**: `--stop 4th5th` (default) and `--stop hybrid`, each ~231 engine passes, ~90 min, **not** in a full refresh — each page has its own update button. Its trade cache is per anchor and keyed on the dials **and** on `data_fingerprint()`, so it can never republish cells computed on an older window or under the other stop. |
+| `build_1m_rcut_report.py` | The R-cut band grid, **one per stop anchor**: `--stop 4th5th` (default) and `--stop hybrid`, **not** in a full refresh — each page has its own update button. Its trade cache is per anchor and keyed on the dials **and** the per-file bars manifest, so it can never republish cells computed on an older window or under the other stop; unchanged data is an exact hit in seconds, grown data splices a tail (~20 min) with the recomputed overlap verified against the cache, and only real change pays the full ~232 passes (~93 min). |
 | `export_charter_trades_1m.py` | The charter hand-off: `output/charter_trades_quickfix1m1dc.json`, in charter's existing schema. The only owner of that directory now, and it prunes. |
 
 #### Every curve is a step function on the market days (2026-08-18)
@@ -1343,9 +1360,10 @@ venv\Scripts\python.exe -m pytest tests -q                   # the 1m engine's t
 
 or all of it plus the data and the charts with
 `python ../trading_system/refresh.py`, which is what charter's **Update** button runs
-(~12 min). `run_1m.py` must go first: everything else reads what it writes.
+(~8-17 min). `run_1m.py` must go first: everything else reads what it writes.
 
-**Not in a full run**, ~90 minutes each, and each has its own button on its own page:
+**Not in a full run** (seconds on an exact hit, ~20 min spliced, ~93 min on a genuine
+full rebuild), and each has its own button on its own page:
 
 ```
 venv\Scripts\python.exe build_1m_rcut_report.py              # R-cut grid, 4th/5th stop

@@ -100,13 +100,17 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
 `hybrid1m` -> `levels1m` ->
-`charts`, ~17 min. The old
+`charts`, ~8-17 min on a normal day (2026-08-21; the measured record is
+`../trading_system/refresh_runtime_plan.md`). The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
-2026-08-12: run_1m 111s, matrix 240s, hybrid stop 1s (it reads the matrix JSON),
-each level study 54s. The matrix became the full factorial on 2026-08-13
-(27 cells; 30 briefly, until the extras went on 2026-08-18) and now costs
-~9 min, which is
-where the chain's ~12 -> ~17 min came from; `hybrid1m` builds `variant 5`,
+2026-08-21: run_1m ~110s, matrix ~4-12 min depending on how many markets'
+files moved (per-market cache + tail splice, cached/spliced counts and a
+TIMING line in its output; under a minute when nothing new landed), hybrid
+stop 1s (it reads the matrix JSON), the level study ~55s, charts ~70s. The
+matrix became the full factorial on 2026-08-13 (27 cells; 30 briefly, until
+the extras went on 2026-08-18), quietly grew to ~30 min once the
+geometry-ratio pane's series dominated, and came back down on 2026-08-21
+with the ratio rewrite and the cache; `hybrid1m` builds `variant 5`,
 and `levels1m` builds the baseline study. A VARIANT WITH A REPORT
 BELONGS IN THE CHAIN -- a page built once ages out of date beside the
 grid it came from, which is exactly what happened to the hybrid stop
@@ -117,8 +121,10 @@ files are deleted rather than left to rot.
 
 **`rcut1m` IS REACHABLE BUT NOT IN A FULL RUN** (user, 2026-08-12: "we're not
 updating quickfix1m1dcRcut.html after clicking button. quickfix1m1dcRcut.html
-will get his own update button inside the html page"). It is ~231 engine passes,
-about 90 minutes. `refresh.EXTRA_STEPS` holds it: `step_for()` searches it,
+will get his own update button inside the html page"). A FULL grid is ~232
+engine passes, about 93 minutes; since 2026-08-19 a click usually costs far
+less (exact hit in seconds, spliced tail ~20 min - see the cache block
+below). `refresh.EXTRA_STEPS` holds it: `step_for()` searches it,
 `run_all()` never does, so `refresh.py rcut1m` and `/api/refresh` reach it and
 a plain `refresh.py` cannot. The page's own button posts that key to charter's
 `/api/refresh` -- the SAME runner, driven from the page that shows the result,
@@ -150,15 +156,27 @@ CORS preflight, streams the log, and reloads itself when the run finishes.
 only -- that is not a security control and does not pretend to be one, it just
 does not hand the reply to the open internet.
 
-**THE R-CUT CACHE IS KEYED ON THE DATA NOW** (2026-08-12), not only on the band
-and the dials. It was reusing every cell from whatever window it was first built
-on, so a rebuild after new bars landed finished in three seconds and republished
-a stale grid beside a fresh baseline -- measured, not hypothetical.
-`data_fingerprint()` hashes size+mtime of every bars parquet (~90 files, ~2 ms)
-and any change throws the whole cache away. It errs the safe way on purpose: a
-wrong cache HIT costs correctness, a wrong MISS costs time. The payload carries
-`built`, `data` and `n_cells`, and the page prints the build time, so a stale
-grid is visible rather than assumed fresh.
+**THE R-CUT CACHE IS KEYED ON THE DATA** (2026-08-12) **AND SPLICES A TAIL
+SINCE 2026-08-19** rather than starting over. It was once reusing every cell
+from whatever window it was first built on, so a rebuild after new bars landed
+finished in three seconds and republished a stale grid beside a fresh baseline
+-- measured, not hypothetical; the first cure threw the whole cache away on any
+data change. Current form: `bars_manifest()` stamps every bars parquet per file
+(size:mtime); unchanged = exact hit in seconds, grown-only = splice candidate
+(`rebuild_tail` reruns each cell from PRIME_DAYS before the cut and
+`verify_overlap` demands the recomputed overlap reproduce the cache trade for
+trade -- any disagreement rebuilds the grid whole), anything else = full
+rebuild. Two boundary rules added 2026-08-21 after real phantoms: the old
+window's LAST day is never compared (its entries_allowed flag flips when the
+roll calendar extends -- it cost a 93-min rebuild over zero changed bars), and
+the cache carries `market_days` so a growth the UNION calendar hides (a second
+refresh in one day filling the newest date in per market) still places its cut
+via `market_gains`. Tests: `tests/test_rcut_incremental.py` (fast oracle +
+RCUT_SLOW=1 real bars) and `tests/test_rcut_market_days.py`. It errs the safe
+way on purpose: a wrong cache HIT costs correctness, a wrong MISS costs time,
+and every refusal names its reason. The payload carries `built`, `data` and
+`n_cells`, and the page prints the build time, so a stale grid is visible
+rather than assumed fresh.
 
 ## 1-minute workstream (2026-08-03) — THE published strategy since 2026-08-12
 

@@ -580,13 +580,22 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                start_capital=STARTING_CAPITAL, tighten=True,
                allow_pre_activation=True, confirm=True, stop_mode="ladder",
                max_entries_per_session=1, min_rpu_range_ratio=None,
-               max_rpu_range_ratio=None, range_mode="trading_day"):
+               max_rpu_range_ratio=None, range_mode="trading_day",
+               geom_by_day=False):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
     `tighten`, `allow_pre_activation`, `confirm`, `stop_mode` and the two
     `*_rpu_range_ratio` bounds are the dials; see the module docstring for
     what each one means.
+
+    `geom_by_day` is NOT a dial - it changes nothing the engine decides.
+    When True the summary carries an extra `geom_days` key: the same four
+    bookkeeping counters (zero_dist_entries, refused_wide, refused_tight,
+    range_unjudged) broken down per trading date, only dates with a hit.
+    It exists for the matrix's tail splice (2026-08-21): the counters are
+    whole-run totals, so a run recomputing only the newest days could not
+    otherwise say what the kept prefix contributed.
     """
     if stop_mode not in STOP_MODES:
         raise ValueError(f"stop_mode must be one of {STOP_MODES}")
@@ -608,6 +617,14 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     win_contract = None
     win_prev_date = None
     refused_tight = refused_wide = range_unjudged = 0
+    geom_days = {}
+
+    def geom_hit(d, counter):
+        if geom_by_day:
+            row = geom_days.setdefault(str(d), dict(
+                zero_dist_entries=0, refused_wide=0, refused_tight=0,
+                range_unjudged=0))
+            row[counter] += 1
 
     def book(pos, exit_ts, exit_price, reason):
         nonlocal cash
@@ -780,6 +797,7 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 dist = (run_high - first) if side == "short" else (first - run_low)
                 if dist <= 0:
                     zero_dist_entries += 1
+                    geom_hit(day.date, "zero_dist_entries")
                 # The stop anchor: structure, the session's running extreme
                 # at this minute, or the further of the two. run_high /
                 # run_low already include THIS bar, so the extreme modes
@@ -814,14 +832,17 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 if geometry_on:
                     if len(win) < MIN_RANGE_BARS:
                         range_unjudged += 1
+                        geom_hit(day.date, "range_unjudged")
                     elif ratio is not None:
                         if (max_rpu_range_ratio is not None
                                 and ratio > max_rpu_range_ratio):
                             refused_wide += 1
+                            geom_hit(day.date, "refused_wide")
                             continue
                         if (min_rpu_range_ratio is not None
                                 and ratio < min_rpu_range_ratio):
                             refused_tight += 1
+                            geom_hit(day.date, "refused_tight")
                             continue
                 risk_usd = cash * risk_pct / 100.0
                 pos = _Position(side=side, contract=day.contract,
@@ -858,4 +879,6 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
         refused_tight=refused_tight,
         range_unjudged=range_unjudged,
     )
+    if geom_by_day:
+        summary["geom_days"] = geom_days
     return trades, summary

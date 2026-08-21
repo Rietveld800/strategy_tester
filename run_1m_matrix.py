@@ -66,11 +66,11 @@ output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
 `--no-reuse` ignores the per-market cache and recomputes everything (see
-the cache block below VARIANTS: a market whose input files have not moved
-since the last run is reused whole from
-output/quickfix1m1dc_matrix_cache.json - trades, rows, calendar and its
-ratio file - and any file change recomputes the whole market; nothing is
-spliced). `--page` redraws the HTML with no backtest.
+the cache block below VARIANTS: an unchanged market is reused whole from
+output/quickfix1m1dc_matrix_cache.json, a market whose files only grew
+reruns just the tail with the recomputed overlap verified against the
+cache, and anything else - or any disagreement - rebuilds that market in
+full). `--page` redraws the HTML with no backtest.
 """
 
 import colorsys
@@ -288,22 +288,26 @@ VARIANTS = build_grid()
 BASELINE_NAME = "variant 2"
 COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 
-# --- the per-market cache (2026-08-21) --------------------------------------
+# --- the per-market cache (2026-08-21; tail splice added the same day) ------
 #
 # A refresh reruns every market from scratch, but a market whose input files
 # did not move since the last run can only produce the byte-identical result,
-# so its engine passes are bought work. This cache is PER MARKET and
-# ALL-OR-NOTHING: a market is either reused whole - its trades, its per-cell
-# summary rows, its day calendar and its already-written ratio file - or
-# recomputed whole. Nothing is spliced and no number is derived, so every
-# cached figure (account fields and the geometry counters included) is the
-# engine's own output for exactly these inputs. That is a weaker save than
-# the R-cut grid's tail splice (build_1m_rcut_report.py), and deliberately
-# so: the matrix's per-market rows carry whole-run counters and the engine's
-# own cash path, which a splice cannot reproduce without changing what the
-# engine reports - a design decision that has not been made. The frozen
-# markets (CC, KC, the delisted ETFs) hit this cache every day; every market
-# hits it on a run where no new data landed.
+# so its engine passes are bought work. The cache is PER MARKET, with three
+# outcomes for a market on any run:
+#
+#   cached  - its manifest is unchanged: reused whole (trades, geometry days,
+#             calendar, its already-written ratio file). Zero engine passes.
+#   spliced - its files only GREW and its cached calendar is a strict prefix
+#             of today's: each cell reruns only the tail, verified against
+#             the cache over the recomputed overlap (splice_cell - the R-cut
+#             grid's mechanics, per market). The ratio series is still
+#             recomputed in full: after the deque rewrite it costs ~3s per
+#             market, which is not worth a second splice implementation.
+#   full    - anything else, including ANY cell's splice disagreeing.
+#
+# Trades and per-day geometry counters are the cache currency; rows and
+# account fields are DERIVED from them identically in all three modes (see
+# the canonical derivation layer), so the modes cannot drift apart.
 #
 # Reuse requires BOTH keys to match:
 #   - the grid signature: every cell's name, dials and universe, plus the
@@ -312,8 +316,8 @@ COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 #     change is not detected - after one, run once with --no-reuse.
 #   - the market's file manifest: size:mtime of every file its inputs come
 #     from (its daily array xlsx, its bars/statistics parquet, its roll
-#     calendar, the market mapping, Binance zips). Any difference - growth,
-#     rewrite or deletion - recomputes the market; there is no partial credit.
+#     calendar, the market mapping, Binance zips). Unchanged = cached;
+#     grown-only = splice candidate; anything else = full.
 CACHE_PATH = HERE / "output" / "quickfix1m1dc_matrix_cache.json"
 
 
@@ -334,7 +338,8 @@ def grid_sig():
                     range_window=str(e.RANGE_WINDOW)),
         loader=dict(files_from=str(run_1m.FILES_FROM),
                     activation=str(run_1m.ACTIVATION_UTC),
-                    price_codec=run_1m.PRICE_CODEC))
+                    price_codec=run_1m.PRICE_CODEC),
+        cache_version=2)
     return hashlib.sha256(json.dumps(
         payload, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
@@ -417,6 +422,175 @@ def entry_reusable(ent, key, manifest):
             and (OUT_RATIO / f"{key}.json").exists())
 
 
+# --- the canonical derivation layer (2026-08-21, with the tail splice) ------
+#
+# Trades are the cache currency; everything else about a market's cell is
+# DERIVED from them, the same way for a fresh run, a cache hit and a splice -
+# one code path, so the three modes cannot drift apart. Two derived families:
+#
+#   * Account fields. The engine's own cash path compounds UNROUNDED net_r,
+#     which no splice can continue exactly, so the matrix replays the engine's
+#     cash rule (risk = cash * RISK_PCT at entry, booked at exit) over the
+#     STORED 4-dp net_r instead - Lode approved the cents-level differences
+#     against the engine's own figures when adopting the splice (2026-08-21).
+#     The trade list is per market and never overlaps, so list order (exit
+#     order) IS entry order and the replay is well-defined.
+#
+#   * The geometry counters. Whole-run totals cannot be spliced, so the
+#     engine now reports them per day (`geom_by_day`) and a market's row sums
+#     whatever days its spliced history is made of.
+GEOM_KEYS = ("zero_dist_entries", "refused_wide", "refused_tight",
+             "range_unjudged")
+ACCOUNT_FIELDS = ("risk_usd", "pnl_usd", "cash_after")
+# Same constants as the R-cut splice, same reasons: the overlap is the
+# recomputed stretch that must agree with the cache trade for trade, and the
+# prime days ahead of it rebuild the engine's small cross-day state (the
+# trailing window; one trading day under range_mode="trading_day").
+OVERLAP_DAYS = 5
+PRIME_DAYS = 5
+
+
+def plain_floats(trades, summary):
+    """Engine output as plain Python floats (bit-exact - the values do not
+    move) so every consumer rounds half-way cases decimally; see the fresh
+    path's comment for the 7.335 case that forced this."""
+    trades = [{k: float(v) if isinstance(v, float) else v
+               for k, v in t.items()} for t in trades]
+    summary = {k: float(v) if isinstance(v, float) else v
+               for k, v in summary.items()}
+    return trades, summary
+
+
+def apply_account(trades):
+    """Replay the engine's cash rule over the trade list; sets the three
+    account fields on every trade and returns final cash."""
+    e = run_1m.engine_1m
+    cash = e.STARTING_CAPITAL
+    for t in trades:
+        risk = cash * e.RISK_PCT / 100.0
+        pnl = t["net_r"] * risk
+        cash += pnl
+        t["risk_usd"] = round(risk, 2)
+        t["pnl_usd"] = round(pnl, 2)
+        t["cash_after"] = round(cash, 2)
+    return cash
+
+
+def market_row(key, trades, geom_days, note, tick, final_cash):
+    """The per-market summary row, derived - field for field the shape the
+    engine's summary + update() produced, so the matrix JSON keeps its
+    layout."""
+    e = run_1m.engine_1m
+    wins = sum(1 for t in trades if t["net_r"] > 0)
+    geom = {k: sum(d[k] for d in geom_days.values()) for k in GEOM_KEYS}
+    return dict(
+        trades=len(trades), wins=wins,
+        win_rate=round(100.0 * wins / len(trades), 1) if trades else None,
+        net_r_total=round(sum(t["net_r"] for t in trades), 2),
+        final_cash=round(final_cash, 2),
+        return_pct=round(100.0 * (final_cash / e.STARTING_CAPITAL - 1.0), 2),
+        zero_dist_entries=geom["zero_dist_entries"],
+        reasons={r: sum(1 for t in trades if t["reason"] == r)
+                 for r in ("stop", "no_confirm", "close1", "data_end")},
+        refused_wide=geom["refused_wide"],
+        refused_tight=geom["refused_tight"],
+        range_unjudged=geom["range_unjudged"],
+        market=key, note=note, tick=tick)
+
+
+def stamps_only_grew(old, new):
+    """R-cut's data_only_grew on a per-market manifest: every known file is
+    stamp-identical or larger; new files are allowed; a same-size rewrite or
+    a deletion refuses, because that is the only screen protecting days older
+    than the recomputed overlap."""
+    for f, stamp in old.items():
+        if f not in new:
+            return False
+        if new[f] == stamp:
+            continue
+        if int(new[f].split(":")[0]) > int(stamp.split(":")[0]):
+            continue
+        return False
+    return True
+
+
+def comparable(t):
+    return {k: v for k, v in t.items() if k not in ACCOUNT_FIELDS}
+
+
+ENTRY_KEYS = ("side", "contract", "entry_date", "entry_ts", "entry", "stop",
+              "rpu", "entry_first", "rpu_range_ratio", "market")
+
+
+def splice_cell(key, cached_trades, cached_geom, days, files, tick, dials,
+                cal, w0):
+    """One cell's tail splice: rerun from PRIME_DAYS before the write point,
+    verify the recomputed overlap against the cache, splice at the write
+    point. Returns (trades, geom_days) or None - and None ALWAYS means the
+    whole market is rebuilt in full; there is no partial credit.
+
+    `cal` is the new full calendar (dates), `w0` the index of the first new
+    day; the cached calendar is cal[:w0]. Two boundary rules beyond the
+    R-cut original, both because the OLD window's last day (cal[w0-1]) was
+    that run's data end: the engine took no entries and counted no geometry
+    there (`entries_allowed=False`) and force-closed open positions as
+    `data_end`, while under the grown window that same day is an ordinary
+    session. So that day is verified loosely (a cached `data_end` trade must
+    match a recomputed trade on its ENTRY fields only, and its geometry is
+    not compared) and the spliced result always takes the TAIL's version of
+    it, which is what a full fresh run would say.
+    """
+    w = max(0, w0 - OVERLAP_DAYS)
+    # Walk back past any cached trade spanning the write point - including
+    # the old window's forced data_end exits, whose exit_date is the old
+    # last day.
+    moved = True
+    while moved and w > 0:
+        moved = False
+        w_iso = str(cal[w])
+        for t in cached_trades:
+            if t["entry_date"] < w_iso <= t["exit_date"]:
+                w -= 1
+                moved = True
+                break
+    if w - PRIME_DAYS < 0 or w0 < 2:
+        return None
+    w_iso = str(cal[w])
+    strict_end = str(cal[w0 - 2])      # last cached day verified strictly
+    start_date = cal[w - PRIME_DAYS]
+    tail_days = [d for d in days if d.date >= start_date]
+    trades, summary = run_1m.engine_1m.run_market(
+        tail_days, files, tick, geom_by_day=True, **dials)
+    trades, summary = plain_floats(trades, summary)
+    tail_geom = summary.pop("geom_days")
+    for t in trades:
+        t["market"] = key
+    # Verify trades over [w_iso, strict_end].
+    old_ov = [t for t in cached_trades
+              if w_iso <= t["entry_date"] <= strict_end]
+    new_ov = [t for t in trades if w_iso <= t["entry_date"] <= strict_end]
+    if len(old_ov) != len(new_ov):
+        return None
+    for a, b in zip(old_ov, new_ov):
+        if a["reason"] == "data_end":
+            if any(a.get(k) != b.get(k) for k in ENTRY_KEYS):
+                return None
+        elif comparable(a) != comparable(b):
+            return None
+    # Verify geometry per day over the same window.
+    d = w
+    while d < w0 - 1:
+        iso = str(cal[d])
+        if cached_geom.get(iso) != tail_geom.get(iso):
+            return None
+        d += 1
+    spliced = ([t for t in cached_trades if t["entry_date"] < w_iso]
+               + [t for t in trades if t["entry_date"] >= w_iso])
+    geom = {d: c for d, c in cached_geom.items() if d < w_iso}
+    geom.update({d: c for d, c in tail_geom.items() if d >= w_iso})
+    return spliced, geom
+
+
 def entry_order_metrics(trades):
     """Longest losing streak and max cumulative-R drawdown, ENTRY order."""
     seq = sorted(trades, key=lambda t: t["entry_ts"])
@@ -491,7 +665,7 @@ def main():
     # per market and totalled at the end, so the next time a step's cost
     # drifts from its documentation the run itself says so.
     tot = {"load": 0.0, "engine": 0.0, "ratio": 0.0}
-    engine_passes = ratio_passes = cached_markets = 0
+    engine_passes = ratio_passes = cached_markets = spliced_markets = 0
     t_run = time.perf_counter()
     for key in keys:
         t0 = time.perf_counter()
@@ -515,12 +689,15 @@ def main():
                 if markets is not None and key not in markets:
                     continue
                 cell = ent["cells"][name]
+                final = apply_account(cell["trades"])
+                row = market_row(key, cell["trades"], cell["geom_days"],
+                                 ent["note"], ent["tick"], final)
                 results[name]["trades"].extend(cell["trades"])
-                results[name]["rows"].append(cell["row"])
+                results[name]["rows"].append(row)
                 ran += 1
                 if name == BASELINE_NAME:
-                    base_line = (f"{cell['row']['trades']}t "
-                                 f"{cell['row']['net_r_total']}R")
+                    base_line = (f"{row['trades']}t "
+                                 f"{row['net_r_total']}R")
             cached_markets += 1
             print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells"
                   f"  |  cached ({time.perf_counter() - t0:.1f}s)",
@@ -555,40 +732,77 @@ def main():
         ran = 0
         base_line = "-"
         ent_cells = {}
+        did_splice = False
         t0 = time.perf_counter()
-        for name, dials, markets, _props in VARIANTS:
+        # THE TAIL SPLICE, tried first: when the market's files only GREW
+        # and its cached calendar is a strict prefix of today's, each cell
+        # reruns only the tail (see splice_cell). Any cell's disagreement
+        # rebuilds the WHOLE market in full - one market, one mode.
+        old = cache_markets.get(key) if reuse else None
+        if (manifest is not None and old and not old.get("excluded")
+                and set(old.get("cells", {})) == cell_names_for(key)
+                and stamps_only_grew(old["manifest"], manifest)):
+            cached_cal = old["calendar"]
+            cal = [d.date for d in days]
+            cal_iso = [str(d) for d in cal]
+            if (len(cal_iso) > len(cached_cal)
+                    and cal_iso[:len(cached_cal)] == cached_cal):
+                w0 = len(cached_cal)
+                cells = {}
+                for name, dials, markets, _props in VARIANTS:
+                    if markets is not None and key not in markets:
+                        continue
+                    c = old["cells"][name]
+                    engine_passes += 1
+                    out = splice_cell(key, c["trades"], c["geom_days"],
+                                      days, files, tick, dials, cal, w0)
+                    if out is None:
+                        print(f"{key}: splice disagreed on {name} - "
+                              f"full rebuild", flush=True)
+                        cells = None
+                        break
+                    cells[name] = out
+                if cells is not None:
+                    for name, (trades, geom) in cells.items():
+                        ent_cells[name] = dict(trades=trades,
+                                               geom_days=geom)
+                    did_splice = True
+                    spliced_markets += 1
+        if not did_splice:
+            for name, dials, markets, _props in VARIANTS:
+                if markets is not None and key not in markets:
+                    continue
+                trades, summary = run_1m.engine_1m.run_market(
+                    days, files, tick, geom_by_day=True, **dials)
+                engine_passes += 1
+                trades, summary = plain_floats(trades, summary)
+                geom_days = summary.pop("geom_days")
+                # The per-day counters are what a splice will later trust,
+                # so a fresh run proves them against the engine's own
+                # totals - loudly, not with a warning.
+                for k in GEOM_KEYS:
+                    if summary[k] != sum(d[k] for d in geom_days.values()):
+                        raise RuntimeError(
+                            f"geom_by_day disagrees with the run totals "
+                            f"on {key}/{name}/{k}")
+                for t in trades:
+                    t["market"] = key
+                ent_cells[name] = dict(trades=trades, geom_days=geom_days)
+        # Rows and results are DERIVED from the cells the same way whether
+        # they were computed, spliced or (below) cached - see the canonical
+        # derivation layer.
+        for name, _dials, markets, _props in VARIANTS:
             if markets is not None and key not in markets:
                 continue
-            trades, summary = run_1m.engine_1m.run_market(
-                days, files, tick, **dials)
-            engine_passes += 1
-            # Normalise to plain Python floats (bit-exact - the values do
-            # not move) so a fresh market and a cached one feed the report
-            # the same TYPES. The engine's numbers arrive as numpy floats,
-            # and numpy rounds a half-way case by scaling where Python
-            # rounds it decimally: variant 8's max drawdown of 7.335 read
-            # 7.34 fresh and 7.33 from cache (2026-08-21) with every trade
-            # bit-identical. Python's is the decimally-correct rounding,
-            # so plain floats are the normal form.
-            trades = [{k: float(v) if isinstance(v, float) else v
-                       for k, v in t.items()} for t in trades]
-            summary = {k: float(v) if isinstance(v, float) else v
-                       for k, v in summary.items()}
-            for t in trades:
-                t["market"] = key
-            summary.update(market=key, note=note, tick=tick)
-            results[name]["trades"].extend(trades)
-            results[name]["rows"].append(summary)
-            ent_cells[name] = dict(trades=trades, row=summary)
+            cell = ent_cells[name]
+            final = apply_account(cell["trades"])
+            row = market_row(key, cell["trades"], cell["geom_days"],
+                             note, tick, final)
+            results[name]["trades"].extend(cell["trades"])
+            results[name]["rows"].append(row)
             ran += 1
             if name == BASELINE_NAME:
-                base_line = (f"{summary['trades']}t "
-                             f"{summary['net_r_total']}R")
-        # The geometry-ratio pane's data: three series, one per stop
-        # anchor, from the bars already loaded. `both_sides` must stay 0 -
-        # the pane reports the wider of two simultaneously armed ladders,
-        # and if that ever starts happening the choice should be made on
-        # purpose rather than discovered later.
+                base_line = (f"{row['trades']}t {row['net_r_total']}R")
         t_engine = time.perf_counter() - t0
         tot["engine"] += t_engine
         OUT_RATIO.mkdir(parents=True, exist_ok=True)
@@ -610,12 +824,13 @@ def main():
             cache_markets[key] = dict(
                 manifest=manifest, excluded=None,
                 calendar=[d.date.isoformat() for d in days],
-                cells=ent_cells)
+                note=note, tick=tick, cells=ent_cells)
             save_matrix_cache(sig, cache_markets)
         n = sum(len(v[side]["main"]) for v in series.values()
                 for side in ("bull", "bear"))
         print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells"
               f"  |  ratio {n} pts"
+              f"  |  {'spliced' if did_splice else 'full'}"
               f"  |  load {t_load:.1f}s engine {t_engine:.1f}s"
               f" ratio {t_ratio:.1f}s", flush=True)
 
@@ -624,7 +839,7 @@ def main():
     print(f"\nTIMING: load {tot['load']:.0f}s"
           f"  |  engine {tot['engine']:.0f}s ({engine_passes} passes)"
           f"  |  ratio {tot['ratio']:.0f}s ({ratio_passes} passes)"
-          f"  |  cached {cached_markets} markets"
+          f"  |  cached {cached_markets} / spliced {spliced_markets} markets"
           f"  |  other {other:.0f}s  |  market loop {t_all:.0f}s", flush=True)
 
     calendar = run_1m.calendar_union(sessions)

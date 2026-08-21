@@ -374,7 +374,7 @@ def splice_point(tcache, calendar, first_new):
     return None
 
 
-def verify_overlap(cached, fresh, w_day, last_cached_day):
+def verify_overlap(cached, fresh, w_day, last_cached_day, skip_days=None):
     """Compare a recomputed cell against the cache on the days they share.
 
     THIS IS THE SAFETY ARGUMENT for incremental rebuilds. data_only_grew() only
@@ -402,11 +402,21 @@ def verify_overlap(cached, fresh, w_day, last_cached_day):
     cannot exist (the flag blocked them), and its forced data_end exits were
     already excluded above. Same boundary rule as run_1m_matrix.splice_cell.
 
+    `skip_days` maps market -> that market's OWN last cached day, for the
+    markets that gained days without moving the union calendar (the
+    per-market splice below): the same flag flip happens per market as at
+    the union's end, so a fresh entry on a market's own boundary day is
+    tail-owned, not a disagreement. Cached entries there cannot exist -
+    the flag blocked them.
+
     Returns (ok, detail).
     """
+    skip = skip_days or {}
+
     def window(trades):
         return {trade_key(t): t for t in trades
-                if w_day <= t["entry_date"] < last_cached_day}
+                if w_day <= t["entry_date"] < last_cached_day
+                and t["entry_date"] != skip.get(t.get("market"))}
 
     old, new = window(cached), window(fresh)
     if old.keys() != new.keys():
@@ -614,15 +624,76 @@ def measure(trades, grid):
     )
 
 
-def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print):
+def market_gains(old_md, new_md, changed, calendar, log):
+    """The per-market view of a growth that never moved the UNION calendar.
+
+    The union hides per-market tails: a second refresh in one day fills the
+    newest date in for the markets that lacked it, every file grows, and the
+    union gains nothing - which used to read as "the bars moved, rebuild"
+    and cost a full grid (2026-08-21, the Hybrid rebuild). With each
+    market's OWN cached calendar this is decidable: every market must still
+    be a prefix-extension of its cached self, and the markets that gained
+    days name both the cut (the earliest union index of any market's first
+    new day) and the boundary days whose entries_allowed flag flipped.
+
+    Returns (first_new, skip_days) or None meaning full rebuild:
+      first_new - union-calendar index the splice treats as the new tail
+      skip_days - {market: its own last cached day} for the gainers
+    """
+    if not old_md:
+        log("incremental: no new market days, but the bars moved and this "
+            "cache predates per-market calendars -- rebuilding; they are "
+            "recorded from this run on.")
+        return None
+    first_new, skip_days = None, {}
+    for key, old_days in old_md.items():
+        new_days = new_md.get(key)
+        if new_days is None:
+            log(f"incremental: {key} vanished from the loadable markets -- "
+                f"rebuilding.")
+            return None
+        if new_days[:len(old_days)] != old_days:
+            log(f"incremental: {key}'s own calendar is not a prefix of its "
+                f"cached one -- history was re-stitched, rebuilding.")
+            return None
+        if len(new_days) == len(old_days):
+            if key in changed:
+                log(f"incremental: {key}'s files moved but it gained no "
+                    f"market day, so the change is INSIDE its history -- "
+                    f"rebuilding.")
+                return None
+            continue
+        gained = new_days[len(old_days)]
+        idx = day_index(calendar, gained)
+        if idx >= len(calendar) or calendar[idx] != gained:
+            # The union is built from these same day lists, so a gained day
+            # missing from it means the caller handed inconsistent inputs.
+            return None
+        if first_new is None or idx < first_new:
+            first_new = idx
+        skip_days[key] = old_days[-1]
+    if first_new is None:
+        log("incremental: no new market days anywhere, but the bars moved -- "
+            "rebuilding rather than guessing what changed.")
+        return None
+    log(f"incremental: the union calendar is unchanged but "
+        f"{len(skip_days)} market(s) gained days "
+        f"({', '.join(sorted(skip_days))}); cutting at the earliest gain.")
+    return first_new, skip_days
+
+
+def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print,
+                 old_market_days=None, new_market_days=None,
+                 changed_markets=None):
     """Recompute the tail of every cached cell and splice it on. None = rebuild.
 
     Everything that could make this unsound is checked and refused rather than
     assumed, in the order that costs least: the cached window must be a PREFIX
     of the new one (anything else is a re-stitch, not a top-up), there must be
-    new days, and a straddle-free cut must exist. Only then does it spend engine
-    passes, and each one is verified against the cache before its result is
-    used.
+    new days - on the union calendar, or failing that per market (see
+    market_gains) - and a straddle-free cut must exist. Only then does it
+    spend engine passes, and each one is verified against the cache before its
+    result is used.
     """
     if not tcache or not old_calendar:
         return None
@@ -631,10 +702,13 @@ def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print):
             "-- history was re-stitched, so every cell is rebuilt.")
         return None
     first_new = len(old_calendar)
+    skip_days = {}
     if first_new >= len(calendar):
-        log("incremental: no new market days, but the bars moved -- rebuilding "
-            "rather than guessing what changed.")
-        return None
+        gains = market_gains(old_market_days, new_market_days or {},
+                             changed_markets or set(), calendar, log)
+        if gains is None:
+            return None
+        first_new, skip_days = gains
 
     w = splice_point(tcache, calendar, first_new)
     if w is None:
@@ -659,7 +733,8 @@ def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print):
             fresh_cache[key] = run_cell(lo, hi, None)
             continue
         tail = run_cell(lo, hi, prime_day)
-        ok, detail = verify_overlap(cached, tail, w_day, last_cached)
+        ok, detail = verify_overlap(cached, tail, w_day, last_cached,
+                                    skip_days)
         if not ok:
             log(f"incremental ABANDONED at {key}: {detail}. The cached trades "
                 f"do not reproduce from the current bars, so the whole grid is "
@@ -741,10 +816,14 @@ def main():
     manifest = bars_manifest()
     fingerprint = manifest_digest(manifest)
     tcache, calendar = {}, []
+    # The per-market calendars the cache carried, kept so an exact-hit run
+    # (which never loads a market) writes them back rather than losing them.
+    cached_market_days = None
     # Set when the data moved but looks appended: the cells are stale, yet their
     # trades are still the right answer for every day before the new ones, so
     # the tail is recomputed instead of the whole grid. Carries the cache to
-    # splice onto and the calendar it was computed over.
+    # splice onto, the calendar it was computed over, its per-market
+    # calendars, and which markets' files moved.
     pending = None
     if reuse and v["trades"].exists():
         try:
@@ -758,11 +837,21 @@ def main():
                 # window than they were computed on. A cache written before
                 # it existed has none, and markets() below rebuilds it.
                 calendar = old.get("calendar", [])
+                cached_market_days = old.get("market_days")
                 print(f"reusing trades for {len(tcache)} cells from "
                       f"{v['trades'].name}", flush=True)
             elif (incremental and old.get("trades") and old.get("calendar")
                   and data_only_grew(old.get("bars"), manifest)):
-                pending = (old["trades"], old["calendar"])
+                # The manifest keys are "<mktdir>/<file>" and a market dir is
+                # "<array_dir>_<KEY>", so the moved files name the moved
+                # markets directly.
+                changed = {f.split("/", 1)[0].rsplit("_", 1)[-1]
+                           for f, stamp in old["bars"].items()
+                           if manifest.get(f) != stamp}
+                changed |= {f.split("/", 1)[0].rsplit("_", 1)[-1]
+                            for f in manifest if f not in old["bars"]}
+                pending = (old["trades"], old["calendar"],
+                           old.get("market_days"), changed)
                 print(f"the 1-minute data has grown since this cache was built "
                       f"({old.get('data')} -> {fingerprint}); every file it was "
                       f"built on is still there and no smaller, so the tail is "
@@ -837,12 +926,16 @@ def main():
     # what the equity axis below is drawn on. Any doubt returns None and the
     # grid falls through to the full rebuild it would have done anyway.
     if pending is not None:
-        old_trades, old_calendar = pending
+        old_trades, old_calendar, old_md, changed = pending
         calendar = [d.isoformat() for d in run_1m.calendar_union(
             [[day.date for day in days]
              for _key, (days, _f, _t, _n) in markets()])]
+        new_md = {key: [day.date.isoformat() for day in days]
+                  for key, (days, _f, _t, _n) in markets()}
         spliced = rebuild_tail(old_trades, old_calendar, calendar, combos, run,
-                               log=lambda m: print(m, flush=True))
+                               log=lambda m: print(m, flush=True),
+                               old_market_days=old_md, new_market_days=new_md,
+                               changed_markets=changed)
         if spliced is None:
             calendar = []            # rebuilt below, from the same markets()
         else:
@@ -892,9 +985,19 @@ def main():
         # digest, kept because the page stamps it and an exact match is still
         # the fast path. A cache written before `bars` existed simply cannot
         # take the incremental path and rebuilds once.
+        # Per-market calendars ride along so a growth that never moves the
+        # UNION calendar (a second refresh filling the newest day in for the
+        # markets that lacked it) is still spliceable - see market_gains.
+        # Written from the loaded markets when this run loaded any, carried
+        # forward otherwise; an old cache gains them on its first splice or
+        # rebuild, no migration needed.
+        market_days = ({key: [day.date.isoformat() for day in days]
+                        for key, (days, _f, _t, _n) in loaded}
+                       if loaded else cached_market_days)
         v["trades"].write_text(json.dumps(dict(dials=dials, data=fingerprint,
                                                bars=manifest,
                                                calendar=calendar,
+                                               market_days=market_days,
                                                trades=tcache)),
                                encoding="utf-8")
 

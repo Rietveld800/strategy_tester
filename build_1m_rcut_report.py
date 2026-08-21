@@ -390,17 +390,44 @@ def verify_overlap(cached, fresh, w_day, last_cached_day):
     ending, and the fresh run -- which can see the next day -- is right to close
     them somewhere else. splice_point() guarantees such a trade is never kept.
 
+    THE OLD WINDOW'S LAST DAY IS NOT COMPARED AT ALL (2026-08-21). Under the
+    cached run that day WAS the calendar's end, so the loaders flagged it
+    entries_allowed=False and the engine could not trade it; under the grown
+    calendar the same date is an ordinary session. A fresh entry there is what
+    a full rebuild would also produce, not a disagreement -- and it is exactly
+    what abandoned the 4th/5th grid into a 93-minute rebuild the day the roll
+    calendars extended 08-19 -> 08-20 with not one bar changed. The spliced
+    result takes the TAIL's version of that day either way (the cut is at or
+    before it), so nothing is lost by not comparing it; entries on it CACHED
+    cannot exist (the flag blocked them), and its forced data_end exits were
+    already excluded above. Same boundary rule as run_1m_matrix.splice_cell.
+
     Returns (ok, detail).
     """
     def window(trades):
         return {trade_key(t): t for t in trades
-                if w_day <= t["entry_date"] <= last_cached_day}
+                if w_day <= t["entry_date"] < last_cached_day}
 
     old, new = window(cached), window(fresh)
     if old.keys() != new.keys():
-        missing = len(old.keys() - new.keys())
-        extra = len(new.keys() - old.keys())
-        return False, f"{missing} cached trade(s) gone, {extra} new on shared days"
+        # Name the trades, not just the counts: an abandon message that only
+        # says "1 new on shared days" leaves WHICH market and day changed to
+        # an archaeology session (2026-08-21, the 0.25|0.30 abandon - the
+        # answer took the sibling cache's manifest and a git record to dig
+        # out, and it was sitting right here in the key).
+        def named(keys):
+            return ", ".join(f"{m} {side} {ts}"
+                             for m, ts, side in sorted(keys)[:3])
+        gone = old.keys() - new.keys()
+        extra = new.keys() - old.keys()
+        parts = []
+        if gone:
+            parts.append(f"{len(gone)} cached trade(s) gone"
+                         f" ({named(gone)})")
+        if extra:
+            parts.append(f"{len(extra)} new on shared days"
+                         f" ({named(extra)})")
+        return False, "; ".join(parts)
     for key, was in old.items():
         if was.get("reason") == "data_end":
             continue                        # artefact of the old window's end

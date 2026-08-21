@@ -518,6 +518,24 @@ def comparable(t):
     return {k: v for k, v in t.items() if k not in ACCOUNT_FIELDS}
 
 
+def splice_refusal(old_manifest, manifest):
+    """Why stamps_only_grew said no, named for the log: a full rebuild
+    should always say WHICH file refused the splice, or the pattern (a
+    loader rewriting instead of appending, say) stays invisible for
+    weeks."""
+    for f, stamp in old_manifest.items():
+        if f not in manifest:
+            return f"file gone: {f}"
+        if manifest[f] == stamp:
+            continue
+        old_size = int(stamp.split(":")[0])
+        new_size = int(manifest[f].split(":")[0])
+        if new_size <= old_size:
+            return (f"rewritten, not grown: {f} "
+                    f"({old_size} -> {new_size} bytes)")
+    return None
+
+
 ENTRY_KEYS = ("side", "contract", "entry_date", "entry_ts", "entry", "stop",
               "rpu", "entry_first", "rpu_range_ratio", "market")
 
@@ -739,14 +757,18 @@ def main():
         # reruns only the tail (see splice_cell). Any cell's disagreement
         # rebuilds the WHOLE market in full - one market, one mode.
         old = cache_markets.get(key) if reuse else None
-        if (manifest is not None and old and not old.get("excluded")
-                and set(old.get("cells", {})) == cell_names_for(key)
-                and stamps_only_grew(old["manifest"], manifest)):
+        can_try = (manifest is not None and old and not old.get("excluded")
+                   and set(old.get("cells", {})) == cell_names_for(key))
+        if can_try and stamps_only_grew(old["manifest"], manifest):
             cached_cal = old["calendar"]
             cal = [d.date for d in days]
             cal_iso = [str(d) for d in cal]
-            if (len(cal_iso) > len(cached_cal)
+            if not (len(cal_iso) > len(cached_cal)
                     and cal_iso[:len(cached_cal)] == cached_cal):
+                print(f"{key}: no splice - calendar not a strict prefix "
+                      f"(cached {len(cached_cal)} days, new {len(cal_iso)})"
+                      f" - full rebuild", flush=True)
+            else:
                 w0 = len(cached_cal)
                 cells = {}
                 for name, dials, markets, _props in VARIANTS:
@@ -768,6 +790,10 @@ def main():
                                                geom_days=geom)
                     did_splice = True
                     spliced_markets += 1
+        elif can_try:
+            print(f"{key}: no splice - "
+                  f"{splice_refusal(old['manifest'], manifest)}"
+                  f" - full rebuild", flush=True)
         if not did_splice:
             for name, dials, markets, _props in VARIANTS:
                 if markets is not None and key not in markets:

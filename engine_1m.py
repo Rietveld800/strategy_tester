@@ -466,12 +466,31 @@ def ratio_series(days, files, tick, stop_mode="ladder",
     # line against a WEEK of range (5.24x its session) while GC got 1.04x.
     # Cleared at a splice for the same reason as `win`.
     recent = deque()
+    # Sliding-window extremes as monotonic deques beside each window, so
+    # the range is a front read instead of a full max()/min() sweep at
+    # every minute - that sweep was ~55% of a whole matrix refresh. Each
+    # holds (ts, value) with ts increasing front to back, highs decreasing
+    # / lows increasing, so the front IS the window's extreme; pruning by
+    # the same cutoff as the window keeps them in lockstep (the cutoff is
+    # monotonically non-decreasing, see _window_cutoff). Values are the
+    # same floats the sweep produced - no arithmetic changes.
+    win_hi, win_lo = deque(), deque()
+    recent_hi, recent_lo = deque(), deque()
     win_contract = None
     win_prev_date = None
+    # `f_live` advances monotonically because bars are chronological across
+    # the whole series and `files` is sorted by activation_ts, so a single
+    # index pointer replaces the per-bar scan _active_file does.
+    fi = -1
+    nfiles = len(files)
     for day in days:
         if day.contract != win_contract:
             win.clear()
             recent.clear()
+            win_hi.clear()
+            win_lo.clear()
+            recent_hi.clear()
+            recent_lo.clear()
             win_contract = day.contract
             win_prev_date = None
         gap_days = (day.date - win_prev_date).days if win_prev_date else 1
@@ -490,22 +509,32 @@ def ratio_series(days, files, tick, stop_mode="ladder",
             cutoff = _window_cutoff(bts, range_mode, gap_days)
             while win and win[0][0] < cutoff:
                 win.popleft()
+            while win_hi and win_hi[0][0] < cutoff:
+                win_hi.popleft()
+            while win_lo and win_lo[0][0] < cutoff:
+                win_lo.popleft()
             td_cutoff = _window_cutoff(bts, "trading_day", gap_days)
             while recent and recent[0][0] < td_cutoff:
                 recent.popleft()
+            while recent_hi and recent_hi[0][0] < td_cutoff:
+                recent_hi.popleft()
+            while recent_lo and recent_lo[0][0] < td_cutoff:
+                recent_lo.popleft()
             run_high = h if run_high is None else max(run_high, h)
             run_low = l if run_low is None else min(run_low, l)
             rng = None
             if len(win) >= MIN_RANGE_BARS:
-                span = max(x[1] for x in win) - min(x[2] for x in win)
+                span = win_hi[0][1] - win_lo[0][1]
                 if span > 0:
                     rng = span
             rng_fb = None
             if len(recent) >= MIN_RANGE_BARS:
-                span = max(x[1] for x in recent) - min(x[2] for x in recent)
+                span = recent_hi[0][1] - recent_lo[0][1]
                 if span > 0:
                     rng_fb = span
-            f_live = _active_file(files, bts)
+            while fi + 1 < nfiles and files[fi + 1].activation_ts <= bts:
+                fi += 1
+            f_live = files[fi] if fi >= 0 else None
             stamp = int(bts.timestamp())
             for name, side in SIDES:
                 r2v = None
@@ -532,6 +561,18 @@ def ratio_series(days, files, tick, stop_mode="ladder",
                         last[name][line] = val
             win.append((bts, h, l))
             recent.append((bts, h, l))
+            while win_hi and win_hi[-1][1] <= h:
+                win_hi.pop()
+            win_hi.append((bts, h))
+            while win_lo and win_lo[-1][1] >= l:
+                win_lo.pop()
+            win_lo.append((bts, l))
+            while recent_hi and recent_hi[-1][1] <= h:
+                recent_hi.pop()
+            recent_hi.append((bts, h))
+            while recent_lo and recent_lo[-1][1] >= l:
+                recent_lo.pop()
+            recent_lo.append((bts, l))
     return dict(stop_mode=stop_mode, **out)
 
 

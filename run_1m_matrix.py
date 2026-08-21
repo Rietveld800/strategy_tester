@@ -65,12 +65,20 @@ is partly just the deepest hole that cell was allowed to dig. Output:
 output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
+`--no-reuse` ignores the per-market cache and recomputes everything (see
+the cache block below VARIANTS: a market whose input files have not moved
+since the last run is reused whole from
+output/quickfix1m1dc_matrix_cache.json - trades, rows, calendar and its
+ratio file - and any file change recomputes the whole market; nothing is
+spliced). `--page` redraws the HTML with no backtest.
 """
 
 import colorsys
+import hashlib
 import json
 import re
 import sys
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -280,6 +288,134 @@ VARIANTS = build_grid()
 BASELINE_NAME = "variant 2"
 COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 
+# --- the per-market cache (2026-08-21) --------------------------------------
+#
+# A refresh reruns every market from scratch, but a market whose input files
+# did not move since the last run can only produce the byte-identical result,
+# so its engine passes are bought work. This cache is PER MARKET and
+# ALL-OR-NOTHING: a market is either reused whole - its trades, its per-cell
+# summary rows, its day calendar and its already-written ratio file - or
+# recomputed whole. Nothing is spliced and no number is derived, so every
+# cached figure (account fields and the geometry counters included) is the
+# engine's own output for exactly these inputs. That is a weaker save than
+# the R-cut grid's tail splice (build_1m_rcut_report.py), and deliberately
+# so: the matrix's per-market rows carry whole-run counters and the engine's
+# own cash path, which a splice cannot reproduce without changing what the
+# engine reports - a design decision that has not been made. The frozen
+# markets (CC, KC, the delisted ETFs) hit this cache every day; every market
+# hits it on a run where no new data landed.
+#
+# Reuse requires BOTH keys to match:
+#   - the grid signature: every cell's name, dials and universe, plus the
+#     engine constants and loader settings a result depends on. Any change
+#     discards the whole cache. An engine CODE change without a constant
+#     change is not detected - after one, run once with --no-reuse.
+#   - the market's file manifest: size:mtime of every file its inputs come
+#     from (its daily array xlsx, its bars/statistics parquet, its roll
+#     calendar, the market mapping, Binance zips). Any difference - growth,
+#     rewrite or deletion - recomputes the market; there is no partial credit.
+CACHE_PATH = HERE / "output" / "quickfix1m1dc_matrix_cache.json"
+
+
+def grid_sig():
+    """Signature of everything besides the input DATA that decides a cell's
+    output. Stable across runs, moves when the grid or the engine dials move."""
+    e = run_1m.engine_1m
+    payload = dict(
+        variants=[[name, dials,
+                   sorted(markets) if markets is not None else None]
+                  for name, dials, markets, _props in VARIANTS],
+        engine=dict(risk_pct=e.RISK_PCT, start_capital=e.STARTING_CAPITAL,
+                    entry_slip=e.ENTRY_SLIP_TICKS,
+                    stop_slip=e.SLIP_STOP_TICKS,
+                    sched_slip=e.SLIP_SCHEDULED_TICKS,
+                    min_ladder=e.MIN_LADDER, min_reversals=e.MIN_REVERSALS,
+                    min_range_bars=e.MIN_RANGE_BARS,
+                    range_window=str(e.RANGE_WINDOW)),
+        loader=dict(files_from=str(run_1m.FILES_FROM),
+                    activation=str(run_1m.ACTIVATION_UTC),
+                    price_codec=run_1m.PRICE_CODEC))
+    return hashlib.sha256(json.dumps(
+        payload, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+def market_manifest(key):
+    """size:mtime_ns stamps of every file this market's inputs are read from.
+
+    A superset is fine (an unused file's stamp only ever forces a recompute);
+    a MISSING source is not, so this mirrors each loader's own paths:
+    load_levels_and_socbars' daily array glob, futures_days' roll calendar +
+    bars + statistics parquet (rglob covers both), etf_days' bars file,
+    binance_days_and_match's kline zips, and the market mapping that names
+    the directories.
+    """
+    m = run_1m.market_info(key)
+    paths = sorted((run_1m.ARRAY_ROOT / m["array_dir"]).glob(
+        "*/daily/*_array.xlsx"))
+    mdir = run_1m.market_dir(m)
+    if mdir.is_dir():
+        paths += sorted(mdir.rglob("*.parquet"))
+    extras = [run_1m.META / f"roll_calendar_{key}.json",
+              run_1m.DC / "config" / "market_mapping.json"]
+    if key == "GC":
+        extras.append(run_1m.META / "contract_calendar_GC.json")
+    if key in run_1m.BINANCE:
+        sym = run_1m.BINANCE[key][1]
+        extras += sorted((run_1m.DC / "data" / "_binance").glob(
+            f"{sym}-1m-*.zip"))
+    root = run_1m.DC.parent
+    out = {}
+    for p in paths + [x for x in extras if x.exists()]:
+        st = p.stat()
+        try:
+            rel = p.relative_to(root).as_posix()
+        except ValueError:
+            rel = str(p)
+        out[rel] = f"{st.st_size}:{st.st_mtime_ns}"
+    return out
+
+
+def cell_names_for(key):
+    """The cells this market belongs to under the current grid."""
+    return {name for name, _d, markets, _p in VARIANTS
+            if markets is None or key in markets}
+
+
+def load_matrix_cache(sig):
+    """The cache's market entries, or {} when absent, unreadable, or built
+    under a different grid signature - all three mean the same thing: no
+    entry is reusable."""
+    try:
+        raw = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if raw.get("sig") != sig:
+        print(f"cache: grid signature changed, discarding {CACHE_PATH.name}",
+              flush=True)
+        return {}
+    return raw.get("markets", {})
+
+
+def save_matrix_cache(sig, markets):
+    CACHE_PATH.parent.mkdir(exist_ok=True)
+    CACHE_PATH.write_text(json.dumps(
+        dict(sig=sig, markets=markets), separators=(",", ":")) + "\n",
+        encoding="utf-8")
+
+
+def entry_reusable(ent, key, manifest):
+    """True when a cached market entry answers for today's inputs whole:
+    same files, and (for a market that ran) every current cell present plus
+    its ratio file still on disk - the ratio series ships from the same run
+    as the trades it sits under, so a missing file voids the entry rather
+    than being rebuilt from a separate load."""
+    if ent is None or ent.get("manifest") != manifest:
+        return False
+    if ent.get("excluded"):
+        return True
+    return (set(ent.get("cells", {})) == cell_names_for(key)
+            and (OUT_RATIO / f"{key}.json").exists())
+
 
 def entry_order_metrics(trades):
     """Longest losing streak and max cumulative-R drawdown, ENTRY order."""
@@ -339,11 +475,57 @@ def close_dd_pct(curve, start_capital=100_000.0):
 
 
 def main():
-    keys = sys.argv[1:] or (run_1m.ELIGIBLE_FUTURES + run_1m.ETFS
-                            + list(run_1m.BINANCE))
+    reuse = "--no-reuse" not in sys.argv[1:]
+    keys = [a for a in sys.argv[1:] if not a.startswith("--")] or (
+        run_1m.ELIGIBLE_FUTURES + run_1m.ETFS + list(run_1m.BINANCE))
     results = {name: {"trades": [], "rows": []} for name, _, _, _ in VARIANTS}
     skipped, sessions = [], []
+    sig = grid_sig()
+    # Old cache entries ride along with whatever this run recomputes: an
+    # entry only ever answers for its own manifest, so keeping the rest is
+    # what lets a subset run (`run_1m_matrix.py GC`) refresh one market's
+    # entry without voiding the others.
+    cache_markets = load_matrix_cache(sig) if reuse else {}
+    # Phase timers: where a matrix run's wall clock goes (load = market
+    # data, engine = the cell passes, ratio = the pane series). Printed
+    # per market and totalled at the end, so the next time a step's cost
+    # drifts from its documentation the run itself says so.
+    tot = {"load": 0.0, "engine": 0.0, "ratio": 0.0}
+    engine_passes = ratio_passes = cached_markets = 0
+    t_run = time.perf_counter()
     for key in keys:
+        t0 = time.perf_counter()
+        try:
+            manifest = market_manifest(key)
+        except Exception:
+            # An unknown or unmapped key; market_inputs below reports it
+            # the way it always has.
+            manifest = None
+        if reuse and entry_reusable(cache_markets.get(key), key, manifest):
+            ent = cache_markets[key]
+            if ent.get("excluded"):
+                skipped.append(ent["excluded"])
+                print(f"{key}: EXCLUDED (cached) - "
+                      f"{ent['excluded']['reason']}", flush=True)
+                continue
+            sessions.append([date.fromisoformat(x) for x in ent["calendar"]])
+            ran = 0
+            base_line = "-"
+            for name, _dials, markets, _props in VARIANTS:
+                if markets is not None and key not in markets:
+                    continue
+                cell = ent["cells"][name]
+                results[name]["trades"].extend(cell["trades"])
+                results[name]["rows"].append(cell["row"])
+                ran += 1
+                if name == BASELINE_NAME:
+                    base_line = (f"{cell['row']['trades']}t "
+                                 f"{cell['row']['net_r_total']}R")
+            cached_markets += 1
+            print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells"
+                  f"  |  cached ({time.perf_counter() - t0:.1f}s)",
+                  flush=True)
+            continue
         try:
             inputs, excluded = run_1m.market_inputs(key)
         except Exception as exc:
@@ -354,8 +536,14 @@ def main():
         if inputs is None:
             skipped.append(excluded)
             print(f"{key}: EXCLUDED - {excluded['reason']}", flush=True)
+            if manifest is not None:
+                cache_markets[key] = dict(manifest=manifest,
+                                          excluded=excluded)
+                save_matrix_cache(sig, cache_markets)
             continue
         days, files, tick, note = inputs
+        t_load = time.perf_counter() - t0
+        tot["load"] += t_load
         # Every market that loads contributes its trading dates to the
         # market-day calendar the curves are drawn on, whatever any cell
         # made of it - including the nine outside the filtered universe,
@@ -366,16 +554,32 @@ def main():
         # per-market figures are in the JSON for every cell anyway.
         ran = 0
         base_line = "-"
+        ent_cells = {}
+        t0 = time.perf_counter()
         for name, dials, markets, _props in VARIANTS:
             if markets is not None and key not in markets:
                 continue
             trades, summary = run_1m.engine_1m.run_market(
                 days, files, tick, **dials)
+            engine_passes += 1
+            # Normalise to plain Python floats (bit-exact - the values do
+            # not move) so a fresh market and a cached one feed the report
+            # the same TYPES. The engine's numbers arrive as numpy floats,
+            # and numpy rounds a half-way case by scaling where Python
+            # rounds it decimally: variant 8's max drawdown of 7.335 read
+            # 7.34 fresh and 7.33 from cache (2026-08-21) with every trade
+            # bit-identical. Python's is the decimally-correct rounding,
+            # so plain floats are the normal form.
+            trades = [{k: float(v) if isinstance(v, float) else v
+                       for k, v in t.items()} for t in trades]
+            summary = {k: float(v) if isinstance(v, float) else v
+                       for k, v in summary.items()}
             for t in trades:
                 t["market"] = key
             summary.update(market=key, note=note, tick=tick)
             results[name]["trades"].extend(trades)
             results[name]["rows"].append(summary)
+            ent_cells[name] = dict(trades=trades, row=summary)
             ran += 1
             if name == BASELINE_NAME:
                 base_line = (f"{summary['trades']}t "
@@ -385,19 +589,43 @@ def main():
         # the pane reports the wider of two simultaneously armed ladders,
         # and if that ever starts happening the choice should be made on
         # purpose rather than discovered later.
+        t_engine = time.perf_counter() - t0
+        tot["engine"] += t_engine
         OUT_RATIO.mkdir(parents=True, exist_ok=True)
+        t0 = time.perf_counter()
         series = {}
         for label, mode in STOP_MODE_BY_LABEL.items():
             s = run_1m.engine_1m.ratio_series(days, files, tick,
                                               stop_mode=mode)
             series[label] = {"bull": s["bull"], "bear": s["bear"]}
+            ratio_passes += 1
         (OUT_RATIO / f"{key}.json").write_text(
             json.dumps({"market": key, "tick": tick, "series": series},
                        separators=(",", ":")), encoding="utf-8")
+        t_ratio = time.perf_counter() - t0
+        tot["ratio"] += t_ratio
+        if manifest is not None:
+            # Checkpoint after every computed market, so a stopped run
+            # keeps what it finished - the entries are independent.
+            cache_markets[key] = dict(
+                manifest=manifest, excluded=None,
+                calendar=[d.date.isoformat() for d in days],
+                cells=ent_cells)
+            save_matrix_cache(sig, cache_markets)
         n = sum(len(v[side]["main"]) for v in series.values()
                 for side in ("bull", "bear"))
         print(f"{key}: {BASELINE_NAME} {base_line}  |  {ran} cells"
-              f"  |  ratio {n} pts", flush=True)
+              f"  |  ratio {n} pts"
+              f"  |  load {t_load:.1f}s engine {t_engine:.1f}s"
+              f" ratio {t_ratio:.1f}s", flush=True)
+
+    t_all = time.perf_counter() - t_run
+    other = t_all - sum(tot.values())
+    print(f"\nTIMING: load {tot['load']:.0f}s"
+          f"  |  engine {tot['engine']:.0f}s ({engine_passes} passes)"
+          f"  |  ratio {tot['ratio']:.0f}s ({ratio_passes} passes)"
+          f"  |  cached {cached_markets} markets"
+          f"  |  other {other:.0f}s  |  market loop {t_all:.0f}s", flush=True)
 
     calendar = run_1m.calendar_union(sessions)
     if calendar:

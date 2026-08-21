@@ -2266,7 +2266,7 @@
    "reason": "close1",
    "net_r": 4.4994,
    "stop": 30333.3,
-   "run_files": 5,
+   "run_files": 6,
    "run_start": "2026-08-14 07:35:00+00:00",
    "tests_in_run": 35,
    "tests_today": 26,
@@ -3444,7 +3444,7 @@
    "first": "2026-08-17 12:39:00+00:00",
    "last": "2026-08-17 12:39:00+00:00",
    "days": 1,
-   "run_files": 5,
+   "run_files": 6,
    "tests_first": 35,
    "tests_last": 35
   },

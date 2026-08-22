@@ -182,14 +182,16 @@ def anchor_report(stop_name, universe, matrix, out):
         rows.append((f"best cell {best}", best))
 
     out("A. ANCHOR ROWS")
-    out("  cell                 n  meanR  stdR      SR     SE   95% CI"
+    out("  cell                 n    netR  meanR  stdR      SR     SE   95% CI"
         "           annSR  PSR(>0)  top mkt")
     for label, key in rows:
         st = stats[key]
         p = ss.psr(st["sr"], st["n"], st["skew"], st["kurt"])
         mkt, share = top_market(cells[key])
         top = f"{share:3.0f}% {mkt}" if share is not None else "   n/a"
-        out(f"  {label:<18} {st['n']:>3}  {fnum(st['mean'],5)}  {fnum(st['sd'],5)}"
+        netr = sum(t["net_r"] for t in cells[key])
+        out(f"  {label:<18} {st['n']:>3}  {netr:>+6.1f}  {fnum(st['mean'],5)}"
+            f"  {fnum(st['sd'],5)}"
             f"  {fnum(st['sr'])}  {fnum(st['se'],5)}"
             f"  [{fnum(st['ci_lo'],5)},{fnum(st['ci_hi'],6)}]"
             f"  {fnum(ann(st),6,2)}  {fnum(p,7,3)}  {top}")

@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 192147.2,
+    "final": 189838.74,
     "max_dd_pct": 6.17,
-    "trades": 94,
-    "win_rate": 42.6,
-    "net_r": 69.51
+    "trades": 96,
+    "win_rate": 41.7,
+    "net_r": 68.3
   },
   "calendar": [
     "2026-01-02",
@@ -186,7 +186,8 @@
     "2026-08-17",
     "2026-08-18",
     "2026-08-19",
-    "2026-08-20"
+    "2026-08-20",
+    "2026-08-21"
   ],
   "markets": [
     {
@@ -432,15 +433,15 @@
       "tick": 0.25
     },
     {
-      "trades": 3,
+      "trades": 4,
       "wins": 0,
       "win_rate": 0.0,
-      "net_r_total": -3.03,
-      "final_cash": 97000.72,
-      "return_pct": -3.0,
+      "net_r_total": -4.05,
+      "final_cash": 96011.71,
+      "return_pct": -3.99,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 3,
+        "stop": 4,
         "no_confirm": 0,
         "close1": 0,
         "data_end": 0
@@ -454,17 +455,17 @@
       "tick": 0.005
     },
     {
-      "trades": 9,
+      "trades": 10,
       "wins": 5,
-      "win_rate": 55.6,
-      "net_r_total": 25.25,
-      "final_cash": 127222.77,
-      "return_pct": 27.22,
+      "win_rate": 50.0,
+      "net_r_total": 25.07,
+      "final_cash": 126991.46,
+      "return_pct": 26.99,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 2,
         "no_confirm": 0,
-        "close1": 7,
+        "close1": 8,
         "data_end": 0
       },
       "refused_wide": 23,
@@ -2882,6 +2883,52 @@
       "pnl_usd": 4450.83,
       "cash_after": 103370.31,
       "market": "NQ"
+    },
+    {
+      "side": "short",
+      "contract": "SIU6",
+      "entry_date": "2026-08-20",
+      "entry_ts": "2026-08-20 07:45:00+00:00",
+      "entry": 66.645,
+      "stop": 67.676,
+      "rpu": 1.0210000000000008,
+      "entry_first": 66.655,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2339,
+      "exit_date": "2026-08-20",
+      "exit_ts": "2026-08-20 14:32:00+00:00",
+      "exit": 67.676,
+      "reason": "stop",
+      "gross_r": -1.0098,
+      "cost_r": 0.0098,
+      "net_r": -1.0196,
+      "risk_usd": 970.01,
+      "pnl_usd": -989.01,
+      "cash_after": 96011.71,
+      "market": "SI"
+    },
+    {
+      "side": "short",
+      "contract": "ZWZ6",
+      "entry_date": "2026-08-20",
+      "entry_ts": "2026-08-20 09:26:00+00:00",
+      "entry": 697.5,
+      "stop": 709.0,
+      "rpu": 11.0,
+      "entry_first": 698.0,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.419,
+      "exit_date": "2026-08-21",
+      "exit_ts": "2026-08-21 18:15:18.211573759+00:00",
+      "exit": 699.25,
+      "reason": "close1",
+      "gross_r": -0.1591,
+      "cost_r": 0.0227,
+      "net_r": -0.1818,
+      "risk_usd": 1272.23,
+      "pnl_usd": -231.31,
+      "cash_after": 126991.46,
+      "market": "ZW"
     }
   ]
 }

@@ -82,6 +82,7 @@
 
 import hashlib
 import json
+import math
 import sys
 import time
 from datetime import date, datetime
@@ -89,6 +90,7 @@ from pathlib import Path
 
 import run_1m
 import run_1m_matrix as mx
+import sharpe_stats as ss
 
 HERE = Path(__file__).resolve().parent
 CHECKPOINT_EVERY = 25      # rewrite the page mid-run so it can be read early
@@ -757,6 +759,38 @@ def rebuild_tail(tcache, old_calendar, calendar, combos, run_cell, log=print,
     return fresh_cache
 
 
+# THE SHARPE EVIDENCE RIDES ON EVERY CELL (Lode, 2026-08-23). The heatmap's
+# levered equity has no formula for its own blur - it compounds, and its
+# denominator is a measured drawdown - so the page could never say whether two
+# cells differ by evidence or by noise. The per-trade Sharpe can (Lo 2002 SE,
+# PSR with the skew/kurtosis correction the -1R-floor distribution needs), so
+# every cell carries the block for both universes and the page renders the
+# all-cells table from it. Computed here at build time, from the same trades
+# as every other metric, so it can never lag the grid it sits beside.
+# Formulas live in sharpe_stats.py; the reading that interprets them is
+# research_1m_sharpe.py (deflation, effective N).
+ANN_DAYS = 252          # market days per year, the annualisation convention
+SHARPE_MIN_N = 30       # below this the page dims the row: an SR on a dozen
+                        # trades is noise with a decimal point
+
+
+def sharpe_block(trades, calendar):
+    """Per-trade Sharpe fields for one cell on one universe. `calendar` is the
+    union market-day axis; annualisation scales trade count by its span."""
+    st = ss.sharpe([t["net_r"] for t in trades])
+    years = len(calendar) / ANN_DAYS if calendar else 0
+    ann = (st["sr"] * math.sqrt(st["n"] / years)
+           if st["sr"] is not None and years else None)
+    p = ss.psr(st["sr"], st["n"], st["skew"], st["kurt"])
+
+    def r(x, d=3):
+        return round(x, d) if x is not None else None
+
+    return dict(sd=r(st["sd"]), sr=r(st["sr"]), se=r(st["se"]),
+                ci_lo=r(st["ci_lo"]), ci_hi=r(st["ci_hi"]),
+                ann=r(ann, 2), psr=r(p, 3))
+
+
 def filtered_metrics(trades, grid):
     """The same cell, measured on the markets the strategy actually trades.
 
@@ -1024,6 +1058,14 @@ def main():
         m = measure(trades, grid)
         if m is not None:
             m["filtered"] = filtered_metrics(trades, grid)
+            # The Sharpe block per universe, beside the metrics it qualifies.
+            # The filter is applied here a second time rather than threading
+            # `calendar` through filtered_metrics for one field.
+            m["sharpe"] = sharpe_block(trades, calendar)
+            if m["filtered"] is not None:
+                m["filtered"]["sharpe"] = sharpe_block(
+                    [t for t in trades
+                     if t.get("market") in run_1m.HUMAN_APPROVED], calendar)
         if lo is None and hi is None:
             baseline = m
         else:
@@ -1046,8 +1088,145 @@ def main():
           flush=True)
 
 
+# The all-cells evidence table's script. A plain string rather than part of
+# the page() f-string, so its braces need no doubling; __MIN_N__ is filled in
+# at build. It renders OUTSIDE boot() - it needs no chart library, so it must
+# not wait on one - and it follows the universe selector like every other
+# surface on this page (the panes and the tooltip earned that rule the hard
+# way, 2026-08-20/21).
+CELL_TABLE_JS = """
+(() => {
+  const MIN_N = __MIN_N__;
+  const fmt = {
+    int: v => String(v),
+    r1: v => (v > 0 ? '+' : '') + v.toFixed(1),
+    f2: v => v.toFixed(2),
+    f3: v => v.toFixed(3),
+    pct: v => v.toFixed(1),
+    usd: v => '$' + Math.round(v / 1000) + 'k',
+  };
+  /* dir +1 = higher is stronger, -1 = lower is stronger, 0 = no shading.
+     Directions are judgements, stated once: risk6% higher = a shallower
+     hole allowed a bigger bet; top-market share lower = less concentration;
+     pos is unshaded because more concurrency is neither. */
+  const COLS = [
+    { l: 'band', get: r => r.name, dir: 0, txt: true },
+    { l: 'n', get: r => r.sel.trades, dir: 1, f: fmt.int },
+    { l: 'netR', get: r => r.sel.net_r, dir: 1, f: fmt.r1 },
+    { l: 'meanR', get: r => r.sel.avg_r, dir: 1, f: fmt.f2 },
+    { l: 'stdR', get: r => r.sh.sd, dir: -1, f: fmt.f2 },
+    { l: 'SR', get: r => r.sh.sr, dir: 1, f: fmt.f2 },
+    { l: 'SE', get: r => r.sh.se, dir: -1, f: fmt.f2 },
+    { l: '95% CI', get: r => r.sh.ci_lo, dir: 1,
+      f: (v, r) => '[' + r.sh.ci_lo.toFixed(2) + ', '
+        + r.sh.ci_hi.toFixed(2) + ']' },
+    { l: 'annSR', get: r => r.sh.ann, dir: 1, f: fmt.f2 },
+    { l: 'PSR', get: r => r.sh.psr, dir: 1, f: fmt.f3 },
+    { l: 'wr%', get: r => r.sel.win_rate, dir: 1, f: fmt.pct },
+    { l: 'PF', get: r => r.sel.profit_factor, dir: 1, f: fmt.f2 },
+    { l: 'W', get: r => r.sel.longest_winning_streak, dir: 1, f: fmt.int },
+    { l: 'L', get: r => r.sel.longest_losing_streak, dir: -1, f: fmt.int },
+    { l: 'pos&le;', get: r => r.sel.pos_max, dir: 0, f: fmt.int },
+    { l: 'risk6%', get: r => r.sel.risk_6pct, dir: 1, f: fmt.f2 },
+    { l: 'final6%', get: r => r.sel.final_6pct, dir: 1, f: fmt.usd },
+    { l: 'top mkt', get: r => r.sel.top_market_share, dir: -1,
+      f: (v, r) => (v == null ? '-' : Math.round(v) + '% ')
+        + (r.sel.top_market || '') },
+  ];
+  /* the pale end of the heatmap's own green ramp: shading must never fight
+     the ink, so the darkest step here is lighter than the map's midpoint */
+  const SHADES = ['', '#f7fcf5', '#e5f5e0', '#ccebc5', '#addd8e'];
+  let sortCol = 5, sortDir = -1;   /* SR, strongest first */
+
+  function rowsFor() {
+    const filt = universe() === 'filtered';
+    const out = [];
+    const push = (name, m, base) => {
+      if (!m) return;
+      const sel = filt ? m.filtered : m;
+      if (!sel || !sel.sharpe) return;
+      out.push({ name, key: base ? null : name, sel, sh: sel.sharpe,
+                 base, ok: sel.trades >= MIN_N });
+    };
+    push('all trades', P.baseline, true);
+    for (const k of Object.keys(P.cells)) push(k, P.cells[k], false);
+    return out;
+  }
+
+  function draw() {
+    const rows = rowsFor();
+    const col = COLS[sortCol];
+    rows.sort((a, b) => {
+      if (a.base !== b.base) return a.base ? -1 : 1;   /* baseline on top */
+      if (a.ok !== b.ok) return a.ok ? -1 : 1;         /* thin rows sink */
+      const va = col.get(a), vb = col.get(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return col.txt ? sortDir * String(va).localeCompare(String(vb))
+                     : sortDir * (va - vb);
+    });
+    /* per-column quintile shading over the eligible, non-baseline rows */
+    const scale = COLS.map(c => {
+      if (!c.dir) return null;
+      const vs = rows.filter(r => r.ok && !r.base)
+        .map(c.get).filter(v => v != null).sort((a, b) => a - b);
+      return vs.length < 5 ? null : vs;
+    });
+    const shade = (ci, v) => {
+      const vs = scale[ci];
+      if (!vs || v == null) return '';
+      let i = 0;
+      while (i < vs.length && vs[i] < v) i++;
+      let q = i / vs.length;
+      if (COLS[ci].dir < 0) q = 1 - q;
+      const s = SHADES[Math.min(4, Math.floor(q * 5))];
+      return s ? 'background:' + s : '';
+    };
+    let h = '<thead><tr>' + COLS.map((c, i) =>
+      '<th' + (i === sortCol ? ' class="on"' : '') + ' data-c="' + i + '">'
+      + c.l + (i === sortCol ? (sortDir < 0 ? ' \\u2193' : ' \\u2191') : '')
+      + '</th>').join('') + '</tr></thead><tbody>';
+    for (const r of rows) {
+      const cls = (r.base ? 'base' : '') + (r.ok ? '' : ' dim');
+      h += '<tr' + (cls.trim() ? ' class="' + cls.trim() + '"' : '')
+        + (r.key ? ' data-k="' + r.key + '"' : '') + '>';
+      COLS.forEach((c, i) => {
+        const v = c.get(r);
+        const style = r.ok && !r.base ? shade(i, v) : '';
+        h += '<td' + (style ? ' style="' + style + '"' : '') + '>'
+          + (v == null ? '-' : (c.f ? c.f(v, r) : v)) + '</td>';
+      });
+      h += '</tr>';
+    }
+    document.getElementById('cells').innerHTML = h + '</tbody>';
+  }
+
+  document.getElementById('cells').addEventListener('click', e => {
+    const th = e.target.closest('th[data-c]');
+    if (th) {
+      const c = +th.dataset.c;
+      if (c === sortCol) sortDir = -sortDir;
+      else { sortCol = c; sortDir = COLS[c].txt ? 1 : -1; }
+      return draw();
+    }
+    const tr = e.target.closest('tr[data-k]');
+    if (tr) {
+      const [a, b] = tr.dataset.k.split('|');
+      lo.value = String(parseFloat(a));
+      hi.value = b === 'inf' ? 'inf' : String(parseFloat(b));
+      show();
+    }
+  });
+  document.getElementById('uni').addEventListener('change', draw);
+  draw();
+})();
+"""
+
+
 def page(p):
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
+    cell_js = CELL_TABLE_JS.replace("__MIN_N__", str(SHARPE_MIN_N))
     data = json.dumps(p)
     heat = json.dumps(dict(pivot=HEAT_PIVOT, floor=HEAT_MIN,
                            neg=NEG_RAMP, negInk=NEG_INK,
@@ -1172,6 +1351,34 @@ border:1px solid var(--axis); border-radius:4px; padding:6px 8px;
 font-size:12px; box-shadow:0 2px 8px rgba(11,11,11,.12); display:none;
 z-index:9; font-variant-numeric:tabular-nums; }}
 h3 {{ font-size:13px; margin:18px 0 0; }}
+/* The all-cells evidence table (2026-08-23). Shading is per COLUMN - darker
+   green = stronger within that column, quintiles over the rows with enough
+   trades - so a glance shows where each metric is strong without ranking
+   rows for the reader. Thin rows are dimmed, never hidden. */
+#cells {{ border-collapse:collapse; margin-top:8px;
+font-variant-numeric:tabular-nums; font-size:11.5px; }}
+#cells td, #cells th {{ padding:2px 7px; border-bottom:1px solid var(--grid);
+text-align:right; white-space:nowrap; }}
+#cells td:first-child, #cells th:first-child {{ text-align:left; }}
+#cells th {{ cursor:pointer; user-select:none; position:sticky; top:0;
+background:var(--surface); color:var(--ink-2); }}
+#cells th.on {{ color:var(--ink); }}
+#cells tr.dim td {{ color:var(--muted); }}
+#cells tr.base td {{ font-weight:600; border-bottom:2px solid var(--axis); }}
+#cells tr[data-k] {{ cursor:pointer; }}
+/* PRINT: the page doubles as the PDF report (Lode, 2026-08-23) - Ctrl+P /
+   Save as PDF. Landscape carries the wide table; the update control, its log
+   and the selectors are screen furniture and stay off paper. */
+@page {{ size: A4 landscape; margin: 10mm; }}
+@media print {{
+  #upd, #updlog, #bar, #tip, #vline {{ display:none !important; }}
+  body {{ padding:0; }}
+  #cells {{ font-size:8.5px; }}
+  #cells th {{ position:static; }}
+  #cells tr {{ break-inside:avoid; }}
+  #cells thead {{ display:table-header-group; }}
+  h3 {{ break-after:avoid; }}
+}}
 </style></head><body>
 <div id="head"><b>quickfix1m1dc - ladder geometry band, {label} stop</b>
 <span class="note"> <b class="k">Stop anchor: {label}</b> - {stop_note}
@@ -1257,6 +1464,24 @@ a number this sample cannot support - and leverage to a measured drawdown bets
 biggest exactly where the evidence is thinnest. Check <b class="k">top market
 share</b>: the BASELINE's own net R is 49% one market. The best region is a
 one-step ridge, not a smooth optimum. Audit s.15.</p>
+
+<h3>Every band as a row - the metrics and the Sharpe evidence</h3>
+<div class="note" style="max-width:1150px">One row per grid cell, on the
+universe the <b class="k">heatmap</b> selector chooses. Beside the money
+metrics, each row carries the <b class="k">per-trade Sharpe</b> (mean R over
+its own scatter - leverage-invariant, so cells compare at equal pain without
+dividing by a measured drawdown), its standard error (Lo 2002), the
+<b class="k">95% interval</b>, the annualised figure and <b class="k">PSR</b>,
+the probability the true Sharpe beats zero given the R distribution's skew
+and fat tails. Two rows whose intervals overlap are NOT distinguishable on
+this sample - that is what these columns exist to say. Shading is per column
+(darker green = stronger, quintiles over the rows with at least
+{SHARPE_MIN_N} trades); dimmed rows are below that and their statistics are
+decoration. Click a header to sort, click a row to load that band in the
+panes above. What no per-row number can carry is the deflation for the
+231-cell search itself - that is research_1m_sharpe.py's reading.
+<b class="k">Ctrl+P prints this page as the PDF report</b> (landscape).</div>
+<table id="cells"></table>
 
 <script>{lib}</script><script>
 const P = {data}, H = {heat};
@@ -1692,7 +1917,7 @@ function boot(tries) {{
   }}
 }}
 boot(15);
-
+{cell_js}
 /* ---- this page's own update button -------------------------------------
    Every other 1-minute page is rebuilt by charter's Update button. This grid
    is not (Lode, 2026-08-12): it is ~231 engine passes, about ninety minutes,

@@ -178,6 +178,26 @@ and every refusal names its reason. The payload carries `built`, `data` and
 `n_cells`, and the page prints the build time, so a stale grid is visible
 rather than assumed fresh.
 
+**THE SHARPE EVIDENCE SITS BESIDE THE MONEY** (Lode, 2026-08-22/23). The
+levered heatmap has no formula for its own blur (equity compounds, and its
+denominator is a measured drawdown), so it can never say whether two cells
+differ by evidence or by noise. Every R-cut cell therefore carries a
+per-trade Sharpe block for both universes (Lo SE, 95% CI, annualised, PSR --
+computed in `build_1m_rcut_report.py` at build time from the same trades, so
+it cannot lag the grid), and each page renders an ALL-CELLS TABLE (one row
+per band, column-scoped quintile shading, follows the universe selector,
+rows under 30 trades dimmed) that doubles as the PDF report via Ctrl+P.
+Formulas in `sharpe_stats.py` (pinned by tests); the interpretation --
+deflation for the 231-cell search, effective N, band-vs-no-band paired
+bootstrap -- is `research_1m_sharpe.py` (seconds, no engine passes). Its
+first reading (2026-08-22): no cell is distinguishable from the chosen one
+(the zone is ONE blob of shared evidence), but the band beats no band on
+both anchors (P <= 0.02) and effective N is ~2, far under the break-even
+N* (24 hybrid / 11 4th5th) -- so the RATIO's edge is real at 95% while the
+specific cell coordinates are taste. The lower cut adds ~0.02 SR: the money
+is in the UPPER cut, the one with the s.15b mechanism. Verdict bounded by
+~80 trades and ~30% ZW concentration: "not rejected", never "confirmed".
+
 ## 1-minute workstream (2026-08-03) — THE published strategy since 2026-08-12
 
 `engine_1m.py` + `run_1m.py` + `tests/test_engine_1m.py` implement

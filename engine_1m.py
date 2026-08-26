@@ -262,26 +262,34 @@ def _ladder(f, side):
 
 
 def _short_setup(f, run_high, min_reversals=MIN_REVERSALS):
-    """(first, second, stop_anchor) under file f, or None."""
+    """(first, second, stop_anchor) under file f, or None.
+
+    The tested list is a PREFIX of the ladder (both are ordered away from
+    prev_close, and an extreme that reaches a level has reached every
+    nearer one), so first and second are ladder[0] and ladder[1] whenever
+    the setup exists at all. Returning them from the ladder rather than
+    the tested list is therefore bit-identical for every count >= 2 - and
+    it is what makes min_reversals=1 expressible, where only one level has
+    been tested but rule 2 still reads the ladder's second, which
+    MIN_LADDER guarantees exists.
+    """
     ladder = _ladder(f, "short")
     if len(ladder) < MIN_LADDER:
         return None
-    tested = [lvl for lvl in ladder if lvl <= run_high]
-    if len(tested) < min_reversals:
+    if sum(1 for lvl in ladder if lvl <= run_high) < min_reversals:
         return None
     anchor = ladder[4] if len(ladder) > 4 else ladder[3]
-    return tested[0], tested[1], anchor
+    return ladder[0], ladder[1], anchor
 
 
 def _long_setup(f, run_low, min_reversals=MIN_REVERSALS):
     ladder = _ladder(f, "long")
     if len(ladder) < MIN_LADDER:
         return None
-    tested = [lvl for lvl in ladder if lvl >= run_low]
-    if len(tested) < min_reversals:
+    if sum(1 for lvl in ladder if lvl >= run_low) < min_reversals:
         return None
     anchor = ladder[4] if len(ladder) > 4 else ladder[3]
-    return tested[0], tested[1], anchor
+    return ladder[0], ladder[1], anchor
 
 
 STOP_MODES = ("ladder", "ladder_or_extreme", "extreme")
@@ -593,11 +601,14 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     Lode's sweep request): how many reversals of the ladder the session's
     running extreme must have reached before the setup arms. The published
     rule is 3 (the module constant, still the default everywhere); the
-    sweep runs 2/3/4/5. It must be at least 2 because rule 2 and the entry
-    both need a SECOND tested reversal to exist. The ladder requirement
-    (MIN_LADDER) and the stop anchor are untouched by this dial - at 5 the
-    ladder implicitly needs a 5th level, since only ladder levels can be
-    tested.
+    sweep runs 1-5. At 1 the setup arms on the FIRST TOUCH of the first
+    reversal itself: the touch bar is its own arming bar, so the OHLC rule
+    applies (the close must be back beyond the level) and any LATER print
+    fires the market order at once. Rule 2 is unchanged at every count -
+    it reads the ladder's second level, which MIN_LADDER guarantees, not
+    the tested list. The ladder requirement and the stop anchor are
+    untouched by this dial; at 5 the ladder implicitly needs a 5th level,
+    since only ladder levels can be tested.
 
     `geom_by_day` is NOT a dial - it changes nothing the engine decides.
     When True the summary carries an extra `geom_days` key: the same four
@@ -611,9 +622,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
         raise ValueError(f"stop_mode must be one of {STOP_MODES}")
     if range_mode not in RANGE_MODES:
         raise ValueError(f"range_mode must be one of {RANGE_MODES}")
-    if min_reversals < 2:
-        raise ValueError("min_reversals must be at least 2 "
-                         "(rule 2 and the entry need a second tested level)")
+    if min_reversals < 1:
+        raise ValueError("min_reversals must be at least 1 "
+                         "(a setup with nothing tested is not a setup)")
     trades = []
     cash = start_capital
     pos = None

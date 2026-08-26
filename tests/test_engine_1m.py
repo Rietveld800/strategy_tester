@@ -163,10 +163,54 @@ def test_min_reversals_five_needs_the_fifth_level_tested():
     assert abs(five[0]["entry"] - 99.8) < 1e-9
 
 
-def test_min_reversals_below_two_raises():
+def test_min_reversals_one_enters_on_the_first_touch():
+    """At 1 the touch bar is its own arming bar: the close must return
+    beyond the level (OHLC cannot order events inside one bar), and a
+    LATER print fires the market order at once."""
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=[bar(ts(10, "01:00"), 99.5, 99.5, 99.5, 99.5),
+                  bar(ts(10, "02:00"), 99.5, 100.0, 99.5, 99.8)]
+            + flat_bars(10, "03:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    default, _ = run_market(days, [base_file()], TICK)
+    assert default == []                       # one tested level: rule 1 at 3
+    trades, _ = run_market(days, [base_file()], TICK, min_reversals=1)
+    assert len(trades) == 1
+    t = trades[0]
+    assert "02:00" in t["entry_ts"]            # the touch bar itself
+    assert abs(t["entry"] - 99.8) < 1e-9       # first - 2 ticks slippage
+    assert abs(t["stop"] - 102.6) < 1e-9       # rule 2 / stop anchor unmoved
+    assert t["reason"] == "close1"
+
+
+def test_min_reversals_one_touch_bar_needs_the_close_back():
+    # The touch bar closes ABOVE the level: no entry there, but the setup
+    # is armed, so the next print of the level fires the market order.
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=[bar(ts(10, "01:00"), 99.5, 99.5, 99.5, 99.5),
+                  bar(ts(10, "02:00"), 99.5, 100.3, 99.5, 100.2),
+                  bar(ts(10, "03:00"), 100.2, 100.2, 99.9, 99.9)]
+            + flat_bars(10, "04:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    trades, _ = run_market(days, [base_file()], TICK, min_reversals=1)
+    assert len(trades) == 1
+    assert "03:00" in trades[0]["entry_ts"]    # not the failed touch bar
+
+
+def test_min_reversals_below_one_raises():
     import pytest
     with pytest.raises(ValueError):
-        run_market([], [], TICK, min_reversals=1)
+        run_market([], [], TICK, min_reversals=0)
 
 
 def test_no_confirm_exit_at_entry_day_settlement():

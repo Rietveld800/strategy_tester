@@ -200,20 +200,30 @@ is in the UPPER cut, the one with the s.15b mechanism. Verdict bounded by
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the
-module constant `MIN_REVERSALS`, unchanged everywhere else; minimum 2,
-because rule 2 and the entry need a second tested level).
-`build_1m_rule1_report.py` runs 2/3/4/5 on the two published
-configurations - 4th/5th stop with band 000-060 (`variant 2`) and hybrid
-stop with band 020-060 (`variant 5`) - eight engine passes over the
-filtered universe, ~5-10 min, NO cell cache (every click recomputes; at
-this cost a cache buys nothing and staleness is the failure mode that
-matters). Band and stop label are read from `run_1m_matrix`'s own tables
-so the page cannot disagree with the matrix; the rule-1 = 3 rows ARE
-variants 2 and 5 and the build prints a MATCH/DIFFERS check against the
-matrix JSON. Output `output/quickfix1m1dcRule1.{json,html}`; the page has
-its own update button posting `reversals1m` (in `refresh.EXTRA_STEPS`,
-by key only - same ruling as the R-cut grids), `--page` redraws with no
-backtest. NOT in charter's overlays or variant list, by request.
+module constant `MIN_REVERSALS`, unchanged everywhere else; minimum 1).
+AT 1 THE SETUP ARMS ON THE FIRST TOUCH of the first reversal itself
+(Lode, same day): the touch bar needs its close back beyond the level -
+the engine's existing OHLC arming rule - and any later print fires the
+market order. Rule 2 is unchanged at every count: `first`/`second` come
+off the LADDER (the tested list is a prefix of it, so this is
+bit-identical for counts >= 2, pinned by the unchanged tests), and
+MIN_LADDER guarantees the second exists. `build_1m_rule1_report.py` runs
+1-5 on the two published configurations - 4th/5th stop with band 000-060
+(`variant 2`) and hybrid stop with band 020-060 (`variant 5`) - ten
+engine passes over the filtered universe, ~5-10 min, NO cell cache (every
+click recomputes; at this cost a cache buys nothing and staleness is the
+failure mode that matters). Band and stop label are read from
+`run_1m_matrix`'s own tables so the page cannot disagree with the matrix;
+the rule-1 = 3 rows ARE variants 2 and 5 and the build prints a
+MATCH/DIFFERS check against the matrix JSON. Output
+`output/quickfix1m1dcRule1.{json,html}`; the page has its own update
+button posting `reversals1m` (in `refresh.EXTRA_STEPS`, by key only -
+same ruling as the R-cut grids), `--page` redraws with no backtest. NOT
+in charter's overlays or variant list, by request. First reading
+(2026-08-26 data): 3 tops both anchors on every headline metric; 1 and 2
+add trades that cost money and lengthen the streak, 4 and 5 remove more
+winners than losers - but the flanks are thin samples, and whether the
+peak at 3 is structure or luck is an OPEN question Lode has flagged.
 
 ## 1-minute workstream (2026-08-03) — THE published strategy since 2026-08-12
 

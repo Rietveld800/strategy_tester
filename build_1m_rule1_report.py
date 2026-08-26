@@ -3,18 +3,21 @@
 # The RULE 1 sweep (Lode, 2026-08-26): quickfix1m1dc with the tested-reversal
 # count as the moving dial. The published rule arms a setup once THREE
 # reversals of the ladder have been tested by the session's running extreme;
-# this page runs the same model at 2, 3, 4 and 5 tested reversals - entry
-# still at the retrace to the FIRST reversal - on the two published
-# configurations:
+# this page runs the same model at 1 to 5 tested reversals - entry still at
+# the (first touch of, or retrace to) the FIRST reversal - on the two
+# published configurations:
 #
 #   4th/5th stop, band 000-060   (the dials of `variant 2`, the baseline)
 #   hybrid stop,  band 020-060   (the dials of `variant 5`)
 #
-# Eight cells, each its own engine run over the filtered universe: rule 1
+# Ten cells, each its own engine run over the filtered universe: rule 1
 # decides WHEN a setup arms, so a different count shifts which minute (and
 # which session) triggers, and no blotter filter can reproduce that. The
 # rule-1 = 3 rows ARE variant 2 and variant 5, re-measured on this pass, so
-# the page carries its own control.
+# the page carries its own control. At rule 1 = 1 the setup arms on the
+# first touch of the first reversal itself (added 2026-08-26, Lode): the
+# touch bar needs its close back beyond the level - OHLC cannot order the
+# events inside one bar - and any later print fires the market order.
 #
 # The band and the stop label are read from run_1m_matrix's own tables
 # (BAND_CUTS_BY_STOP middle slot, STOP_MODE_BY_LABEL), so this page cannot
@@ -24,7 +27,7 @@
 # NOT IN A FULL REFRESH, by the same ruling as the R-cut grids (Lode,
 # 2026-08-12: a research grid gets its own update button inside its page).
 # The page posts `reversals1m` to charter's /api/refresh; the key lives in
-# trading_system/refresh.EXTRA_STEPS. Eight passes over 22 markets is a few
+# trading_system/refresh.EXTRA_STEPS. Ten passes over 22 markets is a few
 # minutes, so there is no cell cache - every click recomputes everything,
 # which errs the safe way by construction.
 #
@@ -46,7 +49,7 @@ OUT_JSON = HERE / "output" / "quickfix1m1dcRule1.json"
 OUT_HTML = HERE / "output" / "quickfix1m1dcRule1.html"
 REFRESH_STEP = "reversals1m"
 
-REVERSAL_COUNTS = (2, 3, 4, 5)
+REVERSAL_COUNTS = (1, 2, 3, 4, 5)
 PUBLISHED_COUNT = 3        # the module constant in engine_1m; rows at 3 are
                            # variant 2 / variant 5 re-measured
 # Everything off the sweep axis sits at the published baseline, exactly as
@@ -58,8 +61,9 @@ BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
 ANCHORS = [("4th/5th", "variant 2 (published baseline)"),
            ("hybrid", "variant 5")]
 # Lightness per tested-reversal count, same idea as the matrix's lockout
-# axis: one hue per stop anchor, the published count darkest.
-COUNT_LIGHT = {2: 62, 3: 32, 4: 47, 5: 72}
+# axis: one hue per stop anchor, the published count darkest, and the
+# further from it the lighter.
+COUNT_LIGHT = {1: 68, 2: 56, 3: 32, 4: 44, 5: 78}
 
 
 def build_cells():
@@ -328,7 +332,7 @@ UPDATER_JS = """
       btn.disabled = false;
       return say('the server refused the run (HTTP ' + r.status + ').');
     } else {
-      say('running - about <b>5-10 minutes</b> (eight engine passes over '
+      say('running - about <b>5-10 minutes</b> (ten engine passes over '
           + 'the 22 markets). You can leave this page; the run is on the '
           + 'server, and reloading reattaches to it.');
     }
@@ -434,14 +438,19 @@ before the setup arms</b>
 <span class="note"> The published rule 1 arms a setup once
 <b style="color:#222">3</b> reversals of the ladder have been tested by the
 session's running extreme; entry is still the retrace to the FIRST
-reversal. This page runs the same model at <b style="color:#222">2, 3, 4
-and 5</b> tested reversals, on the two published configurations - the
+reversal. This page runs the same model at <b style="color:#222">1, 2, 3,
+4 and 5</b> tested reversals, on the two published configurations - the
 4th/5th stop with its band 000-060 (the dials of variant 2, the published
-baseline) and the hybrid stop with its band 020-060 (variant 5). Every cell
-is its own engine run on the filtered universe (22 markets, s.16): rule 1
-decides WHEN a setup arms, so a different count shifts which minute
-triggers and which session spends its lockout - no blotter filter can
-reproduce that. The rows at rule 1 = 3 (marked *) ARE variant 2 and
+baseline) and the hybrid stop with its band 020-060 (variant 5). At
+<b style="color:#222">rule 1 = 1</b> the setup arms on the first touch of
+the first reversal itself: the touch bar needs its close back beyond the
+level (OHLC cannot order the events inside one bar), and any later print
+fires the market order at once. Rule 2 is unchanged at every count - the
+day open is judged against the ladder's second reversal, tested or not.
+Every cell is its own engine run on the filtered universe (22 markets,
+s.16): rule 1 decides WHEN a setup arms, so a different count shifts which
+minute triggers and which session spends its lockout - no blotter filter
+can reproduce that. The rows at rule 1 = 3 (marked *) ARE variant 2 and
 variant 5, re-measured on this pass. Everything else sits at the published
 baseline: lockout 1, no tightening, overnight window blocked, no
 confirmation clause, trading-day range window.</span>
@@ -450,14 +459,15 @@ are drawn at a constant 6% max drawdown</b> - risk per trade solved per
 cell by bisection (the table's <b>risk @6% DD</b> column), because at one
 bet size the tallest curve is partly just the deepest hole that cell was
 allowed to dig. <b style="color:#222">Colour</b>: green is the 4th/5th
-stop, blue the hybrid; the darkest shade is the published count (3),
-lighter shades are 4, then 2, lightest 5. Read the losing streak, the
-drawdown and the top-market share before the money: a count that books few
-trades is a thin sample, not a better rule.</div>
+stop, blue the hybrid; the darkest shade is the published count (3), and
+the further a count sits from it the lighter its line (4, then 2, then 1,
+lightest 5). Read the losing streak, the drawdown and the top-market share
+before the money: a count that books few trades is a thin sample, not a
+better rule.</div>
 <div id="upd">
   <button id="updbtn" type="button" disabled>Update this sweep</button>
   <span id="updnote" class="note">built <b style="color:#222">{built}</b>
-  &middot; this page is not rebuilt by charter's Update button; it is eight
+  &middot; this page is not rebuilt by charter's Update button; it is ten
   engine passes, about <b style="color:#222">5-10 minutes</b>. Press this
   when you want it re-read on current data.</span>
 </div>

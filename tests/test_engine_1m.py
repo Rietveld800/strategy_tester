@@ -112,6 +112,63 @@ def test_three_level_ladder_is_no_setup():
     assert trades == []
 
 
+def two_tested_days():
+    """Open 99.5; the rally only reaches 100.7, testing TWO reversals
+    (100.0, 100.5) of the five-level ladder; the next bar retraces to the
+    first. Arms under min_reversals=2, never under the default 3."""
+    return [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=[bar(ts(10, "01:00"), 99.5, 99.5, 99.5, 99.5),
+                  bar(ts(10, "02:00"), 99.5, 100.7, 99.5, 100.6),
+                  bar(ts(10, "03:00"), 100.6, 100.6, 99.8, 99.8)]
+            + flat_bars(10, "04:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+
+
+def test_min_reversals_two_arms_on_two_tested_levels():
+    days = two_tested_days()
+    default, _ = run_market(days, [base_file()], TICK)
+    assert default == []                       # rule 1 at 3: never armed
+    trades, _ = run_market(days, [base_file()], TICK, min_reversals=2)
+    assert len(trades) == 1
+    t = trades[0]
+    assert abs(t["entry"] - 99.8) < 1e-9       # still fills at the FIRST
+    assert abs(t["stop"] - 102.6) < 1e-9       # stop anchor unmoved (5th)
+    assert t["reason"] == "close1"
+
+
+def test_min_reversals_five_needs_the_fifth_level_tested():
+    # short_entry_day's rally high is 102.0: four tested, not five.
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=short_entry_day() + flat_bars(10, "04:00", 3, 99.7),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    four, _ = run_market(days, [base_file()], TICK, min_reversals=4)
+    assert len(four) == 1
+    five, _ = run_market(days, [base_file()], TICK, min_reversals=5)
+    assert five == []
+    # Push the rally through the 5th reversal (102.5): five tested, and
+    # the entry is still the retrace to the first.
+    days[0].bars[1] = bar(ts(10, "02:00"), 99.5, 102.5, 99.5, 101.5)
+    five, _ = run_market(days, [base_file()], TICK, min_reversals=5)
+    assert len(five) == 1
+    assert abs(five[0]["entry"] - 99.8) < 1e-9
+
+
+def test_min_reversals_below_two_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        run_market([], [], TICK, min_reversals=1)
+
+
 def test_no_confirm_exit_at_entry_day_settlement():
     days = [
         Day(date=date(2026, 6, 10), contract="GCQ6",

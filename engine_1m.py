@@ -261,24 +261,24 @@ def _ladder(f, side):
                   reverse=True)
 
 
-def _short_setup(f, run_high):
+def _short_setup(f, run_high, min_reversals=MIN_REVERSALS):
     """(first, second, stop_anchor) under file f, or None."""
     ladder = _ladder(f, "short")
     if len(ladder) < MIN_LADDER:
         return None
     tested = [lvl for lvl in ladder if lvl <= run_high]
-    if len(tested) < MIN_REVERSALS:
+    if len(tested) < min_reversals:
         return None
     anchor = ladder[4] if len(ladder) > 4 else ladder[3]
     return tested[0], tested[1], anchor
 
 
-def _long_setup(f, run_low):
+def _long_setup(f, run_low, min_reversals=MIN_REVERSALS):
     ladder = _ladder(f, "long")
     if len(ladder) < MIN_LADDER:
         return None
     tested = [lvl for lvl in ladder if lvl >= run_low]
-    if len(tested) < MIN_REVERSALS:
+    if len(tested) < min_reversals:
         return None
     anchor = ladder[4] if len(ladder) > 4 else ladder[3]
     return tested[0], tested[1], anchor
@@ -581,13 +581,23 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                allow_pre_activation=True, confirm=True, stop_mode="ladder",
                max_entries_per_session=1, min_rpu_range_ratio=None,
                max_rpu_range_ratio=None, range_mode="trading_day",
-               geom_by_day=False):
+               min_reversals=MIN_REVERSALS, geom_by_day=False):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
-    `tighten`, `allow_pre_activation`, `confirm`, `stop_mode` and the two
-    `*_rpu_range_ratio` bounds are the dials; see the module docstring for
-    what each one means.
+    `tighten`, `allow_pre_activation`, `confirm`, `stop_mode`, the two
+    `*_rpu_range_ratio` bounds and `min_reversals` are the dials; see the
+    module docstring for what each one means.
+
+    RULE 1'S TESTED-REVERSAL COUNT IS A DIAL (`min_reversals`, 2026-08-26,
+    Lode's sweep request): how many reversals of the ladder the session's
+    running extreme must have reached before the setup arms. The published
+    rule is 3 (the module constant, still the default everywhere); the
+    sweep runs 2/3/4/5. It must be at least 2 because rule 2 and the entry
+    both need a SECOND tested reversal to exist. The ladder requirement
+    (MIN_LADDER) and the stop anchor are untouched by this dial - at 5 the
+    ladder implicitly needs a 5th level, since only ladder levels can be
+    tested.
 
     `geom_by_day` is NOT a dial - it changes nothing the engine decides.
     When True the summary carries an extra `geom_days` key: the same four
@@ -601,6 +611,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
         raise ValueError(f"stop_mode must be one of {STOP_MODES}")
     if range_mode not in RANGE_MODES:
         raise ValueError(f"range_mode must be one of {RANGE_MODES}")
+    if min_reversals < 2:
+        raise ValueError("min_reversals must be at least 2 "
+                         "(rule 2 and the entry need a second tested level)")
     trades = []
     cash = start_capital
     pos = None
@@ -694,9 +707,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 threshold = pos_.entry_first
                 setup = None
                 if f is not None:
-                    setup = (_short_setup(f, run_high)
+                    setup = (_short_setup(f, run_high, min_reversals)
                              if pos_.side == "short"
-                             else _long_setup(f, run_low))
+                             else _long_setup(f, run_low, min_reversals))
                 if setup is not None:
                     new_first = setup[0]
                     threshold = (min(threshold, new_first)
@@ -760,8 +773,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                     or f.publish_date < prev_trading_date):
                 f = None  # the day's own update is not active yet
             for side in ("short", "long") if f is not None else ():
-                setup = (_short_setup(f, run_high) if side == "short"
-                         else _long_setup(f, run_low))
+                setup = (_short_setup(f, run_high, min_reversals)
+                         if side == "short"
+                         else _long_setup(f, run_low, min_reversals))
                 if setup is None:
                     continue
                 first, second, anchor = setup
@@ -783,9 +797,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                 # close must be back beyond the level to prove the return.
                 setup_prev = None
                 if (prev_high if side == "short" else prev_low) is not None:
-                    setup_prev = (_short_setup(f, prev_high)
+                    setup_prev = (_short_setup(f, prev_high, min_reversals)
                                   if side == "short"
-                                  else _long_setup(f, prev_low))
+                                  else _long_setup(f, prev_low, min_reversals))
                 if setup_prev is None:
                     returned = prints and (c <= first if side == "short"
                                            else c >= first)

@@ -218,7 +218,13 @@ the rule-1 = 3 rows ARE variants 2 and 5 and the build prints a
 MATCH/DIFFERS check against the matrix JSON. Output
 `output/quickfix1m1dcRule1.{json,html}`; the page has its own update
 button posting `reversals1m` (in `refresh.EXTRA_STEPS`, by key only -
-same ruling as the R-cut grids), `--page` redraws with no backtest. NOT
+same ruling as the R-cut grids), `--page` redraws with no backtest. THE
+PAGE CARRIES A PER-MARKET TABLE (Lode, same day: "check per market
+whether rule 1 = 3 still wins"): net R per market per count for each
+anchor, best cell shaded, rows under 3 rule-3 trades dimmed and not
+counted, derived from the payload's trades on every build. Its reading
+rules are printed with it: a win on a market that loses at every count
+is less exposure, not a better rule, and a thin row is not a sample. NOT
 in charter's overlays or variant list, by request. First reading
 (2026-08-26 data): 3 tops both anchors on every headline metric; 1 and 2
 add trades that cost money and lengthen the streak, 4 and 5 remove more

@@ -233,7 +233,8 @@ def main():
         trades={n: results[n]["trades"] for n, _p, _d in CELLS},
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
-    write_page(report, calendar, built)
+    write_page(report, calendar, built,
+               {n: results[n]["trades"] for n, _p, _d in CELLS})
     print(f"\nwrote {OUT_JSON.name} and {OUT_HTML.name}")
 
 
@@ -249,7 +250,7 @@ def rebuild_page():
                          if risk6 else run_1m.portfolio_replay(trades))
         report[name] = dict(cell, color=color_for(cell["props"]),
                             curve=curve)
-    write_page(report, p["calendar"], p.get("built", "unknown"))
+    write_page(report, p["calendar"], p.get("built", "unknown"), p["trades"])
     print(f"redrew {OUT_HTML.name} from {OUT_JSON.name} "
           f"({len(report)} cells, no backtest)")
 
@@ -358,9 +359,78 @@ UPDATER_JS = """
 """
 
 
-def write_page(report, calendar, built):
-    """The sweep page: one chart, one table, a checkbox per row, and its
-    own update button. Layout follows the matrix page."""
+# A count "winning" a market needs half an R of daylight before it is
+# called a win or a loss; anything closer is a tie. Coarse on purpose - a
+# tenth of an R between two eight-trade cells is noise, not a verdict.
+TIE_R = 0.5
+# Below this many rule-3 trades a market's row is dimmed and left out of
+# the win/loss count: a comparison against one or two trades is not a
+# comparison. Dimmed, never hidden, the house rule.
+MIN_R3_TRADES = 3
+
+
+def market_table(trades_by_cell, suffix, title):
+    """One anchor's per-market breakdown: net R per rule-1 count, the best
+    count per row shaded, rows ordered by the rule-3 result.
+
+    Derived from the payload's own trades at page-build time (Lode,
+    2026-08-26: "check per market whether rule 1 = 3 still wins"), so it
+    can never lag the grid above it and `--page` rebuilds it too. The
+    summary counts only markets with a rule-3 sample; the reading rules
+    the first analysis surfaced are printed with the table, because two
+    kinds of row flatter the flanks for free: a market that loses money at
+    EVERY count (there, trading less just loses less) and a thin row
+    (one or two trades is not a sample).
+    """
+    per = {}
+    for n in REVERSAL_COUNTS:
+        for t in trades_by_cell[f"{suffix} r{n}"]:
+            cell = per.setdefault(t["market"], {}).setdefault(n, [0, 0.0])
+            cell[0] += 1
+            cell[1] += t["net_r"]
+
+    def stat(m, n):
+        return per[m].get(n, (0, 0.0))
+
+    order = sorted(per, key=lambda m: -stat(m, 3)[1])
+    wins = ties = losses = 0
+    rows = []
+    for m in order:
+        vals = {n: stat(m, n)[1] for n in REVERSAL_COUNTS}
+        best = max(REVERSAL_COUNTS, key=lambda n: vals[n])
+        thin = stat(m, 3)[0] < MIN_R3_TRADES
+        if not thin:
+            if best == PUBLISHED_COUNT:
+                wins += 1
+            elif abs(vals[best] - vals[PUBLISHED_COUNT]) <= TIE_R:
+                ties += 1
+            else:
+                losses += 1
+        cells = []
+        for n in REVERSAL_COUNTS:
+            tr, r = stat(m, n)
+            cls = " class='best'" if (tr and n == best) else ""
+            cells.append(f"<td{cls}>"
+                         f"{f'{tr} / {r:+.2f}' if tr else '-'}</td>")
+        rows.append(f"<tr{' class=dim' if thin else ''}><td>{m}</td>"
+                    + "".join(cells) + f"<td>r{best}</td></tr>")
+    judged = wins + ties + losses
+    summary = (f"rule 1 = {PUBLISHED_COUNT} best in <b>{wins}</b> of the "
+               f"{judged} markets with a rule-3 sample, within {TIE_R}R of "
+               f"the best in {ties}, beaten in {losses}; rows under "
+               f"{MIN_R3_TRADES} rule-3 trades are dimmed and not counted.")
+    head = "".join(
+        f"<th>r{n}{' *' if n == PUBLISHED_COUNT else ''}</th>"
+        for n in REVERSAL_COUNTS)
+    return (f"<div><b>{title}</b><br><span class='note'>{summary}</span>"
+            f"<table class='pm'><tr><th>market</th>{head}<th>best</th></tr>"
+            + "".join(rows) + "</table></div>")
+
+
+def write_page(report, calendar, built, trades_by_cell):
+    """The sweep page: one chart, one table, a checkbox per row, the
+    per-market breakdown, and its own update button. Layout follows the
+    matrix page."""
     lib = run_1m.LIB_PATH.read_text(encoding="utf-8")
     first = min((c[0][0] for c in (r["curve"] for r in report.values()) if c),
                 default=None)
@@ -399,6 +469,12 @@ def write_page(report, calendar, built):
         for r in report.values())
     updater = (UPDATER_JS.replace("__STEP__", REFRESH_STEP)
                .replace("__BUILT__", built))
+    pm = "".join(
+        market_table(trades_by_cell,
+                     "4th5th" if label == "4th/5th" else label,
+                     f"{label} stop, band "
+                     f"{mx.band_label(*mx.BAND_CUTS_BY_STOP[label][1])}")
+        for label, _mc in ANCHORS)
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc v2 - rule 1 sweep (tested reversals)</title><style>
 body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
@@ -432,6 +508,16 @@ overflow:auto; background:#14150f; color:#d7d6cd; border-radius:8px;
 padding:10px 12px; font:11.5px ui-monospace,Consolas,monospace;
 white-space:pre-wrap; }}
 .note {{ color:#666; }}
+/* The per-market breakdown: one table per anchor, side by side. Scoped
+   class, same reason as #tbl. */
+#pm {{ display:flex; gap:34px; flex-wrap:wrap; align-items:flex-start;
+margin-top:8px; }}
+.pm {{ border-collapse:collapse; margin-top:6px; }}
+.pm td, .pm th {{ padding:3px 8px; border-bottom:1px solid #ddd;
+text-align:right; font-size:12px; }}
+.pm td:first-child, .pm th:first-child {{ text-align:left; }}
+.pm td.best {{ background:#e5f5e0; }}
+.pm tr.dim td {{ opacity:.45; }}
 </style></head><body>
 <b>quickfix1m1dc v2 - rule 1 sweep: how many reversals must be tested
 before the setup arms</b>
@@ -485,6 +571,15 @@ better rule.</div>
 <th>day-2 win / day-2 loss / stop</th>
 <th title="the market carrying the largest share of the cell's net R">top market</th>
 <th></th></tr>{head}</table>
+<div style="margin-top:20px"><b>Per market: does rule 1 = 3 hold
+everywhere?</b>
+<span class="note"> Trades / net R per market per count, rows ordered by
+the rule-3 result, the best count of each row shaded. Read the shading
+with two rules: a "win" on a market that loses money at EVERY count is
+less exposure to a losing market, not a better arming rule, and a dimmed
+row (under 3 rule-3 trades) is not a sample. Derived from the same trades
+as the grid above, on every build.</span></div>
+<div id="pm">{pm}</div>
 <script>{lib}</script><script>
 const chart = LightweightCharts.createChart(
   document.getElementById('chart'),

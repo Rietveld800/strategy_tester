@@ -237,7 +237,19 @@ and `--page`. First reading (2026-08-26 data): r3 is the ONLY count
 positive in all 8 months on both anchors, but it is monthly WINNER only
 4/8 (4th/5th) and 2/8 (hybrid) - its edge is consistency, not monthly
 dominance; r1 owned Jan-Mar. NOT in charter's overlays or variant list,
-by request. First reading
+by request. THE EVIDENCE READING IS `research_1m_rule1.py` (2026-08-27,
+seconds, no engine passes; writes `quickfix1m1dcRule1_research.txt`):
+paired day-cluster bootstrap (r3 vs each count, net R AND per-trade SR,
+no selection deflation - r3 is the pre-existing rule, not a swept
+optimum), the marginal-trade decomposition, the rolling difference.
+First reading: r3's edge over LOWER counts is per-trade QUALITY (dSR
+P <= 0.02 both anchors; raw money unproven - hybrid vs r1 P = 0.48) and
+the mechanism is TIMING on shared sessions (4th/5th: +42.2R vs +0.7R on
+the same 49 sessions), NOT the marginal trades losing (only-r1 trades
+are ~breakeven-plus, +0.15R avg); over HIGHER counts the edge is MONEY
+(P = 0.01-0.03): the trades 4/5 forfeit win 55-59%. So the r3 claim is
+RISK-ADJUSTED superiority, which is exactly what the 6%-DD levered
+finals show. First reading
 (2026-08-26 data): 3 tops both anchors on every headline metric; 1 and 2
 add trades that cost money and lengthen the streak, 4 and 5 remove more
 winners than losers - but the flanks are thin samples, and whether the

@@ -224,8 +224,20 @@ whether rule 1 = 3 still wins"): net R per market per count for each
 anchor, best cell shaded, rows under 3 rule-3 trades dimmed and not
 counted, derived from the payload's trades on every build. Its reading
 rules are printed with it: a win on a market that loses at every count
-is less exposure, not a better rule, and a thin row is not a sample. NOT
-in charter's overlays or variant list, by request. First reading
+is less exposure, not a better rule, and a thin row is not a sample.
+AND ONE PAGE PER MONTH (Lode, 2026-08-27:
+"if r3 wins almost every month then that is proof of the r3 edge"):
+`quickfix1m1dcRule1_<month>.html`, the sweep's trades PARTITIONED BY
+ENTRY MONTH - never eight isolated backtests, because the engine carries
+state across days (lockout, held positions, trailing window), so the
+monthly tables SUM EXACTLY to the full-window page and the build has no
+extra engine passes. Each page carries that month's r1-r5 tables per
+anchor plus an all-months net-R strip; all rebuilt by the same runner
+and `--page`. First reading (2026-08-26 data): r3 is the ONLY count
+positive in all 8 months on both anchors, but it is monthly WINNER only
+4/8 (4th/5th) and 2/8 (hybrid) - its edge is consistency, not monthly
+dominance; r1 owned Jan-Mar. NOT in charter's overlays or variant list,
+by request. First reading
 (2026-08-26 data): 3 tops both anchors on every headline metric; 1 and 2
 add trades that cost money and lengthen the streak, 4 and 5 remove more
 winners than losers - but the flanks are thin samples, and whether the

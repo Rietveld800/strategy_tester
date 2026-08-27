@@ -233,9 +233,13 @@ def main():
         trades={n: results[n]["trades"] for n, _p, _d in CELLS},
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
-    write_page(report, calendar, built,
-               {n: results[n]["trades"] for n, _p, _d in CELLS})
-    print(f"\nwrote {OUT_JSON.name} and {OUT_HTML.name}")
+    trades_by_cell = {n: results[n]["trades"] for n, _p, _d in CELLS}
+    write_page(report, calendar, built, trades_by_cell)
+    months = write_month_pages(trades_by_cell,
+                               [str(d) for d in calendar], built)
+    print(f"\nwrote {OUT_JSON.name}, {OUT_HTML.name} and "
+          f"{len(months)} monthly pages ({month_name(months[0])} - "
+          f"{month_name(months[-1])})")
 
 
 def rebuild_page():
@@ -251,8 +255,10 @@ def rebuild_page():
         report[name] = dict(cell, color=color_for(cell["props"]),
                             curve=curve)
     write_page(report, p["calendar"], p.get("built", "unknown"), p["trades"])
-    print(f"redrew {OUT_HTML.name} from {OUT_JSON.name} "
-          f"({len(report)} cells, no backtest)")
+    months = write_month_pages(p["trades"], p["calendar"],
+                               p.get("built", "unknown"))
+    print(f"redrew {OUT_HTML.name} and {len(months)} monthly pages from "
+          f"{OUT_JSON.name} ({len(report)} cells, no backtest)")
 
 
 # The page's own update control, same mechanics as the R-cut pages: probe
@@ -427,6 +433,165 @@ def market_table(trades_by_cell, suffix, title):
             + "".join(rows) + "</table></div>")
 
 
+# ---- the monthly pages (Lode, 2026-08-27) ---------------------------------
+#
+# "Run the backtest over a single month and do this for all months ... if r3
+# wins almost every month then that is proof of the r3 edge." One page per
+# month of the backtest window, quickfix1m1dcRule1_<month>.html.
+#
+# THE MONTHS ARE A PARTITION OF THE FULL RUN, NOT EIGHT ISOLATED BACKTESTS.
+# Every trade of the sweep is assigned to the month of its ENTRY session and
+# nothing is recomputed: the engine carries state across days (the session
+# lockout, a position held into the next session, the trailing range window),
+# so an isolated January run would open with missing carry-ins and end with
+# forced exits, and its numbers would not add up to anything. Partitioned by
+# entry month, the eight tables SUM EXACTLY to the sweep page's totals, which
+# is what makes "does rule 3 win every month" a decomposition of the same
+# evidence rather than a new experiment.
+#
+# A month holds a handful of trades per cell, so the monthly winner is noisy
+# by construction: the pages print net R and the ordering, and the reading
+# rule beside them - read the SIGN and the consistency across months, not
+# the exact figure.
+
+MONTHS_EN = ("january", "february", "march", "april", "may", "june", "july",
+             "august", "september", "october", "november", "december")
+
+
+def month_name(mk):
+    """`2026-01` -> `january`. Filenames carry the month name alone (Lode's
+    naming); the page title carries the year too."""
+    return MONTHS_EN[int(mk[5:7]) - 1]
+
+
+def month_path(mk):
+    return HERE / "output" / f"quickfix1m1dcRule1_{month_name(mk)}.html"
+
+
+def month_stats(trades):
+    n = len(trades)
+    wins = sum(1 for t in trades if t["net_r"] > 0)
+    net = sum(t["net_r"] for t in trades)
+    return dict(trades=n, win_rate=round(100 * wins / n, 1) if n else None,
+                net_r=round(net, 2), avg_r=round(net / n, 3) if n else None)
+
+
+def month_links(months, current=None, main_link=False):
+    """The navigation line every page in the family shares."""
+    parts = []
+    if main_link:
+        parts.append(f"<a href='{OUT_HTML.name}'>full window</a>")
+    for mk in months:
+        label = month_name(mk)
+        parts.append(f"<b>{label}</b>" if mk == current
+                     else f"<a href='{month_path(mk).name}'>{label}</a>")
+    return " &middot; ".join(parts)
+
+
+def write_month_pages(trades_by_cell, calendar_iso, built):
+    """One page per month of the backtest window, from the sweep's own
+    trades. Returns the months written."""
+    months = sorted({d[:7] for d in calendar_iso})
+    # (anchor label, suffix, {cell name: {month: trades}})
+    anchors = []
+    for label, _mc in ANCHORS:
+        suffix = "4th5th" if label == "4th/5th" else label
+        by_month = {}
+        for n in REVERSAL_COUNTS:
+            cell = {}
+            for t in trades_by_cell[f"{suffix} r{n}"]:
+                cell.setdefault(t["entry_date"][:7], []).append(t)
+            by_month[n] = cell
+        band = mx.band_label(*mx.BAND_CUTS_BY_STOP[label][1])
+        anchors.append((label, band, by_month))
+    for mk in months:
+        title = f"{month_name(mk).capitalize()} {mk[:4]}"
+        sections = []
+        for label, band, by_month in anchors:
+            stats = {n: month_stats(by_month[n].get(mk, []))
+                     for n in REVERSAL_COUNTS}
+            best = max(REVERSAL_COUNTS,
+                       key=lambda n: stats[n]["net_r"])
+            rows = "".join(
+                f"<tr{' class=base' if n == PUBLISHED_COUNT else ''}>"
+                f"<td>r{n}{' *' if n == PUBLISHED_COUNT else ''}</td>"
+                f"<td>{s['trades']}</td>"
+                f"<td>{s['win_rate'] if s['win_rate'] is not None else '-'}</td>"
+                f"<td{' class=best' if (n == best and s['trades']) else ''}>"
+                f"{s['net_r']:+.2f}</td>"
+                f"<td>{s['avg_r'] if s['avg_r'] is not None else '-'}</td>"
+                f"</tr>"
+                for n, s in stats.items())
+            # The all-months strip: net R per count per month, this month's
+            # column highlighted, so the cross-month verdict is readable
+            # from any page of the family.
+            strip_head = "".join(
+                f"<th{' class=cur' if m == mk else ''}>{month_name(m)[:3]}"
+                f"</th>" for m in months)
+            strip_rows = ""
+            for n in REVERSAL_COUNTS:
+                vals = {m: round(sum(t['net_r']
+                                     for t in by_month[n].get(m, [])), 2)
+                        for m in months}
+                winners = {m: max(REVERSAL_COUNTS, key=lambda k: round(
+                    sum(t['net_r'] for t in by_month[k].get(m, [])), 2))
+                    for m in months}
+                strip_rows += (
+                    f"<tr{' class=base' if n == PUBLISHED_COUNT else ''}>"
+                    f"<td>r{n}{' *' if n == PUBLISHED_COUNT else ''}</td>"
+                    + "".join(
+                        f"<td class='{'cur ' if m == mk else ''}"
+                        f"{'best' if winners[m] == n else ''}'>"
+                        f"{vals[m]:+.2f}</td>" for m in months)
+                    + f"<td>{sum(vals.values()):+.2f}</td></tr>")
+            sections.append(
+                f"<h3>{label} stop, band {band}</h3>"
+                f"<table class='pm'><tr><th>rule 1</th><th>trades</th>"
+                f"<th>wr%</th><th>netR</th><th>avg R</th></tr>{rows}</table>"
+                f"<div class='note' style='margin-top:14px'>net R by month, "
+                f"every month of the window (best count per month shaded, "
+                f"this month's column boxed):</div>"
+                f"<table class='pm strip'><tr><th></th>{strip_head}"
+                f"<th>total</th></tr>{strip_rows}</table>")
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>quickfix1m1dc v2 - rule 1 sweep, {title}</title><style>
+body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
+sans-serif; margin:0; padding:14px; max-width:1150px; }}
+.note {{ color:#666; }}
+h3 {{ font-size:13px; margin:20px 0 4px; }}
+.pm {{ border-collapse:collapse; margin-top:6px; }}
+.pm td, .pm th {{ padding:3px 9px; border-bottom:1px solid #ddd;
+text-align:right; font-size:12px; }}
+.pm td:first-child, .pm th:first-child {{ text-align:left; }}
+.pm td.best {{ background:#e5f5e0; }}
+.pm tr.base td:first-child {{ font-weight:600; }}
+.strip td.cur, .strip th.cur {{ border-left:1px solid #999;
+border-right:1px solid #999; }}
+#nav {{ margin-top:10px; }}
+</style></head><body>
+<b>quickfix1m1dc v2 - rule 1 sweep, {title}</b>
+<span class="note"> The sweep's trades assigned to the month of their ENTRY
+session - a partition of the full run, not an isolated backtest: the engine
+carries state across days (the lockout, positions held into the next
+session, the trailing window), so these tables sum exactly to the
+<a href="{OUT_HTML.name}">full-window page</a>. A trade entered at the end
+of the month and exited in the next counts here, in its entry month.
+<b style="color:#222">A month is a handful of trades per cell</b>: read the
+sign and the consistency across months, not the exact figure - the monthly
+winner is noisy by construction. The rows at rule 1 = 3 (marked *) are the
+published rule.</span>
+<div id="nav" class="note">{month_links(months, current=mk,
+                                        main_link=True)}</div>
+{''.join(sections)}
+<div class="note" style="margin-top:18px">built <b style="color:#222">
+{built}</b> &middot; rebuilt together with the sweep: the update button on
+the <a href="{OUT_HTML.name}">full-window page</a> recomputes every month,
+and so does <b>--page</b>.</div>
+</body></html>"""
+        month_path(mk).write_text(html, encoding="utf-8")
+    return months
+
+
 def write_page(report, calendar, built, trades_by_cell):
     """The sweep page: one chart, one table, a checkbox per row, the
     per-market breakdown, and its own update button. Layout follows the
@@ -475,6 +640,8 @@ def write_page(report, calendar, built, trades_by_cell):
                      f"{label} stop, band "
                      f"{mx.band_label(*mx.BAND_CUTS_BY_STOP[label][1])}")
         for label, _mc in ANCHORS)
+    months = sorted({str(d)[:7] for d in calendar})
+    month_nav = month_links(months)
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>quickfix1m1dc v2 - rule 1 sweep (tested reversals)</title><style>
 body {{ background:#fff; color:#222; font:13px -apple-system,Segoe UI,
@@ -580,6 +747,10 @@ less exposure to a losing market, not a better arming rule, and a dimmed
 row (under 3 rule-3 trades) is not a sample. Derived from the same trades
 as the grid above, on every build.</span></div>
 <div id="pm">{pm}</div>
+<div style="margin-top:20px"><b>Month by month</b>
+<span class="note"> the same trades partitioned by entry month, one page
+per month (they sum exactly to this page's totals):</span><br>
+<span class="note">{month_nav}</span></div>
 <script>{lib}</script><script>
 const chart = LightweightCharts.createChart(
   document.getElementById('chart'),

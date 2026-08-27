@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 185481.04,
+    "final": 188277.54,
     "max_dd_pct": 6.17,
-    "trades": 98,
-    "win_rate": 40.8,
-    "net_r": 66.0
+    "trades": 99,
+    "win_rate": 41.4,
+    "net_r": 67.5
   },
   "calendar": [
     "2026-01-02",
@@ -189,21 +189,22 @@
     "2026-08-20",
     "2026-08-21",
     "2026-08-24",
-    "2026-08-25"
+    "2026-08-25",
+    "2026-08-26"
   ],
   "markets": [
     {
-      "trades": 7,
-      "wins": 4,
-      "win_rate": 57.1,
-      "net_r_total": 4.73,
-      "final_cash": 104743.59,
-      "return_pct": 4.74,
+      "trades": 8,
+      "wins": 5,
+      "win_rate": 62.5,
+      "net_r_total": 6.24,
+      "final_cash": 106322.8,
+      "return_pct": 6.32,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 3,
         "no_confirm": 0,
-        "close1": 4,
+        "close1": 5,
         "data_end": 0
       },
       "refused_wide": 2,
@@ -2976,6 +2977,29 @@
       "risk_usd": 1058.15,
       "pnl_usd": -1071.17,
       "cash_after": 104743.59,
+      "market": "GC"
+    },
+    {
+      "side": "short",
+      "contract": "GCZ6",
+      "entry_date": "2026-08-25",
+      "entry_ts": "2026-08-25 11:50:00+00:00",
+      "entry": 4702.400000000001,
+      "stop": 4735.1,
+      "rpu": 32.5,
+      "entry_first": 4702.6,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.3846,
+      "exit_date": "2026-08-26",
+      "exit_ts": "2026-08-26 17:30:18.822749359+00:00",
+      "exit": 4653.3,
+      "reason": "close1",
+      "gross_r": 1.5108,
+      "cost_r": 0.0031,
+      "net_r": 1.5077,
+      "risk_usd": 1047.44,
+      "pnl_usd": 1579.21,
+      "cash_after": 106322.8,
       "market": "GC"
     }
   ]

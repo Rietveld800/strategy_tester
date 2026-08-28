@@ -2397,6 +2397,30 @@
    "nth_today": 1,
    "n_today": 1,
    "episode_n": 2
+  },
+  {
+   "i": 99,
+   "market": "NG",
+   "side": "short",
+   "level": 2.882,
+   "episode": "NG|short|2.882|83",
+   "entry_ts": "2026-08-26 18:12:00+00:00",
+   "exit_ts": "2026-08-27 13:30:00+00:00",
+   "entry_date": "2026-08-26",
+   "reason": "stop",
+   "net_r": -1.0635,
+   "stop": 2.945,
+   "run_files": 4,
+   "run_start": "2026-08-22 07:35:00+00:00",
+   "tests_in_run": 22,
+   "tests_today": 16,
+   "attempt": 1,
+   "prior_losses": 0,
+   "prior_wins": 0,
+   "same_day_prior": 0,
+   "nth_today": 1,
+   "n_today": 1,
+   "episode_n": 1
   }
  ],
  "episodes": [
@@ -2847,6 +2871,22 @@
    "run_files": 2,
    "tests_first": 5,
    "tests_last": 5
+  },
+  {
+   "episode": "NG|short|2.882|83",
+   "market": "NG",
+   "side": "short",
+   "level": 2.882,
+   "n": 1,
+   "wins": 0,
+   "net_r": -1.063,
+   "sequence": "L",
+   "first": "2026-08-26 18:12:00+00:00",
+   "last": "2026-08-26 18:12:00+00:00",
+   "days": 1,
+   "run_files": 4,
+   "tests_first": 22,
+   "tests_last": 22
   },
   {
    "episode": "UDOW|short|63.2|15",

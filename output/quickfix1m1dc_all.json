@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 188277.54,
+    "final": 186275.2,
     "max_dd_pct": 6.17,
-    "trades": 99,
-    "win_rate": 41.4,
-    "net_r": 67.5
+    "trades": 100,
+    "win_rate": 41.0,
+    "net_r": 66.44
   },
   "calendar": [
     "2026-01-02",
@@ -349,15 +349,15 @@
       "tick": 0.01
     },
     {
-      "trades": 7,
+      "trades": 8,
       "wins": 3,
-      "win_rate": 42.9,
-      "net_r_total": 4.34,
-      "final_cash": 104242.83,
-      "return_pct": 4.24,
+      "win_rate": 37.5,
+      "net_r_total": 3.28,
+      "final_cash": 103134.22,
+      "return_pct": 3.13,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 4,
+        "stop": 5,
         "no_confirm": 0,
         "close1": 3,
         "data_end": 0
@@ -3002,6 +3002,29 @@
       "pnl_usd": 1579.21,
       "cash_after": 106322.8,
       "market": "GC"
+    },
+    {
+      "side": "short",
+      "contract": "NGV26",
+      "entry_date": "2026-08-26",
+      "entry_ts": "2026-08-26 18:12:00+00:00",
+      "entry": 2.8800000000000003,
+      "stop": 2.945,
+      "rpu": 0.06299999999999972,
+      "entry_first": 2.882,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.5727,
+      "exit_date": "2026-08-27",
+      "exit_ts": "2026-08-27 13:30:00+00:00",
+      "exit": 2.945,
+      "reason": "stop",
+      "gross_r": -1.0317,
+      "cost_r": 0.0317,
+      "net_r": -1.0635,
+      "risk_usd": 1042.43,
+      "pnl_usd": -1108.61,
+      "cash_after": 103134.22,
+      "market": "NG"
     }
   ]
 }

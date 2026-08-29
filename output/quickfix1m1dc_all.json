@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 186275.2,
+    "final": 197977.2,
     "max_dd_pct": 6.17,
-    "trades": 100,
-    "win_rate": 41.0,
-    "net_r": 66.44
+    "trades": 101,
+    "win_rate": 41.6,
+    "net_r": 72.72
   },
   "calendar": [
     "2026-01-02",
@@ -191,7 +191,8 @@
     "2026-08-24",
     "2026-08-25",
     "2026-08-26",
-    "2026-08-27"
+    "2026-08-27",
+    "2026-08-28"
   ],
   "markets": [
     {
@@ -569,17 +570,17 @@
       "tick": 0.05
     },
     {
-      "trades": 0,
-      "wins": 0,
-      "win_rate": null,
-      "net_r_total": 0,
-      "final_cash": 100000.0,
-      "return_pct": 0.0,
+      "trades": 1,
+      "wins": 1,
+      "win_rate": 100.0,
+      "net_r_total": 6.28,
+      "final_cash": 106282.05,
+      "return_pct": 6.28,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 0,
         "no_confirm": 0,
-        "close1": 0,
+        "close1": 1,
         "data_end": 0
       },
       "refused_wide": 4,
@@ -3025,6 +3026,29 @@
       "pnl_usd": -1108.61,
       "cash_after": 103134.22,
       "market": "NG"
+    },
+    {
+      "side": "short",
+      "contract": "URA",
+      "entry_date": "2026-08-27",
+      "entry_ts": "2026-08-27 18:26:00+00:00",
+      "entry": 48.209999999999994,
+      "stop": 48.62,
+      "rpu": 0.39000000000000057,
+      "entry_first": 48.23,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.4149,
+      "exit_date": "2026-08-28",
+      "exit_ts": "2026-08-28 20:04:00+00:00",
+      "exit": 45.75,
+      "reason": "close1",
+      "gross_r": 6.3077,
+      "cost_r": 0.0256,
+      "net_r": 6.2821,
+      "risk_usd": 1000.0,
+      "pnl_usd": 6282.05,
+      "cash_after": 106282.05,
+      "market": "URA"
     }
   ]
 }

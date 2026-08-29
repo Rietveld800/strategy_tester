@@ -8,8 +8,8 @@
   "source": "strategy_tester",
   "starting_capital": 100000.0,
   "risk_pct": 1.0,
-  "n_markets": 17,
-  "n_trades": 100
+  "n_markets": 18,
+  "n_trades": 101
  },
  "markets": {
   "United_States_Oil_Fund_LP": {
@@ -1310,6 +1310,24 @@
      "target": null,
      "reason": "close1",
      "r": 1.26,
+     "bars": null
+    }
+   ]
+  },
+  "Global_X_Uranium_ETF": {
+   "tick": 0.01,
+   "price_decimals": 2,
+   "trades": [
+    {
+     "side": "short",
+     "entry_date": "2026-08-27",
+     "entry": 48.209999999999994,
+     "exit_date": "2026-08-28",
+     "exit": 45.75,
+     "stop": 48.62,
+     "target": null,
+     "reason": "close1",
+     "r": 6.282,
      "bars": null
     }
    ]

@@ -432,6 +432,57 @@ def rules_html(p):
 </div>"""
 
 
+def open_html(open_positions):
+    """The positions entered but not yet closed (Lode, 2026-08-29): a
+    window-end entry waiting for the settlement of its market's next
+    trading day, carried by run_1m.py as `open_positions` beside the
+    blotter. None means the payload does not track them at all - a matrix
+    cell, or a JSON from before the key existed - and the section is
+    omitted; an empty LIST is a positive statement and prints as one.
+    Not to be confused with the "Open positions" chart pane, which counts
+    concurrently open CLOSED-by-now trades over time."""
+    if open_positions is None:
+        return ""
+    head = '<div class="section-h">Currently open</div>'
+    if not open_positions:
+        return (head + '<p class="chartnote">No open positions at the end '
+                'of the data: every entry in the window has met its '
+                'exit.</p>')
+    note = (
+        '<p class="chartnote">Entered but not yet closed: each of these '
+        'exits at the settlement of its market&#39;s next trading day, so '
+        'a position entered before a weekend or holiday waits here until '
+        'that settlement prints. <b>R so far</b> is marked at the last '
+        'settlement in the data and nothing is booked &mdash; every '
+        'figure above counts closed trades only. A market whose data '
+        'stopped entirely never parks here: a position stranded by a '
+        'data stop is force-closed in the blotter as <b>Data end</b>.</p>')
+    cols = [("Market", "l", 12), ("Side", "l", 7), ("In (UTC)", "l", 15),
+            ("In", "", 11), ("Stop", "", 11), ("R/24h", "", 9),
+            ("R so far", "", 11), ("Marked at (UTC)", "l", 24)]
+    heads = "".join(f'<th class="{c}" style="width:{w}%">{lab}</th>'
+                    for lab, c, w in cols)
+    rows = []
+    for o in sorted(open_positions, key=lambda o: o["entry_ts"]):
+        ratio = o.get("rpu_range_ratio")
+        rows.append(
+            f'<tr>'
+            f'<td class="l">{esc(o["market"])}</td>'
+            f'<td class="l">{o["side"]}</td>'
+            f'<td class="l mono">{stamp(o["entry_ts"])}</td>'
+            f'<td class="mono">{price(o["entry"])}</td>'
+            f'<td class="mono">{price(o["stop"])}</td>'
+            f'<td class="mono">'
+            f'{f"{ratio:.2f}" if ratio is not None else "&mdash;"}</td>'
+            f'<td class="mono {cls(o["unrealized_r"])}">'
+            f'{signed(o["unrealized_r"])}</td>'
+            f'<td class="l mono">{stamp(o["mark_ts"])}</td>'
+            f'</tr>')
+    return (f'{head}{note}<div class="tradecard"><table class="trades">'
+            f'<thead><tr>{heads}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div>')
+
+
 def blotter_html(trades, money_of, links):
     cols = [("Market", "l", 10), ("Side", "l", 5), ("In (UTC)", "l", 12.5),
             ("Out (UTC)", "l", 12.5), ("Held", "", 5.5), ("In", "", 8),
@@ -787,6 +838,7 @@ __RULES__
   <th style="width:9%">Avg R</th>
   <th class="l wrap" style="width:42%">What it means</th>
 </tr></thead><tbody>__CLASSES__</tbody></table></div>
+__OPEN__
 <div class="section-h">All trades</div>
 <p class="chartnote">__BLOTNOTE__</p>
 __BLOTTER__
@@ -1060,6 +1112,7 @@ def build(data=None, out=None, variant=None):
             .replace("__NOTE__", note)
             .replace("__STATS__", stats)
             .replace("__CLASSES__", class_rows)
+            .replace("__OPEN__", open_html(data.get("open_positions")))
             .replace("__BLOTNOTE__", blotnote)
             .replace("__BLOTTER__", blotter_html(trades, money_of, links))
             .replace("__MKTNOTE__", mktnote)

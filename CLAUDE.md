@@ -576,6 +576,30 @@ run is also what charter's trade study reads. The rules block and the stop
 sentence are GENERATED from the payload's dials, so a variant page states its
 own model rather than the baseline's.
 
+**OPEN POSITIONS ARE ON THE PUBLISHED PAGE SINCE 2026-08-29** (Lode:
+"which trades are currently open and waiting for the settlement time of
+the next trading day ... there could be trades which are open during the
+weekend"). The window's last day used to refuse entries outright ("no
+exit day left"), so the position the live method holds over a weekend
+was invisible - not open, not closed, simply absent. run_1m's published
+pass now builds its days with `window_end_entries=True` and runs the
+engine with `carry_open=True`: a position still open when a LIVE
+market's data ends comes back as `summary["open_position"]` - booked
+NOWHERE, the trade list and every statistic untouched - is written to
+the JSON as `open_positions` and rendered as the report's "Currently
+open" table (entry, stop, R marked at the last settlement). LIVE means
+the market's newest bars are at most `OPEN_MAX_AGE_DAYS` (7) calendar
+days old at run time, so a rerun on a stale archive rightly reports
+nothing open. **A market whose Socrates data stopped ENTIRELY is the
+OTHER case and keeps the old conservative build** (Lode's explicit
+distinction, same day): no window-end entry, and a stranded position
+force-closes in the blotter as `data_end`, because that trade can never
+close. The matrix, the R-cut grids, the rule-1 sweep and every research
+pass call `market_inputs` at its default and stay bit-identical; the
+engine's summary only carries the new key when the dial is on; variant
+pages have no `open_positions` key and omit the section. Pinned by the
+carry_open tests in `tests/test_engine_1m.py`.
+
 ## Working agreements (carried over from charter)
 
 - Commit straight to main.

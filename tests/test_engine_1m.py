@@ -930,3 +930,60 @@ def test_range_mode_reaches_run_market_and_rejects_nonsense():
         run_market(days, files, TICK, range_mode="nonsense")
     with pytest.raises(ValueError):
         ratio_series(days, files, TICK, range_mode="nonsense")
+
+
+# --- carry_open: a window-end position is a fact, not a data_end trade ------
+# (Lode, 2026-08-29: current open positions are something else than a
+# position stranded by a market whose data stopped entirely.)
+
+def entry_day_only():
+    """The window ends on the entry day itself: no next session exists,
+    so the position cannot meet its close1 exit inside the data. The
+    entry-day settlement (99.5, beyond the first reversal 100.0 for a
+    short) confirms the trade, so `confirm` does not abort it first."""
+    return [Day(date=date(2026, 6, 10), contract="GCQ6",
+                bars=short_entry_day() + flat_bars(10, "04:00", 3, 99.7),
+                settle_ts=ts(10, "17:30"), settle_price=99.5)]
+
+
+def test_open_at_data_end_books_data_end_by_default():
+    trades, summary = run_market(entry_day_only(), [base_file()], TICK)
+    assert len(trades) == 1
+    assert trades[0]["reason"] == "data_end" and trades[0]["exit"] == 99.5
+    # the key only exists when the dial is on: every caller that never
+    # asked sees the summary it always saw
+    assert "open_position" not in summary
+
+
+def test_carry_open_returns_the_position_and_books_nothing():
+    trades, summary = run_market(entry_day_only(), [base_file()], TICK,
+                                 carry_open=True)
+    assert trades == []
+    o = summary["open_position"]
+    assert o["side"] == "short" and o["contract"] == "GCQ6"
+    assert abs(o["entry"] - 99.8) < 1e-9      # 100.0 - 2 ticks slippage
+    assert abs(o["stop"] - 102.6) < 1e-9      # 5th reversal 102.5 + tick
+    assert o["mark"] == 99.5 and "17:30" in o["mark_ts"]
+    # short from 99.8 marked at 99.5, gross of the exit cost not yet paid
+    assert abs(o["unrealized_r"] - (99.8 - 99.5) / 2.6) < 1e-4
+    # nothing is booked: no trade, no cash move, no data_end in the count
+    assert summary["trades"] == 0
+    assert summary["return_pct"] == 0.0
+    assert summary["reasons"]["data_end"] == 0
+
+
+def test_carry_open_changes_nothing_when_every_position_closes():
+    def make_days():
+        return [
+            Day(date=date(2026, 6, 10), contract="GCQ6",
+                bars=short_entry_day() + flat_bars(10, "04:00", 3, 99.7),
+                settle_ts=ts(10, "17:30"), settle_price=99.5),
+            Day(date=date(2026, 6, 11), contract="GCQ6",
+                bars=flat_bars(11, "01:00", 3, 98.0),
+                settle_ts=ts(11, "17:30"), settle_price=98.0),
+        ]
+    plain, _ = run_market(make_days(), [base_file()], TICK)
+    carried, summary = run_market(make_days(), [base_file()], TICK,
+                                  carry_open=True)
+    assert plain == carried
+    assert summary["open_position"] is None

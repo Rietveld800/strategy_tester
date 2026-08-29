@@ -589,7 +589,8 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                allow_pre_activation=True, confirm=True, stop_mode="ladder",
                max_entries_per_session=1, min_rpu_range_ratio=None,
                max_rpu_range_ratio=None, range_mode="trading_day",
-               min_reversals=MIN_REVERSALS, geom_by_day=False):
+               min_reversals=MIN_REVERSALS, geom_by_day=False,
+               carry_open=False):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
 
     `files` must be sorted by activation_ts. Bars must be chronological.
@@ -609,6 +610,19 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     the tested list. The ladder requirement and the stop anchor are
     untouched by this dial; at 5 the ladder implicitly needs a 5th level,
     since only ladder levels can be tested.
+
+    `carry_open` (Lode, 2026-08-29): a position still open when the data
+    ends is normally force-closed as a `data_end` trade at the last
+    settlement. That is the right answer for a market whose data stopped
+    ENTIRELY - the trade can never close, so it is booked and counted.
+    For a live market's window end it is the wrong answer: the position
+    is simply still open, waiting for the next session's settlement
+    (a weekend can sit in between). With carry_open the engine returns
+    such a position under summary["open_position"] instead - entry, stop
+    and an unrealized R marked at the last settlement - and books
+    NOTHING: no cash moves, no trade is appended, so every statistic
+    counts closed trades only. The key exists only when the dial is on,
+    which keeps the summary byte-identical for every existing caller.
 
     `geom_by_day` is NOT a dial - it changes nothing the engine decides.
     When True the summary carries an extra `geom_days` key: the same four
@@ -884,9 +898,26 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             pos = settle(pos)
         prev_trading_date = day.date
 
+    open_position = None
     if pos is not None:
         last = days[-1]
-        book(pos, last.settle_ts, last.settle_price, "data_end")
+        if carry_open:
+            sign = -1.0 if pos.side == "short" else 1.0
+            open_position = dict(
+                side=pos.side, contract=pos.contract,
+                entry_date=str(pos.entry_date), entry_ts=str(pos.entry_ts),
+                entry=pos.entry, stop=pos.stop_entry, rpu=pos.rpu,
+                entry_first=pos.entry_first,
+                stop_tightened=pos.stop_tightened,
+                rpu_range_ratio=(round(pos.rpu_range_ratio, 4)
+                                 if pos.rpu_range_ratio is not None
+                                 else None),
+                risk_usd=round(pos.risk_usd, 2),
+                mark_ts=str(last.settle_ts), mark=last.settle_price,
+                unrealized_r=round(
+                    sign * (last.settle_price - pos.entry) / pos.rpu, 4))
+        else:
+            book(pos, last.settle_ts, last.settle_price, "data_end")
         pos = None
 
     wins = [t for t in trades if t["net_r"] > 0]
@@ -906,4 +937,6 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
     )
     if geom_by_day:
         summary["geom_days"] = geom_days
+    if carry_open:
+        summary["open_position"] = open_position
     return trades, summary

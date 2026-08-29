@@ -199,7 +199,7 @@ def load_settlements(m):
     return out
 
 
-def futures_days(m):
+def futures_days(m, window_end_entries=False):
     calendar = json.loads(
         (META / f"roll_calendar_{m['key']}.json").read_text(encoding="utf-8"))
     # Trade-close markets (ZB, SB, DX) take their day-close events from
@@ -245,8 +245,16 @@ def futures_days(m):
             else:
                 settle = settlements.get((seg["symbol"], d))
             if not day_bars.empty and settle is not None:
-                allowed = not ((i > 0 and d == first) or d == last
-                               or d in blackout)
+                # A segment's last date is normally entry-free: on a roll
+                # boundary the exit day is on another contract, and on the
+                # WINDOW end there is no exit day at all. window_end_entries
+                # opens up only the latter - the final segment's last date -
+                # so the engine can take the entry and carry it as an open
+                # position; roll boundaries and blackouts stay refused.
+                window_end = (i == len(segments) - 1 and d == last)
+                allowed = not ((i > 0 and d == first) or d in blackout
+                               or (d == last and not (window_end
+                                                      and window_end_entries)))
                 if not allowed:
                     excluded += 1
                 days.append(engine_1m.Day(
@@ -274,7 +282,7 @@ ETF_PRIMARY = {"URA": "URA_ARCX.parquet", "VIXY": "VIXY_BATS.parquet",
                "UNG": "UNG_ARCX.parquet", "WEAT": "WEAT_ARCX.parquet"}
 
 
-def etf_days(m):
+def etf_days(m, window_end_entries=False):
     """RTH days for an ETF from its primary-exchange bars. The window
     runs to 16:05 NY so the closing-auction print (the official close)
     is always inside the last bar."""
@@ -294,12 +302,12 @@ def etf_days(m):
                           grp["high"] * PX_SCALE, grp["low"] * PX_SCALE,
                           grp["close"] * PX_SCALE)),
             settle_ts=grp["ts_event"].iloc[-1], settle_price=c))
-    if days:
+    if days and not window_end_entries:
         days[-1].entries_allowed = False  # window end, no exit day left
     return days
 
 
-def binance_days_and_match(key, socbars):
+def binance_days_and_match(key, socbars, window_end_entries=False):
     """UTC-day sessions from Binance Vision 1m klines. Socrates shows
     integer-rounded values, so the gate compares at +-0.5."""
     _array_dir, sym = BINANCE[key]
@@ -331,20 +339,23 @@ def binance_days_and_match(key, socbars):
             bars=list(zip(grp["ts"], grp["open"], grp["high"],
                           grp["low"], grp["close"])),
             settle_ts=grp["ts"].iloc[-1], settle_price=c))
-    if days:
+    if days and not window_end_entries:
         days[-1].entries_allowed = False
     rate = match / checked if checked else 0.0
     return days, rate
 
 
-def market_inputs(key):
+def market_inputs(key, window_end_entries=False):
     """(days, files, tick, note) for a market, or (None, exclusion dict).
     Loading is the slow part; run_1m_matrix.py calls this once per market
-    and runs the engine dials on the same inputs."""
+    and runs the engine dials on the same inputs. The default keeps the
+    window's last day entry-free, as every consumer of closed trades
+    expects; only the published run asks for window_end_entries, paired
+    with the engine's carry_open dial (see run_market below)."""
     m = market_info(key)
     files, socbars = load_levels_and_socbars(m)
     if key in BINANCE:
-        days, rate = binance_days_and_match(key, socbars)
+        days, rate = binance_days_and_match(key, socbars, window_end_entries)
         if rate < 0.9:
             return None, {"market": key, "status": "EXCLUDED",
                           "reason": f"Binance UTC-day match {rate:.2f} "
@@ -352,7 +363,7 @@ def market_inputs(key):
         return (days, files, 0.01,
                 f"Binance spot, UTC days, match {rate:.2f}"), None
     if key in ETFS:
-        days = etf_days(m)
+        days = etf_days(m, window_end_entries)
         tick = 0.01
         note = ("ETF, primary-exchange bars; verified offline vs "
                 "EQUS.SUMMARY")
@@ -362,12 +373,19 @@ def market_inputs(key):
                 encoding="utf-8")) if key != "GC" else json.loads(
             (META / "contract_calendar_GC.json").read_text(encoding="utf-8"))
         tick = calendar[0]["tick_size"]
-        days, _ = futures_days(m)
+        days, _ = futures_days(m, window_end_entries)
         note = "futures, frozen calendar"
     if not days:
         return None, {"market": key, "status": "EXCLUDED",
                       "reason": "no tradable days"}
     return (days, files, tick, note), None
+
+
+# A market counts as LIVE - its data expected to carry on next session -
+# when its newest bars are at most this many calendar days old at run
+# time. Long enough for any weekend-plus-holiday cluster, far shorter
+# than a real data stop.
+OPEN_MAX_AGE_DAYS = 7
 
 
 def run_market(key, **dials):
@@ -377,12 +395,31 @@ def run_market(key, **dials):
     builders need them (see the market-day grid below) and this is the
     only pass that holds the bars, so asking for them later would mean
     loading every market a second time.
+
+    CURRENT OPEN POSITIONS ARE NOT DATA-STOP ORPHANS (Lode, 2026-08-29).
+    A LIVE market's window-end entry is a real position waiting for the
+    next session's settlement, so this pass allows the entry and has the
+    engine carry it as summary["open_position"] instead of refusing it or
+    force-closing it. A market whose Socrates data stopped entirely is
+    the opposite case: its trade can never close, so the conservative
+    build applies unchanged - no window-end entry, and anything already
+    open books as a `data_end` trade. Liveness is the age of the newest
+    bars at run time, which is exactly what "currently open" means: a
+    rerun on a stale archive rightly reports no open positions.
     """
-    inputs, excluded = market_inputs(key)
+    inputs, excluded = market_inputs(key, window_end_entries=True)
     if inputs is None:
         return None, excluded, []
     days, files, tick, note = inputs
-    trades, summary = engine_1m.run_market(days, files, tick, **dials)
+    live = (date.today() - days[-1].date).days <= OPEN_MAX_AGE_DAYS
+    if not live:
+        # Reload at the conservative default rather than patching the
+        # flag back by hand: only the builders know whether the last day
+        # was a window end, a blackout or a calendar overhang.
+        inputs, excluded = market_inputs(key)
+        days, files, tick, note = inputs
+    trades, summary = engine_1m.run_market(days, files, tick,
+                                           carry_open=live, **dials)
     for t in trades:
         t["market"] = key
     summary.update(market=key, status="OK", note=note, tick=tick)
@@ -588,6 +625,7 @@ def log_published(trades, rows, calendar, final, max_dd, total_r, wr):
 def main():
     keys = sys.argv[1:]
     all_trades, rows, skipped, sessions = [], [], [], []
+    open_positions = []
     if not keys:
         universe = ELIGIBLE_FUTURES + ETFS + list(BINANCE)
         keys = [k for k in universe if k in HUMAN_APPROVED]
@@ -608,6 +646,13 @@ def main():
             print(f"{key}: EXCLUDED - {summary['reason']}", flush=True)
             continue
         all_trades.extend(trades)
+        # The open position rides in the summary so run_market's shape
+        # could stay (trades, summary, dates); it is popped here so the
+        # per-market rows keep their pre-2026-08-29 schema.
+        opos = summary.pop("open_position", None)
+        if opos:
+            opos["market"] = key
+            open_positions.append(opos)
         rows.append(summary)
         # Every market that RAN counts toward the calendar, including the
         # ones that never took a trade: the account was open for business
@@ -615,7 +660,8 @@ def main():
         sessions.append(dates)
         print(f"{key}: {summary['trades']} trades, wr "
               f"{summary['win_rate']}%, net {summary['net_r_total']}R "
-              f"({summary['note']})", flush=True)
+              f"({summary['note']})"
+              + (" + 1 OPEN position" if opos else ""), flush=True)
 
     all_trades.sort(key=lambda t: t["entry_ts"])
     calendar = calendar_union(sessions)
@@ -634,6 +680,12 @@ def main():
                 if all_trades else "")
         print(f"CALENDAR: {len(calendar)} market days, {calendar[0]} to "
               f"{calendar[-1]}{tail}")
+    open_positions.sort(key=lambda o: o["entry_ts"])
+    for o in open_positions:
+        print(f"OPEN: {o['market']} {o['side']} entered {o['entry_ts'][:16]} "
+              f"at {o['entry']:g}, stop {o['stop']:g}, "
+              f"{o['unrealized_r']:+.2f}R at the {o['mark_ts'][:10]} "
+              f"settlement; exits at the next trading day's settlement")
 
     OUT_JSON.parent.mkdir(exist_ok=True)
     log_published(all_trades, rows, calendar, final, max_dd, total_r, wr)
@@ -654,7 +706,13 @@ def main():
         # the only thing in this file that says when the DATA ends rather
         # than when the last trade did.
         calendar=[d.isoformat() for d in calendar],
-        markets=rows, excluded=skipped, trades=all_trades),
+        markets=rows, excluded=skipped,
+        # Entered, not yet closed: positions waiting for the settlement
+        # of their market's next trading day. Kept OUT of `trades` so
+        # every consumer of closed trades is untouched; a market whose
+        # data stopped entirely never lands here (see run_market).
+        open_positions=open_positions,
+        trades=all_trades),
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report
     # The published page is sized to the 6% drawdown budget (Lode,

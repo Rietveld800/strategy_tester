@@ -172,7 +172,7 @@ prices are the trade's own contract's bars only, never across a splice.
 
 ## 6. Horizons, statistics, null
 
-**Horizons — fixed list (AMENDED TWICE, A1 and A2 below).**
+**Horizons — fixed list (AMENDED THREE TIMES, A1, A2 and A3 below).**
 
 The list as first registered (2026-08-28, first reading in section 12):
 30m, 1h, 2h, 4h; entry settlement; next activation; next settlement; +2,
@@ -184,9 +184,9 @@ replaced by fifteen horizons; the entry day is day 0:
 | horizon | definition |
 |---|---|
 | 30m, 1h, 2h, 4h | clock offsets from `entry_ts`; the last bar at or before the instant; a horizon that falls after that session's last bar is flagged "session ended" and reads that last bar |
-| settle0 .. settle3 (A2: .. settle7) | the settlement of session N (`settle_ts` / `settle_price` of the Nth trading day after the entry day in the market's `days` list); settle1 is the engine's `close1` exit moment |
-| close0 .. close3 (A2: .. close7) | the session's LAST print: the close of the last on-book bar of session N |
-| open1 .. open3 (A2: .. open7) | the session's FIRST print: the open of the first on-book bar of session N. Bars strictly before it carry the excursions; a stop printing on the open bar itself prints after the open and does not count at openN |
+| settle0 .. settle3 (A2: .. settle7; A3: .. settle12) | the settlement of session N (`settle_ts` / `settle_price` of the Nth trading day after the entry day in the market's `days` list); settle1 is the engine's `close1` exit moment |
+| close0 .. close3 (A2: .. close7; A3: .. close12) | the session's LAST print: the close of the last on-book bar of session N |
+| open1 .. open3 (A2: .. open7; A3: .. open12) | the session's FIRST print: the open of the first on-book bar of session N. Bars strictly before it carry the excursions; a stop printing on the open bar itself prints after the open and does not count at openN |
 
 Reason for the amendment, in Lode's terms: the activation horizon does not
 sit at a comparable point of the session across markets — the update lands
@@ -231,6 +231,12 @@ null is placed on the same twenty-seven horizons. This is an extension
 of the window, asked for to see where the edge ends, not a horizon added
 because the curve suggested it (section 8) - no exit rule is read off
 days 4-7 any more than off days 1-3.
+
+**Amendment A3 (Lode, 2026-08-30, after the A2 reading).** Day 12
+instead of day 7: open8 .. close12 appended, forty-two horizons. Same
+terms as A2 in every respect; n decays further and one-market shares
+past day 5 were already 50-68% under A2, so the far tail is read as
+descriptive only.
 
 **Statistics per horizon:** n, m(h), s(h), hit-rate (x(h) > 0), S(h),
 median x(h), MFE(h) and MAE(h) means, the e-ratio MFE(h)/MAE(h), the ZW

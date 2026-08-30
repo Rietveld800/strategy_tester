@@ -232,15 +232,15 @@ def test_a_splice_inside_the_window_raises_under_strict():
 def test_past_the_data_end_is_a_reason_not_a_crash():
     p = prof(synthetic_run(splice=False))
     assert p["settle3"] == {"reason": "data end"}
-    assert p["close7"] == {"reason": "data end"}
+    assert p["close12"] == {"reason": "data end"}
 
 
 def test_the_horizon_list_runs_to_day_seven():
-    # amendment A2 (2026-08-30): three moments per session, days 0..7
-    assert ep.HORIZON_DAYS == 7
-    assert len(ep.H_NAMES) == 27
+    # amendments A2/A3 (2026-08-30): three moments per session, days 0..12
+    assert ep.HORIZON_DAYS == 12
+    assert len(ep.H_NAMES) == 42
     assert ep.H_NAMES[:6] == ["30m", "1h", "2h", "4h", "settle0", "close0"]
-    assert ep.H_NAMES[-3:] == ["open7", "settle7", "close7"]
+    assert ep.H_NAMES[-3:] == ["open12", "settle12", "close12"]
     assert ep.DECIDING == ("settle0", "settle1")
 
 

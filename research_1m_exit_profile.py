@@ -38,7 +38,8 @@
 # Horizons (section 6, amendment A1): 30m, 1h, 2h, 4h from entry_ts; then
 # settleN (the settlement price), closeN (the session's last bar, its close)
 # and openN (the session's first bar, its open) for day 0 (the entry day)
-# and days 1-7 (days 1-3 until amendment A2, 2026-08-30). settle1 is the
+# and days 1-12 (days 1-3 until amendment A2, 1-7 until A3, both
+# 2026-08-30). settle1 is the
 # engine's close1 exit moment.
 #
 # Null (section 6): each trade's geometry - side, rpu, stop distance - placed
@@ -109,11 +110,11 @@ NS_MIN = 60 * 10**9
 # session, before the ETF open, 5 minutes into Sugar; charter's
 # site/1m/timing.html) - and every session's open, settlement and close are
 # in, for the entry day and the three that follow.
-# AMENDMENT A2 (Lode, 2026-08-30): the day horizon runs to day 7 instead
-# of day 3 - the same three structural moments per session, four more
-# sessions of them. Nothing else moves: the clock horizons, the deciding
+# AMENDMENTS A2 and A3 (Lode, 2026-08-30): the day horizon runs to day 7
+# instead of day 3, then to day 12 - the same three structural moments per
+# session, more sessions of them. Nothing else moves: the clock horizons, the deciding
 # horizons (settle0, settle1) and every reading rule are as under A1.
-HORIZON_DAYS = 7
+HORIZON_DAYS = 12
 HORIZONS = [
     ("30m", "clock", 30),
     ("1h", "clock", 60),

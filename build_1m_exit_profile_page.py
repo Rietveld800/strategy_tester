@@ -39,7 +39,7 @@ CI_REPS = 4000
 COL_U = "#1A4889"      # unconstrained path
 COL_T = "#B0402A"      # stop-truncated path
 COL_N = "#888"         # the null's mean
-W, H = 1120, 300
+W, H = 1500, 320
 PAD_L, PAD_R, PAD_T, PAD_B = 46, 14, 14, 52
 
 
@@ -343,7 +343,7 @@ def p4_section(p4):
 
 CSS = """
 body { background:#fff; color:#222; font:13px -apple-system,Segoe UI,sans-serif;
-       margin:0; padding:16px 22px; max-width:1180px; }
+       margin:0; padding:16px 22px; max-width:1560px; }
 h1 { font-size:20px; margin:0 0 4px; }
 h2 { font-size:16px; margin:28px 0 6px; border-bottom:1px solid #ddd;
      padding-bottom:4px; }
@@ -352,7 +352,7 @@ h3 { font-size:14px; margin:18px 0 6px; }
 .rules { background:#f5f5f5; border:1px solid #e3e3e3; padding:10px 14px;
          margin:10px 0 16px; line-height:1.5; }
 .charts { display:flex; flex-wrap:wrap; gap:16px; margin:8px 0 12px; }
-.chart { width:1120px; height:300px; background:#fff; border:1px solid #e6e6e6; }
+.chart { width:1500px; height:320px; background:#fff; border:1px solid #e6e6e6; }
 .ct { font-size:12px; font-weight:600; fill:#222; }
 .yt { font-size:10px; fill:#555; text-anchor:end; }
 .xt { font-size:10px; fill:#444; text-anchor:end; }
@@ -389,8 +389,8 @@ def build():
              f"decides nothing</div>",
              "<div class='rules'>"
              "<b>What is drawn.</b> For every taken trade, the signed excursion "
-             "from the first-reversal price at twenty-seven FIXED horizons: 30m, 1h, "
-             "2h, 4h after entry, then for the entry day (day 0) and days 1-7 "
+             "from the first-reversal price at forty-two FIXED horizons: 30m, 1h, "
+             "2h, 4h after entry, then for the entry day (day 0) and days 1-12 "
              "the session's settlement price (settleN), last print (closeN) and "
              "first print (openN). settle1 is the engine's close1 exit moment. "
              "<b>Two paths.</b> <i>Signal path (no stop)</i> = the market after a "

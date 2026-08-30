@@ -195,16 +195,17 @@ def nice_step(span):
 
 
 def stats_table(stats, path_label):
+    # top market, share % and the session-ended count are in the study's
+    # txt and not on the page (Lode, 2026-08-30).
     head = ("<tr><th>horizon</th><th>n</th><th>mean R</th><th>sd</th>"
             "<th>hit</th><th>Sharpe</th><th>median</th><th>MFE</th><th>MAE</th>"
-            "<th>e-ratio</th><th>top market</th><th>share %</th>"
-            "<th>session-ended</th></tr>")
+            "<th>e-ratio</th></tr>")
     body = []
     for name in PAGE_HORIZONS:
         s = stats[name]
         if not s.get("n"):
             body.append(f"<tr class='dim'><td>{esc(name)}</td><td>0</td>"
-                        f"<td colspan='11'>no horizon</td></tr>")
+                        f"<td colspan='8'>no horizon</td></tr>")
             continue
         cls = " class='dim'" if s["n"] < ep.MIN_N else ""
         body.append(
@@ -213,8 +214,6 @@ def stats_table(stats, path_label):
             f"<td>{fmt(s['hit'], 2)}</td><td>{fmt(s['sharpe'])}</td>"
             f"<td>{fmt(s['median'])}</td><td>{fmt(s['mfe'])}</td>"
             f"<td>{fmt(s['mae'])}</td><td>{fmt(s['e_ratio'], 2)}</td>"
-            f"<td>{esc(s['top_market'])}</td>"
-            f"<td>{fmt(s['top_share'], 1)}</td><td>{s.get('flagged', 0) or ''}</td>"
             f"</tr>")
     return (f"<div class='tt'>{esc(path_label)}</div><table class='st'>"
             f"{head}{''.join(body)}</table>")

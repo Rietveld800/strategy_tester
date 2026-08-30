@@ -9,8 +9,20 @@
 # output/ (Lode, 2026-08-28), is not in the refresh chain and has no update
 # button: the study is a reading, re-run by hand.
 #
-# Per sample (variant 2 published / variant 5) and universe (all / the 17
-# surviving markets), in R units:
+# WHAT THE PAGE DRAWS IS A SUBSET OF WHAT THE STUDY MEASURED (Lode,
+# 2026-08-30): variant 5 only (the hybrid stop), the 17 surviving
+# markets only, and the horizons WITHOUT settle2 .. settle12 - every
+# session's open and close stay, and so do settle0 and settle1, the
+# deciding horizons. The study itself is unchanged: it still runs both
+# samples, both universes and all forty-two horizons as pre-registered,
+# and the verdict lines printed here are ITS verdicts, read on the full
+# list (P2's "every later horizon" includes the settlements the page
+# does not draw). The null was run on the 'all' universe only, so this
+# page carries no null line and no null table. P4 is shown for the
+# hybrid anchor alone, to match. PAGE_SAMPLES / PAGE_UNIVERSES /
+# PAGE_HORIZONS / PAGE_P4_ANCHORS below are the whole of that choice.
+#
+# Per sample and universe drawn, in R units:
 #   - the mean excursion profile m(h) on the unconstrained path (the SIGNAL)
 #     with its 95% day-cluster bootstrap interval, the stop-truncated path
 #     (the TRADE) beside it, and the null's mean where it was run;
@@ -36,6 +48,12 @@ HERE = Path(__file__).resolve().parent
 OUT_HTML = HERE / "output" / "quickfix1m1dc_exit_profile.html"
 CI_REPS = 4000
 
+PAGE_SAMPLES = ("variant 5",)
+PAGE_UNIVERSES = ("17 markets",)
+PAGE_HORIZONS = [n for n in ep.H_NAMES
+                 if not (n.startswith("settle") and int(n[6:]) >= 2)]
+PAGE_P4_ANCHORS = ("hybrid",)
+
 COL_U = "#1A4889"      # unconstrained path
 COL_T = "#B0402A"      # stop-truncated path
 COL_N = "#888"         # the null's mean
@@ -57,7 +75,7 @@ def horizon_series(rows, path, denom="R"):
     """Per horizon: (values, clusters) for the excursion of one path."""
     field = "x" if path == "unconstrained" else "x_trunc"
     out = {}
-    for name in ep.H_NAMES:
+    for name in PAGE_HORIZONS:
         vals, cl, _ = ep.series(rows, name, field, denom)
         out[name] = (vals, cl)
     return out
@@ -89,8 +107,8 @@ def sharpe_line(rows, path):
 def svg_chart(title, lines, ylabel, zero=True):
     """lines: list of dict(name, color, values[len(H_NAMES)], ci=[(lo,hi)]|None,
     dash=bool). Values may be None."""
-    xs = [PAD_L + i * (W - PAD_L - PAD_R) / (len(ep.H_NAMES) - 1)
-          for i in range(len(ep.H_NAMES))]
+    xs = [PAD_L + i * (W - PAD_L - PAD_R) / (len(PAGE_HORIZONS) - 1)
+          for i in range(len(PAGE_HORIZONS))]
     allv = [v for ln in lines for v in ln["values"] if v is not None]
     for ln in lines:
         for c in ln.get("ci") or []:
@@ -121,7 +139,7 @@ def svg_chart(title, lines, ylabel, zero=True):
         parts.append(f"<line x1='{PAD_L}' x2='{W - PAD_R}' y1='{y(0):.1f}' "
                      f"y2='{y(0):.1f}' class='zero'/>")
     # x labels
-    for i, name in enumerate(ep.H_NAMES):
+    for i, name in enumerate(PAGE_HORIZONS):
         parts.append(f"<text x='{xs[i]:.1f}' y='{H - PAD_B + 14}' class='xt' "
                      f"transform='rotate(-40 {xs[i]:.1f} {H - PAD_B + 14})'>"
                      f"{esc(name)}</text>")
@@ -180,7 +198,7 @@ def stats_table(stats, path_label):
             "<th>e-ratio</th><th>top market</th><th>share %</th>"
             "<th>session-ended</th></tr>")
     body = []
-    for name in ep.H_NAMES:
+    for name in PAGE_HORIZONS:
         s = stats[name]
         if not s.get("n"):
             body.append(f"<tr class='dim'><td>{esc(name)}</td><td>0</td>"
@@ -235,7 +253,7 @@ def sample_section(label, sres):
         sres = dict(sres, **sres[label])
     out = [f"<h2>{esc(label)} &mdash; {esc(anchor)} &mdash; {sres['n']} trades profiled"
            f"{', ' + str(sres['failures']) + ' not placed' if sres['failures'] else ''}</h2>"]
-    for uname in ("all", "17 markets"):
+    for uname in PAGE_UNIVERSES:
         u = sres.get(uname)
         if not u:
             continue
@@ -255,7 +273,7 @@ def sample_section(label, sres):
             lines.append(dict(name="null mean", color=COL_N, dash=True,
                               values=[null[n].get("null_mean")
                                       if null[n].get("null_reps") else None
-                                      for n in ep.H_NAMES]))
+                                      for n in PAGE_HORIZONS]))
         c1 = svg_chart(f"mean excursion m(h), R units - {uname}", lines,
                        "R per trade; whiskers = 95% day-cluster bootstrap")
         c2 = svg_chart(f"per-trade Sharpe S(h) - {uname}", [
@@ -293,7 +311,7 @@ def null_table(null):
     head = ("<tr><th>horizon</th><th>n</th><th>observed</th><th>null mean</th>"
             "<th>null sd</th><th>percentile</th><th>placements</th></tr>")
     body = []
-    for name in ep.H_NAMES:
+    for name in PAGE_HORIZONS:
         s = null[name]
         if not s.get("null_reps"):
             body.append(f"<tr class='dim'><td>{esc(name)}</td>"
@@ -315,13 +333,17 @@ def p4_section(p4):
     out = ["<h2>P4 &mdash; rule 1 = 3 against the marginal trades of lower "
            "counts (unpowered by construction; recorded for the forward "
            "window)</h2>"]
-    for anchor, cells in p4.items():
+    for anchor in PAGE_P4_ANCHORS:
+        cells = p4.get(anchor)
+        if not cells:
+            out.append(f"<p>{esc(anchor)}: not in the payload</p>")
+            continue
         for rn, hres in cells.items():
             head = ("<tr><th>horizon</th><th>n r3</th><th>n marginal</th>"
                     "<th>m(r3)</th><th>m(marginal)</th><th>diff</th>"
                     "<th>95% CI</th><th>P(&le;0)</th></tr>")
             body = []
-            for name in ep.H_NAMES:
+            for name in PAGE_HORIZONS:
                 h = hres.get(name)
                 if not h:
                     body.append(f"<tr class='dim'><td>{esc(name)}</td>"
@@ -389,16 +411,25 @@ def build():
              f"decides nothing</div>",
              "<div class='rules'>"
              "<b>What is drawn.</b> For every taken trade, the signed excursion "
-             "from the first-reversal price at forty-two FIXED horizons: 30m, 1h, "
-             "2h, 4h after entry, then for the entry day (day 0) and days 1-12 "
-             "the session's settlement price (settleN), last print (closeN) and "
-             "first print (openN). settle1 is the engine's close1 exit moment. "
+             "from the first-reversal price at FIXED horizons: 30m, 1h, 2h, 4h "
+             "after entry, then the entry day's settlement (settle0) and last "
+             "print (close0), the next settlement (settle1, the engine's close1 "
+             "exit moment), and for days 1-12 each session's first print "
+             "(openN) and last print (closeN). "
+             "<b>This page is a subset of the study.</b> The study measured "
+             f"{len(ep.H_NAMES)} horizons on both samples and both universes; "
+             f"this page draws {len(PAGE_HORIZONS)} of them (settle2 .. settle12 "
+             "left out), for variant 5 on the 17 surviving markets only. The "
+             "verdict lines below are the study's own, read on its full horizon "
+             "list, so P2's 'every later horizon' includes the settlements not "
+             "drawn here. The null was run on the 'all' universe only and is "
+             "therefore not on this page. "
              "<b>Two paths.</b> <i>Signal path (no stop)</i> = the market after a "
              "qualifying trigger, followed as if no stop existed. <i>Trade path "
              "(stop as booked)</i> = the same path frozen at the trade's OWN stop "
-             "- the one the blotter recorded at entry, so the 4th/5th ladder stop "
-             "for variant 2 and the hybrid stop for variant 5, named in each "
-             "heading - from the first bar after the entry bar that prints it; "
+             "- the one the blotter recorded at entry, the hybrid stop for "
+             "variant 5, named in each heading - from the first bar after the "
+             "entry bar that prints it; "
              "no scheduled exit, so a point on it is the position still open "
              "with its stop, marked at that moment. "
              f"<b>Rules fixed before the run:</b> flat = 95% interval covers 0 and "
@@ -408,7 +439,10 @@ def build():
              f"rejected'. Bootstrap reps {data['reps']}, seed {data['seed']}, null "
              f"placements {data['null_b']}. No exit rule is swept and no optimum "
              "is read off these curves.</div>"]
-    for label, sres in data["samples"].items():
+    for label in PAGE_SAMPLES:
+        sres = data["samples"].get(label)
+        if sres is None:
+            raise SystemExit(f"{label!r} is not in the study JSON")
         parts.append(sample_section(label, sres))
     parts.append(p4_section(data.get("P4")))
     parts.append("<div class='foot'>Verdict ceiling on this sample: 'not "

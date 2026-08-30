@@ -19,7 +19,7 @@
 #     printed them.
 # Then the P4 tables and the combined verdicts.
 #
-# Charts are inline SVG: nine categorical horizons need no time axis, and
+# Charts are inline SVG: categorical horizons need no time axis, and
 # the page stays self-contained.
 #
 # Usage: python build_1m_exit_profile_page.py
@@ -39,7 +39,7 @@ CI_REPS = 4000
 COL_U = "#1A4889"      # unconstrained path
 COL_T = "#B0402A"      # stop-truncated path
 COL_N = "#888"         # the null's mean
-W, H = 760, 280
+W, H = 1120, 300
 PAD_L, PAD_R, PAD_T, PAD_B = 46, 14, 14, 52
 
 
@@ -87,7 +87,7 @@ def sharpe_line(rows, path):
 
 
 def svg_chart(title, lines, ylabel, zero=True):
-    """lines: list of dict(name, color, values[9], ci=[(lo,hi)]|None,
+    """lines: list of dict(name, color, values[len(H_NAMES)], ci=[(lo,hi)]|None,
     dash=bool). Values may be None."""
     xs = [PAD_L + i * (W - PAD_L - PAD_R) / (len(ep.H_NAMES) - 1)
           for i in range(len(ep.H_NAMES))]
@@ -352,7 +352,7 @@ h3 { font-size:14px; margin:18px 0 6px; }
 .rules { background:#f5f5f5; border:1px solid #e3e3e3; padding:10px 14px;
          margin:10px 0 16px; line-height:1.5; }
 .charts { display:flex; flex-wrap:wrap; gap:16px; margin:8px 0 12px; }
-.chart { width:760px; height:280px; background:#fff; border:1px solid #e6e6e6; }
+.chart { width:1120px; height:300px; background:#fff; border:1px solid #e6e6e6; }
 .ct { font-size:12px; font-weight:600; fill:#222; }
 .yt { font-size:10px; fill:#555; text-anchor:end; }
 .xt { font-size:10px; fill:#444; text-anchor:end; }
@@ -389,8 +389,8 @@ def build():
              f"decides nothing</div>",
              "<div class='rules'>"
              "<b>What is drawn.</b> For every taken trade, the signed excursion "
-             "from the first-reversal price at fifteen FIXED horizons: 30m, 1h, "
-             "2h, 4h after entry, then for the entry day (day 0) and days 1-3 "
+             "from the first-reversal price at twenty-seven FIXED horizons: 30m, 1h, "
+             "2h, 4h after entry, then for the entry day (day 0) and days 1-7 "
              "the session's settlement price (settleN), last print (closeN) and "
              "first print (openN). settle1 is the engine's close1 exit moment. "
              "<b>Two paths.</b> <i>Signal path (no stop)</i> = the market after a "

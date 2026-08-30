@@ -38,7 +38,8 @@
 # Horizons (section 6, amendment A1): 30m, 1h, 2h, 4h from entry_ts; then
 # settleN (the settlement price), closeN (the session's last bar, its close)
 # and openN (the session's first bar, its open) for day 0 (the entry day)
-# and days 1-3. settle1 is the engine's close1 exit moment.
+# and days 1-7 (days 1-3 until amendment A2, 2026-08-30). settle1 is the
+# engine's close1 exit moment.
 #
 # Null (section 6): each trade's geometry - side, rpu, stop distance - placed
 # at random on-book minutes of the SAME market, the same session time-of-day
@@ -108,6 +109,11 @@ NS_MIN = 60 * 10**9
 # session, before the ETF open, 5 minutes into Sugar; charter's
 # site/1m/timing.html) - and every session's open, settlement and close are
 # in, for the entry day and the three that follow.
+# AMENDMENT A2 (Lode, 2026-08-30): the day horizon runs to day 7 instead
+# of day 3 - the same three structural moments per session, four more
+# sessions of them. Nothing else moves: the clock horizons, the deciding
+# horizons (settle0, settle1) and every reading rule are as under A1.
+HORIZON_DAYS = 7
 HORIZONS = [
     ("30m", "clock", 30),
     ("1h", "clock", 60),
@@ -115,16 +121,10 @@ HORIZONS = [
     ("4h", "clock", 240),
     ("settle0", "settle", 0),
     ("close0", "close", 0),
-    ("open1", "open", 1),
-    ("settle1", "settle", 1),
-    ("close1", "close", 1),
-    ("open2", "open", 2),
-    ("settle2", "settle", 2),
-    ("close2", "close", 2),
-    ("open3", "open", 3),
-    ("settle3", "settle", 3),
-    ("close3", "close", 3),
 ]
+for _d in range(1, HORIZON_DAYS + 1):
+    HORIZONS += [(f"open{_d}", "open", _d), (f"settle{_d}", "settle", _d),
+                 (f"close{_d}", "close", _d)]
 H_NAMES = [h[0] for h in HORIZONS]
 H_ENTRY_SETTLE = "settle0"
 H_NEXT_SETTLE = "settle1"       # the close1 exit of the engine (its
@@ -135,7 +135,7 @@ DECIDING = (H_ENTRY_SETTLE, H_NEXT_SETTLE)   # reading rule 2's horizons
 
 class SpliceError(ValueError):
     """A horizon would cross a contract change. The doc says a splice
-    inside the +3 window must raise (section 10)."""
+    inside the horizon window must raise (section 10)."""
 
 
 # --------------------------------------------------------------------------
@@ -363,6 +363,12 @@ def agreement_check(t, prof, tick):
     LEVEL either way; the check translates. For a stop trade the stop bar
     must be the exit bar. Returns None when it agrees, else a message."""
     h = prof.get(H_NEXT_SETTLE)
+    if (h is None or "reason" in h) and t["reason"] == "stop"             and t["exit_date"] == t["entry_date"]:
+        # A window-end entry (run_1m's published pass admits them since
+        # 2026-08-30) stopped inside its own session has no next
+        # settlement in the data yet; the entry day's last print carries
+        # the whole session, so the booking is checked there.
+        h = prof.get("close0")
     if h is None or "reason" in h:
         return f"no next settlement horizon ({h and h.get('reason')})"
     sign = -1.0 if t["side"] == "short" else 1.0

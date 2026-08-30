@@ -172,7 +172,7 @@ prices are the trade's own contract's bars only, never across a splice.
 
 ## 6. Horizons, statistics, null
 
-**Horizons — fixed list (AMENDED ONCE, A1 below).**
+**Horizons — fixed list (AMENDED TWICE, A1 and A2 below).**
 
 The list as first registered (2026-08-28, first reading in section 12):
 30m, 1h, 2h, 4h; entry settlement; next activation; next settlement; +2,
@@ -184,9 +184,9 @@ replaced by fifteen horizons; the entry day is day 0:
 | horizon | definition |
 |---|---|
 | 30m, 1h, 2h, 4h | clock offsets from `entry_ts`; the last bar at or before the instant; a horizon that falls after that session's last bar is flagged "session ended" and reads that last bar |
-| settle0, settle1, settle2, settle3 | the settlement of session N (`settle_ts` / `settle_price` of the Nth trading day after the entry day in the market's `days` list); settle1 is the engine's `close1` exit moment |
-| close0, close1, close2, close3 | the session's LAST print: the close of the last on-book bar of session N |
-| open1, open2, open3 | the session's FIRST print: the open of the first on-book bar of session N. Bars strictly before it carry the excursions; a stop printing on the open bar itself prints after the open and does not count at openN |
+| settle0 .. settle3 (A2: .. settle7) | the settlement of session N (`settle_ts` / `settle_price` of the Nth trading day after the entry day in the market's `days` list); settle1 is the engine's `close1` exit moment |
+| close0 .. close3 (A2: .. close7) | the session's LAST print: the close of the last on-book bar of session N |
+| open1 .. open3 (A2: .. open7) | the session's FIRST print: the open of the first on-book bar of session N. Bars strictly before it carry the excursions; a stop printing on the open bar itself prints after the open and does not count at openN |
 
 Reason for the amendment, in Lode's terms: the activation horizon does not
 sit at a comparable point of the session across markets — the update lands
@@ -218,6 +218,19 @@ Consequences for the predictions, recorded rather than silently absorbed:
   activation and next settlement).
 - P3, P4, P5, the population, the quantities, the null and the bootstrap
   are unchanged.
+
+**Amendment A2 (Lode, 2026-08-30, after the A1 reading).** The day
+horizons run to day 7 instead of day 3: open4 .. close7 are appended,
+twenty-seven horizons in all. The clock horizons, the deciding horizons
+(settle0, settle1), P1-P5 and every reading rule are as under A1; P2's
+"every later horizon" now spans to close7. Recorded consequences:
+later horizons lose trades to "data end" (each further day drops the
+window's newest entries) and to "splice" (a longer window crosses more
+contract changes), so their n decays and rule 1 dims them sooner; the
+null is placed on the same twenty-seven horizons. This is an extension
+of the window, asked for to see where the edge ends, not a horizon added
+because the curve suggested it (section 8) - no exit rule is read off
+days 4-7 any more than off days 1-3.
 
 **Statistics per horizon:** n, m(h), s(h), hit-rate (x(h) > 0), S(h),
 median x(h), MFE(h) and MAE(h) means, the e-ratio MFE(h)/MAE(h), the ZW
@@ -333,7 +346,7 @@ random minute in this market at this time of the session".
 - Tests: the excursion and horizon definitions of section 5 and 6 pinned
   on a synthetic market with hand-computed values (session-end horizon,
   Friday-to-Saturday activation, stop truncation on the entry bar, a
-  splice inside the +3 window must raise). Real-data checks: every
+  splice inside the horizon window must raise). Real-data checks: every
   trade's `x(next settlement)` on the trade path (stop as booked), in R, must
   equal `gross_r + (fill - level) / rpu` in the trade's favour — the entry
   slippage (`ENTRY_SLIP_TICKS * tick / rpu`) on a touch fill, the

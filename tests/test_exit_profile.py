@@ -232,6 +232,16 @@ def test_a_splice_inside_the_window_raises_under_strict():
 def test_past_the_data_end_is_a_reason_not_a_crash():
     p = prof(synthetic_run(splice=False))
     assert p["settle3"] == {"reason": "data end"}
+    assert p["close7"] == {"reason": "data end"}
+
+
+def test_the_horizon_list_runs_to_day_seven():
+    # amendment A2 (2026-08-30): three moments per session, days 0..7
+    assert ep.HORIZON_DAYS == 7
+    assert len(ep.H_NAMES) == 27
+    assert ep.H_NAMES[:6] == ["30m", "1h", "2h", "4h", "settle0", "close0"]
+    assert ep.H_NAMES[-3:] == ["open7", "settle7", "close7"]
+    assert ep.DECIDING == ("settle0", "settle1")
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +311,24 @@ def test_profile_reproduces_the_engines_booking(stop_day10, gap, reason):
     # and the check has teeth: a wrong gross_r is caught
     bad = dict(t, gross_r=t["gross_r"] + 0.5)
     assert ep.agreement_check(bad, p, TICK) is not None
+
+
+def test_a_window_end_stop_is_checked_on_the_entry_days_last_print():
+    # the published pass admits entries on the window's last day
+    # (2026-08-30); one stopped in its own session has no settle1 yet
+    days = engine_days(stop_day10=True)[:2]
+    files = [file_at(9, ts(10, "00:00"), BULL5)]
+    trades, _ = run_market(days, files, TICK, **PUBLISHED_DIALS)
+    t = dict(trades[0], market="GC")
+    assert t["reason"] == "stop" and t["exit_date"] == t["entry_date"]
+    p = ep.trade_profile(ep.MarketRun(days, files), t)
+    assert p["settle1"] == {"reason": "data end"}
+    assert ep.agreement_check(t, p, TICK) is None
+    bad = dict(t, gross_r=t["gross_r"] + 0.5)
+    assert ep.agreement_check(bad, p, TICK) is not None
+    # a close1 booking still needs the next settlement
+    assert "no next settlement" in ep.agreement_check(
+        dict(t, reason="close1"), p, TICK)
 
 
 def test_a_tightened_stop_is_refused():

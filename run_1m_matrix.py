@@ -339,7 +339,10 @@ def grid_sig():
         loader=dict(files_from=str(run_1m.FILES_FROM),
                     activation=str(run_1m.ACTIVATION_UTC),
                     price_codec=run_1m.PRICE_CODEC),
-        cache_version=2)
+        # 3 (2026-08-30): live markets build days with window_end_entries
+        # and cells carry open_position - entries under 2 lack both and
+        # miss window-end trades, so they may not answer.
+        cache_version=3)
     return hashlib.sha256(json.dumps(
         payload, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
@@ -418,6 +421,15 @@ def entry_reusable(ent, key, manifest):
         return False
     if ent.get("excluded"):
         return True
+    # A cached OPEN position is only current while the market still is:
+    # unchanged files mean unchanged trades, but liveness decays with the
+    # clock, and once the data has gone stale that position can never
+    # close - it must be recomputed under the conservative build, where
+    # it books as `data_end` (Lode's live-vs-data-stop distinction).
+    if any(c.get("open_position") for c in ent.get("cells", {}).values()):
+        last = date.fromisoformat(ent["calendar"][-1])
+        if (date.today() - last).days > run_1m.OPEN_MAX_AGE_DAYS:
+            return False
     return (set(ent.get("cells", {})) == cell_names_for(key)
             and (OUT_RATIO / f"{key}.json").exists())
 
@@ -459,6 +471,12 @@ def plain_floats(trades, summary):
     summary = {k: float(v) if isinstance(v, float) else v
                for k, v in summary.items()}
     return trades, summary
+
+
+def plain_open(o):
+    """plain_floats for an open-position record (or None)."""
+    return None if o is None else {k: float(v) if isinstance(v, float) else v
+                                   for k, v in o.items()}
 
 
 def apply_account(trades):
@@ -541,22 +559,32 @@ ENTRY_KEYS = ("side", "contract", "entry_date", "entry_ts", "entry", "stop",
 
 
 def splice_cell(key, cached_trades, cached_geom, days, files, tick, dials,
-                cal, w0):
+                cal, w0, carry_open=False):
     """One cell's tail splice: rerun from PRIME_DAYS before the write point,
     verify the recomputed overlap against the cache, splice at the write
-    point. Returns (trades, geom_days) or None - and None ALWAYS means the
-    whole market is rebuilt in full; there is no partial credit.
+    point. Returns (trades, geom_days, open_position) or None - and None
+    ALWAYS means the whole market is rebuilt in full; no partial credit.
+
+    The open position comes from the TAIL run alone, which is sufficient:
+    it can only arise at the window end, which is inside the tail, and
+    the primed cross-day state matches a full run's - the same premise
+    the trade verification pins. `carry_open` is the market's LIVE
+    verdict, passed through to the engine.
 
     `cal` is the new full calendar (dates), `w0` the index of the first new
     day; the cached calendar is cal[:w0]. Two boundary rules beyond the
     R-cut original, both because the OLD window's last day (cal[w0-1]) was
-    that run's data end: the engine took no entries and counted no geometry
-    there (`entries_allowed=False`) and force-closed open positions as
+    that run's data end: a LIVE market's run since 2026-08-30 does take
+    entries there (window_end_entries) - and those are stable across
+    window growth, since a day's decisions never read later days - but a
+    conservative build refused them and force-closed open positions as
     `data_end`, while under the grown window that same day is an ordinary
     session. So that day is verified loosely (a cached `data_end` trade must
     match a recomputed trade on its ENTRY fields only, and its geometry is
     not compared) and the spliced result always takes the TAIL's version of
-    it, which is what a full fresh run would say.
+    it, which is what a full fresh run would say. A cached open position
+    is not a trade and needs no boundary rule: the tail recomputes its day
+    whole.
     """
     w = max(0, w0 - OVERLAP_DAYS)
     # Walk back past any cached trade spanning the write point - including
@@ -578,8 +606,12 @@ def splice_cell(key, cached_trades, cached_geom, days, files, tick, dials,
     start_date = cal[w - PRIME_DAYS]
     tail_days = [d for d in days if d.date >= start_date]
     trades, summary = run_1m.engine_1m.run_market(
-        tail_days, files, tick, geom_by_day=True, **dials)
+        tail_days, files, tick, geom_by_day=True, carry_open=carry_open,
+        **dials)
     trades, summary = plain_floats(trades, summary)
+    opos = plain_open(summary.pop("open_position", None))
+    if opos:
+        opos["market"] = key
     tail_geom = summary.pop("geom_days")
     for t in trades:
         t["market"] = key
@@ -606,7 +638,7 @@ def splice_cell(key, cached_trades, cached_geom, days, files, tick, dials,
                + [t for t in trades if t["entry_date"] >= w_iso])
     geom = {d: c for d, c in cached_geom.items() if d < w_iso}
     geom.update({d: c for d, c in tail_geom.items() if d >= w_iso})
-    return spliced, geom
+    return spliced, geom, opos
 
 
 def entry_order_metrics(trades):
@@ -670,7 +702,8 @@ def main():
     reuse = "--no-reuse" not in sys.argv[1:]
     keys = [a for a in sys.argv[1:] if not a.startswith("--")] or (
         run_1m.ELIGIBLE_FUTURES + run_1m.ETFS + list(run_1m.BINANCE))
-    results = {name: {"trades": [], "rows": []} for name, _, _, _ in VARIANTS}
+    results = {name: {"trades": [], "rows": [], "open": []}
+               for name, _, _, _ in VARIANTS}
     skipped, sessions = [], []
     sig = grid_sig()
     # Old cache entries ride along with whatever this run recomputes: an
@@ -712,6 +745,8 @@ def main():
                                  ent["note"], ent["tick"], final)
                 results[name]["trades"].extend(cell["trades"])
                 results[name]["rows"].append(row)
+                if cell.get("open_position"):
+                    results[name]["open"].append(cell["open_position"])
                 ran += 1
                 if name == BASELINE_NAME:
                     base_line = (f"{row['trades']}t "
@@ -722,7 +757,7 @@ def main():
                   flush=True)
             continue
         try:
-            inputs, excluded = run_1m.market_inputs(key)
+            inputs, excluded, live = run_1m.live_market_inputs(key)
         except Exception as exc:
             skipped.append({"market": key,
                             "reason": f"{type(exc).__name__}: {exc}"})
@@ -777,7 +812,8 @@ def main():
                     c = old["cells"][name]
                     engine_passes += 1
                     out = splice_cell(key, c["trades"], c["geom_days"],
-                                      days, files, tick, dials, cal, w0)
+                                      days, files, tick, dials, cal, w0,
+                                      carry_open=live)
                     if out is None:
                         print(f"{key}: splice disagreed on {name} - "
                               f"full rebuild", flush=True)
@@ -785,9 +821,10 @@ def main():
                         break
                     cells[name] = out
                 if cells is not None:
-                    for name, (trades, geom) in cells.items():
+                    for name, (trades, geom, opos) in cells.items():
                         ent_cells[name] = dict(trades=trades,
-                                               geom_days=geom)
+                                               geom_days=geom,
+                                               open_position=opos)
                     did_splice = True
                     spliced_markets += 1
         elif can_try:
@@ -799,9 +836,13 @@ def main():
                 if markets is not None and key not in markets:
                     continue
                 trades, summary = run_1m.engine_1m.run_market(
-                    days, files, tick, geom_by_day=True, **dials)
+                    days, files, tick, geom_by_day=True, carry_open=live,
+                    **dials)
                 engine_passes += 1
                 trades, summary = plain_floats(trades, summary)
+                opos = plain_open(summary.pop("open_position", None))
+                if opos:
+                    opos["market"] = key
                 geom_days = summary.pop("geom_days")
                 # The per-day counters are what a splice will later trust,
                 # so a fresh run proves them against the engine's own
@@ -813,7 +854,8 @@ def main():
                             f"on {key}/{name}/{k}")
                 for t in trades:
                     t["market"] = key
-                ent_cells[name] = dict(trades=trades, geom_days=geom_days)
+                ent_cells[name] = dict(trades=trades, geom_days=geom_days,
+                                       open_position=opos)
         # Rows and results are DERIVED from the cells the same way whether
         # they were computed, spliced or (below) cached - see the canonical
         # derivation layer.
@@ -826,6 +868,8 @@ def main():
                              note, tick, final)
             results[name]["trades"].extend(cell["trades"])
             results[name]["rows"].append(row)
+            if cell.get("open_position"):
+                results[name]["open"].append(cell["open_position"])
             ran += 1
             if name == BASELINE_NAME:
                 base_line = (f"{row['trades']}t {row['net_r_total']}R")
@@ -955,6 +999,14 @@ def main():
         calendar=[d.isoformat() for d in calendar],
         per_market={n: results[n]["rows"] for n, _, _, _ in VARIANTS},
         trades={n: results[n]["trades"] for n, _, _, _ in VARIANTS},
+        # Entered but not yet closed, one list per cell - the same entry
+        # can be open in one cell and refused or already stopped in
+        # another, since the stop anchor moves the stop, the R and the
+        # band's verdict. build_1m_report.py --variant renders these;
+        # they are in no cell's trades, curves or statistics.
+        open_positions={n: sorted(results[n]["open"],
+                                  key=lambda o: o["entry_ts"])
+                        for n, _, _, _ in VARIANTS},
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
     write_page(report, calendar)

@@ -76,7 +76,7 @@ def check_market(key):
             print(f"  FAIL {key}/{name}: splice returned None")
             bad += 1
             continue
-        sp_trades, sp_geom = out
+        sp_trades, sp_geom, _opos = out
         f_trades = full[name]["trades"]
         probs = []
         if ([mx.comparable(t) for t in sp_trades]

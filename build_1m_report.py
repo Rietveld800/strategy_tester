@@ -914,6 +914,10 @@ def variant_payload(name):
         # baseline page is drawn on - a variant page and the published one
         # end on the same market day even when their last trades differ.
         calendar=m.get("calendar"),
+        # One open-position list per cell since 2026-08-30; a matrix JSON
+        # from before then has no key, and .get(name) then omits the
+        # section rather than printing a false "none open".
+        open_positions=m.get("open_positions", {}).get(name),
         trades=trades)
 
 

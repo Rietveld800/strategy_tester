@@ -388,6 +388,29 @@ def market_inputs(key, window_end_entries=False):
 OPEN_MAX_AGE_DAYS = 7
 
 
+def live_market_inputs(key):
+    """(inputs, excluded, live) - market_inputs plus the LIVE verdict,
+    shared by the published run and the matrix so the two passes cannot
+    disagree about what "currently open" means. A live market's days
+    allow the window-end entry (paired with the engine's carry_open
+    dial); a market whose data stopped entirely is rebuilt at the
+    conservative default, where a stranded position books as `data_end`.
+    Liveness is the age of the newest bars at run time, which is exactly
+    what "currently open" means: a rerun on a stale archive rightly
+    reports nothing open.
+    """
+    inputs, excluded = market_inputs(key, window_end_entries=True)
+    if inputs is None:
+        return None, excluded, False
+    live = (date.today() - inputs[0][-1].date).days <= OPEN_MAX_AGE_DAYS
+    if not live:
+        # Reload at the conservative default rather than patching the
+        # flag back by hand: only the builders know whether the last day
+        # was a window end, a blackout or a calendar overhang.
+        inputs, excluded = market_inputs(key)
+    return inputs, excluded, live
+
+
 def run_market(key, **dials):
     """One market at the given engine dials (see engine_1m.run_market).
 
@@ -403,21 +426,14 @@ def run_market(key, **dials):
     force-closing it. A market whose Socrates data stopped entirely is
     the opposite case: its trade can never close, so the conservative
     build applies unchanged - no window-end entry, and anything already
-    open books as a `data_end` trade. Liveness is the age of the newest
-    bars at run time, which is exactly what "currently open" means: a
-    rerun on a stale archive rightly reports no open positions.
+    open books as a `data_end` trade. See live_market_inputs, which
+    run_1m_matrix.py shares since 2026-08-30 so its cells carry open
+    positions the same way.
     """
-    inputs, excluded = market_inputs(key, window_end_entries=True)
+    inputs, excluded, live = live_market_inputs(key)
     if inputs is None:
         return None, excluded, []
     days, files, tick, note = inputs
-    live = (date.today() - days[-1].date).days <= OPEN_MAX_AGE_DAYS
-    if not live:
-        # Reload at the conservative default rather than patching the
-        # flag back by hand: only the builders know whether the last day
-        # was a window end, a blackout or a calendar overhang.
-        inputs, excluded = market_inputs(key)
-        days, files, tick, note = inputs
     trades, summary = engine_1m.run_market(days, files, tick,
                                            carry_open=live, **dials)
     for t in trades:

@@ -594,11 +594,27 @@ nothing open. **A market whose Socrates data stopped ENTIRELY is the
 OTHER case and keeps the old conservative build** (Lode's explicit
 distinction, same day): no window-end entry, and a stranded position
 force-closes in the blotter as `data_end`, because that trade can never
-close. The matrix, the R-cut grids, the rule-1 sweep and every research
-pass call `market_inputs` at its default and stay bit-identical; the
-engine's summary only carries the new key when the dial is on; variant
-pages have no `open_positions` key and omit the section. Pinned by the
+close. The R-cut grids, the rule-1 sweep and every research pass call
+`market_inputs` at its default and stay bit-identical; the engine's
+summary only carries the new key when the dial is on. Pinned by the
 carry_open tests in `tests/test_engine_1m.py`.
+**THE MATRIX CARRIES THEM TOO SINCE 2026-08-30** (Lode: "we want variant
+pages to show the open positions"). Both passes share
+`run_1m.live_market_inputs()` so they cannot disagree about what
+"currently open" means. The matrix JSON gains `open_positions`, one list
+PER CELL - the same entry can be open in one cell and refused or already
+stopped in another, because the stop anchor moves the stop, the R and
+the band's verdict - and `build_1m_report.py --variant` renders it (an
+old matrix JSON has no key and the section is omitted, never a false
+"none open"). Cache consequences, all deliberate: `cache_version` 2 -> 3
+(entries built under the conservative day build miss window-end trades
+and the field - one full rebuild); the splice passes `carry_open`
+through and takes the open position from the TAIL run, which contains
+the window end by construction; and `entry_reusable` refuses a cached
+entry whose cells hold an open position once the market's newest day is
+older than `OPEN_MAX_AGE_DAYS`, because liveness decays with the clock
+even when no file moves - the recompute then books it as `data_end`,
+which is Lode's live-vs-data-stop distinction applied to the cache.
 
 ## Working agreements (carried over from charter)
 

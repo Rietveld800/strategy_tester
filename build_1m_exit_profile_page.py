@@ -10,16 +10,18 @@
 # button: the study is a reading, re-run by hand.
 #
 # WHAT THE PAGE DRAWS IS A SUBSET OF WHAT THE STUDY MEASURED (Lode,
-# 2026-08-30): variant 5 only (the hybrid stop), the 17 surviving
-# markets only, and the horizons WITHOUT settle2 .. settle12 - every
+# 2026-08-30): variant 5 only (the hybrid stop), the 'all' universe
+# only (every taken trade, the discontinued markets included - Lode's
+# choice after the 17-market page read 74 of variant 5's 88 trades), and
+# the horizons WITHOUT settle2 .. settle12 - every
 # session's open and close stay, and so do settle0 and settle1, the
 # deciding horizons. The study itself is unchanged: it still runs both
 # samples, both universes and all forty-two horizons as pre-registered,
 # and the verdict lines printed here are ITS verdicts, read on the full
 # list (P2's "every later horizon" includes the settlements the page
-# does not draw). The null was run on the 'all' universe only, so this
-# page carries no null line and no null table. P4 is shown for the
-# hybrid anchor alone, to match. PAGE_SAMPLES / PAGE_UNIVERSES /
+# does not draw). The null was run on the 'all' universe, so its line
+# and table are on the page. P4 is shown for the hybrid anchor alone,
+# to match. PAGE_SAMPLES / PAGE_UNIVERSES /
 # PAGE_HORIZONS / PAGE_P4_ANCHORS below are the whole of that choice.
 #
 # Per sample and universe drawn, in R units:
@@ -49,7 +51,7 @@ OUT_HTML = HERE / "output" / "quickfix1m1dc_exit_profile.html"
 CI_REPS = 4000
 
 PAGE_SAMPLES = ("variant 5",)
-PAGE_UNIVERSES = ("17 markets",)
+PAGE_UNIVERSES = ("all",)
 PAGE_HORIZONS = [n for n in ep.H_NAMES
                  if not (n.startswith("settle") and int(n[6:]) >= 2)]
 PAGE_P4_ANCHORS = ("hybrid",)
@@ -419,11 +421,11 @@ def build():
              "<b>This page is a subset of the study.</b> The study measured "
              f"{len(ep.H_NAMES)} horizons on both samples and both universes; "
              f"this page draws {len(PAGE_HORIZONS)} of them (settle2 .. settle12 "
-             "left out), for variant 5 on the 17 surviving markets only. The "
-             "verdict lines below are the study's own, read on its full horizon "
-             "list, so P2's 'every later horizon' includes the settlements not "
-             "drawn here. The null was run on the 'all' universe only and is "
-             "therefore not on this page. "
+             "left out), for variant 5 on every taken trade (universe 'all', "
+             "the discontinued markets included; the study's 17-market reading "
+             "is in its .txt). The verdict lines below are the study's own, "
+             "read on its full horizon list, so P2's 'every later horizon' "
+             "includes the settlements not drawn here. "
              "<b>Two paths.</b> <i>Signal path (no stop)</i> = the market after a "
              "qualifying trigger, followed as if no stop existed. <i>Trade path "
              "(stop as booked)</i> = the same path frozen at the trade's OWN stop "

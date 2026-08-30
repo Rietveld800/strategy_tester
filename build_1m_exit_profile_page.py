@@ -302,8 +302,9 @@ def sample_section(label, sres):
         if null:
             out.append(null_table(null))
     comb = sres.get("combined", {})
-    out.append("<div class='tt'>combined verdicts (both universes AND both "
-               "denominators)</div><ul class='vd'>"
+    out.append("<div class='tt'>combined verdicts - the study's, over both "
+               "universes (all AND the 17 markets, the latter not on this "
+               "page) and both denominators</div><ul class='vd'>"
                + "".join(f"<li><b>{esc(k)}</b>: {esc(v)}</li>"
                          for k, v in comb.items()) + "</ul>")
     return "".join(out)
@@ -405,7 +406,8 @@ def build():
     parts = [f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
              f"<title>quickfix1m1dc - exit-timing profile (pre-registered)</title>"
              f"<style>{CSS}</style></head><body>",
-             "<h1>quickfix1m1dc &mdash; the exit-timing profile</h1>",
+             "<h1>quickfix1m1dc &mdash; the exit-timing profile, variant 5 "
+             "(hybrid stop), every taken trade</h1>",
              f"<div class='meta'>study built {esc(data['built'])} &middot; "
              f"pre-registration <code>{esc(data['doc'])}</code> &middot; reading "
              f"<code>output/quickfix1m1dc_exit_profile.txt</code> &middot; "
@@ -418,14 +420,22 @@ def build():
              "print (close0), the next settlement (settle1, the engine's close1 "
              "exit moment), and for days 1-12 each session's first print "
              "(openN) and last print (closeN). "
-             "<b>This page is a subset of the study.</b> The study measured "
-             f"{len(ep.H_NAMES)} horizons on both samples and both universes; "
-             f"this page draws {len(PAGE_HORIZONS)} of them (settle2 .. settle12 "
-             "left out), for variant 5 on every taken trade (universe 'all', "
-             "the discontinued markets included; the study's 17-market reading "
-             "is in its .txt). The verdict lines below are the study's own, "
-             "read on its full horizon list, so P2's 'every later horizon' "
-             "includes the settlements not drawn here. "
+             "<b>This page is one reading of the study.</b> The pre-registered "
+             "study reads two samples (the published variant 2 and variant 5), "
+             "two universes (every taken trade / the 17 surviving markets) and "
+             f"{len(ep.H_NAMES)} horizons; the whole of it is in the .txt. This "
+             "page shows ONE of those readings: <b>variant 5</b>, universe "
+             "<b>all</b> (every taken trade, the discontinued markets CC, KC, "
+             f"UDOW, UNG, USO included), at {len(PAGE_HORIZONS)} of the "
+             f"{len(ep.H_NAMES)} horizons - settle2 .. settle12 are left out, "
+             "every session's open and close stay, and so do settle0 and "
+             "settle1, the deciding horizons. Charts and tables are that "
+             "reading's numbers unchanged. The verdict lines are the study's, "
+             "computed on its full horizon list, so P2's 'every later horizon' "
+             "includes the settlements not drawn here. The 'combined verdicts' "
+             "block folds this reading together with the 17-market one and "
+             "both denominators (reading rules 4 and 6), which is why it can "
+             "read differently from the verdicts printed above it. "
              "<b>Two paths.</b> <i>Signal path (no stop)</i> = the market after a "
              "qualifying trigger, followed as if no stop existed. <i>Trade path "
              "(stop as booked)</i> = the same path frozen at the trade's OWN stop "

@@ -615,6 +615,14 @@ entry whose cells hold an open position once the market's newest day is
 older than `OPEN_MAX_AGE_DAYS`, because liveness decays with the clock
 even when no file moves - the recompute then books it as `data_end`,
 which is Lode's live-vs-data-stop distinction applied to the cache.
+**THE R-CUT PAGES DELIBERATELY DO NOT CARRY THEM** (Lode, 2026-08-30:
+"keep the R-cut pages as they are. They are only useful in the variant
+reports"). Open positions feed no figure anywhere - equity, drawdown
+and Sharpe book only at close, the table is operational ("what is
+riding over the weekend") - and that question belongs to the pages
+that act as blotters. The R-cut grids are the closed-trade research
+record, still built at `market_inputs`' conservative default; do not
+extend open positions there.
 
 ## Working agreements (carried over from charter)
 

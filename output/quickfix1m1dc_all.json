@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 195628.16,
+    "final": 193567.74,
     "max_dd_pct": 6.17,
-    "trades": 102,
-    "win_rate": 41.2,
-    "net_r": 71.55
+    "trades": 103,
+    "win_rate": 40.8,
+    "net_r": 70.43
   },
   "calendar": [
     "2026-01-02",
@@ -460,15 +460,15 @@
       "tick": 0.005
     },
     {
-      "trades": 12,
+      "trades": 13,
       "wins": 5,
-      "win_rate": 41.7,
-      "net_r_total": 22.6,
-      "final_cash": 123873.83,
-      "return_pct": 23.87,
+      "win_rate": 38.5,
+      "net_r_total": 21.48,
+      "final_cash": 122487.18,
+      "return_pct": 22.49,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 4,
+        "stop": 5,
         "no_confirm": 0,
         "close1": 8,
         "data_end": 0
@@ -495,7 +495,7 @@
         "close1": 3,
         "data_end": 0
       },
-      "refused_wide": 85,
+      "refused_wide": 116,
       "refused_tight": 0,
       "range_unjudged": 0,
       "market": "PL",
@@ -726,7 +726,25 @@
       "reason": "human market filter: failed the chart-structure inspection (audit s.16)"
     }
   ],
-  "open_positions": [],
+  "open_positions": [
+    {
+      "side": "short",
+      "contract": "HGZ6",
+      "entry_date": "2026-08-28",
+      "entry_ts": "2026-08-28 09:04:00+00:00",
+      "entry": 6.7276,
+      "stop": 6.755599999999999,
+      "rpu": 0.026999999999999247,
+      "entry_first": 6.7286,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2389,
+      "risk_usd": 1087.69,
+      "mark_ts": "2026-08-28 17:00:28.144571591+00:00",
+      "mark": 6.659000000000001,
+      "unrealized_r": 2.5407,
+      "market": "HG"
+    }
+  ],
   "trades": [
     {
       "side": "short",
@@ -3073,6 +3091,29 @@
       "pnl_usd": 6282.05,
       "cash_after": 106282.05,
       "market": "URA"
+    },
+    {
+      "side": "short",
+      "contract": "ZWZ6",
+      "entry_date": "2026-08-28",
+      "entry_ts": "2026-08-28 07:40:00+00:00",
+      "entry": 761.875,
+      "stop": 770.75,
+      "rpu": 8.375,
+      "entry_first": 762.375,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.319,
+      "exit_date": "2026-08-28",
+      "exit_ts": "2026-08-28 11:31:00+00:00",
+      "exit": 770.75,
+      "reason": "stop",
+      "gross_r": -1.0597,
+      "cost_r": 0.0597,
+      "net_r": -1.1194,
+      "risk_usd": 1238.74,
+      "pnl_usd": -1386.65,
+      "cash_after": 122487.18,
+      "market": "ZW"
     }
   ]
 }

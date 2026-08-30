@@ -519,12 +519,18 @@ its variant grid, and this strategy is outside both, so the tables are rendered
 in Python and the only script is the panes plus a table sorter. Its money is
 `run_1m.portfolio_replay` MIRRORED (the trades' own `pnl_usd` / `cash_after`
 are PER MARKET, a different account) and the build warns if its final capital
-or drawdown drifts from what `run_1m` published. **The drawdown pane plots
-the worst drawdown REACHED each day, not the one standing at the bell**, and
-the build warns if the bottom of the pane is not the headline: this is a 1m
-engine resampled to a daily axis, so a session can dig a hole and fill it
-before the close. Carrying only closing balances showed 8.96% under an
-11.20% headline until 2026-08-08. The equity line still plots the close.
+or drawdown drifts from what `run_1m` published. **The worst drawdown
+REACHED each day is computed beside the closing one, but the PANE plots the
+CLOSES curve** (fcfa722, 2026-08-09: the worst-reached pane was removed,
+both maxima sit side by side in the KPI row, and the worst-reached series
+feeds the daily calendar's drawdown column and the build's warning if its
+bottom is not the headline). So the headline "worst reached intraday" is
+deliberately NOT visible in the pane - a session can dig a hole and fill
+it before the close (variant 5's 5.70% on 2026-08-28 existed for eight
+hours and the day closed at an equity HIGH), and carrying only closing
+balances showed 8.96% under an 11.20% headline until 2026-08-08. Look for
+the headline in the KPI row and the daily calendar, not the pane. The
+equity line still plots the close.
 **EVERY CURVE IN THIS PROJECT IS A STEP FUNCTION ON THE MARKET DAYS**
 (Lode, 2026-08-18). The balance stands still until a trade closes and
 then jumps, so a line joining consecutive exit balances draws eleven days

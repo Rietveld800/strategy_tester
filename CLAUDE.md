@@ -172,7 +172,15 @@ roll calendar extends -- it cost a 93-min rebuild over zero changed bars), and
 the cache carries `market_days` so a growth the UNION calendar hides (a second
 refresh in one day filling the newest date in per market) still places its cut
 via `market_gains`. Tests: `tests/test_rcut_incremental.py` (fast oracle +
-RCUT_SLOW=1 real bars) and `tests/test_rcut_market_days.py`. It errs the safe
+RCUT_SLOW=1 real bars) and `tests/test_rcut_market_days.py`. THE MONDAY
+REBUILDS WERE THE DATA REFRESH'S DOING, NOT THIS CACHE'S (found 2026-08-31,
+Lode: "lately when I update the file it always starts from scratch"): an
+empty weekend purchase made data_center's `merge_parquet` read the ETF
+parquet back and rewrite it byte-identical, moving only the mtime, and the
+manifest rightly refused "rewritten at the same size" -- three Mondays in a
+row (08-17, 08-24, 08-31) each cost the next click a full 93-min rebuild.
+Fixed upstream (refresh_1m.py: an empty purchase no longer writes); the
+strict refusal here is unchanged and correct. It errs the safe
 way on purpose: a wrong cache HIT costs correctness, a wrong MISS costs time,
 and every refusal names its reason. The payload carries `built`, `data` and
 `n_cells`, and the page prints the build time, so a stale grid is visible

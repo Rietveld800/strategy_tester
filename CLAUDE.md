@@ -98,9 +98,13 @@ overlays to 1 with no other edit; its copy was rewritten because it described
 profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
-rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
+rail button runs that file): `data` -> `bars` -> `specs` ->
+`strategy1m` -> `matrix1m` ->
 `hybrid1m` -> `contracts1m` -> `capitals1m` -> `levels1m` ->
-`charts`, ~8-17 min on a normal day (2026-08-21; the measured record is
+`charts`, ~8-17 min on a normal day (`specs`, added 2026-09-02,
+rebuilds data_center's contract spec table from the just-refreshed
+bars in ~1s so the deployment pages price off current fronts; a
+locked xlsx warns instead of failing the run) (2026-08-21; the measured record is
 `../trading_system/refresh_runtime_plan.md`). The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
 2026-08-21: run_1m ~110s, matrix ~4-12 min depending on how many markets'

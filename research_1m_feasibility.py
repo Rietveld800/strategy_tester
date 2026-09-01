@@ -61,26 +61,28 @@ LIVE22 = ["GC", "BTC", "SR3", "ZW", "ZC", "YM", "6E", "6J", "LE", "HG",
           "CL", "NG", "PA", "PL", "NQ", "ES", "SI", "ZN", "ZB",
           "FGBL", "SB", "DX"]
 
-# The smallest LISTED smaller contract per market, from the measured
-# catalog: (root, size fraction, verified). Fractions for the
-# longstanding minis/micros are exchange knowledge; the 2025-era roots
-# are presumed and flagged until definitions are bought. The treasuries'
-# 10Y/30Y are deliberately absent: yield-quoted cash-settled contracts
-# are a different product, not a smaller ZN/ZB.
+# The smallest LISTED smaller contract per market. ALL VERIFIED since
+# 2026-09-01 from purchased GLBX definitions (data_center
+# micro_buy_definitions.py, derived micro-vs-parent unit quantities in
+# the same unit and currency -- MJY included: 1,250,000 JPY, a true
+# 1/10 of 6J in the same quote direction). The treasuries' 10Y/30Y are
+# deliberately absent: yield-quoted cash-settled contracts, NOT a
+# smaller ZN/ZB (confirmed NOT COMPARABLE by the same validation).
+# Silver's floor is SIL at 1/5 -- QI, the other listed root, is 1/2.
 MICRO_BEST = {
     "GC": ("MGC", 0.10, True),   # 1OZ (1/100) exists too; MGC suffices
     "SI": ("SIL", 0.20, True),
     "HG": ("MHG", 0.10, True),
     "CL": ("MCL", 0.10, True),
-    "NG": ("QG", 0.25, True),
+    "NG": ("MNG", 0.10, True),   # verified 1,000 MMBtu -- smaller than QG
     "ES": ("MES", 0.10, True),
     "NQ": ("MNQ", 0.10, True),
     "YM": ("MYM", 0.10, True),
     "6E": ("M6E", 0.10, True),
     "BTC": ("MBT", 0.02, True),
-    "ZW": ("MZW", 0.10, False),  # verified listed; SIZE presumed
-    "ZC": ("MZC", 0.10, False),
-    "6J": ("MJY", 0.10, False),  # listed; size AND quote direction open
+    "ZW": ("MZW", 0.10, True),   # verified 500 bu
+    "ZC": ("MZC", 0.10, True),   # verified 500 bu
+    "6J": ("MJY", 0.10, True),   # verified 1.25M JPY, same direction
 }
 
 RANGE_DAYS = 90

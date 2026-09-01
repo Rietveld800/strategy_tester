@@ -260,10 +260,17 @@ and cannot touch PA, PL or SI at this threshold. data_center's `metadata/micro_c
 proven, liquidity not) feeds the micros sheet of
 `contract_specs.xlsx`; 24 roots are listed on GLBX (MNG, MZW/MZC and
 1OZ were surprises), none exist for PA/PL/LE/SR3/DX/softs/FGBL, the
-treasuries' micros are yield-quoted (a different product), and MJY's
-quote direction is unverified. Specs verify from definitions (~$0.06
-all-in) and a sampled week of 1m bars is ~$0.66 -- both quoted, neither
-bought.
+treasuries' micros are yield-quoted (a different product, confirmed
+NOT COMPARABLE by the definitions). **THE DEFINITIONS WERE BOUGHT AND
+VALIDATED 2026-09-01** ($0.0552, data_center
+`micro_buy_definitions.py`, manifest-logged): all 22 tradable-size
+roots VERIFIED by derived micro-vs-parent unit quantities. Upgrades:
+MJY is a TRUE 1/10 of 6J (same quote direction -- the inversion worry
+was wrong), MNG (1/10) is smaller than QG and becomes NG's floor, and
+MZW/MZC are 1/10 (500 bu). Every fraction in
+`research_1m_feasibility.MICRO_BEST` is now verified; the $100k
+verdicts did not move (SI's floor is still SIL at 1/5 -- QI is 1/2).
+A sampled week of 1m bars (~$0.66, for liquidity) stays unbought.
 **THE CONTRACTS PAGES EXIST SINCE 2026-09-01 AND ARE IN THE CHAIN**
 (Lode: "trade it with the contracts and not with the one percent
 risk"): `build_1m_report.py --contracts` renders the SAME two trade

@@ -378,7 +378,18 @@ missed by $28 -- the refusal gate reads LIVE equity, not starting
 capital, exactly as the broker would. A taken trade's R never changes
 down the ladder; only which trades fit, what they risked and what
 they paid. The arsenal table lists ONLY the 22 traded markets (plus
-the verified micros); ETFs appear nowhere on the page.
+the verified micros); ETFs appear nowhere on the page. BESIDE THE
+ARSENAL SITS THE REAL-STOPS DIFFICULTY TABLE (Lode, same day: the
+1%-of-price yardstick "doesn't say too much because for silver 1%
+price movement isn't much"): per market, the historical setups'
+per-contract dollar risk (rpu x point value -- the number the sizing
+gate actually reads) and the account each implies at 1% (acct = 100 x
+per-contract risk), median setup and worst setup, hardest first, the
+smallest verified micro's route beside it, range-estimate fallback
+starred for no-trade markets. First reading: SI needs ~$1.14M for its
+MEDIAN setup (the 1%-of-price yardstick said $336k -- its structural
+stops run 2-4% of price), GC $641k median but $1.99M for the worst,
+and the bottom half of the universe trades from under $40k.
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the

@@ -15,8 +15,12 @@ Sizing (Lode 2026-08-21, refusal policy revised 2026-09-01):
   quantized trade list a SUBSET of the blotter, so this layer is no
   longer capital-independent -- that is the point.) The idealized 1%
   layer remains the research currency; this layer is a deployability
-  measurement on top, never a replacement. Margin is out of scope;
-  execution costs are the next step of the deployment work.
+  measurement on top, never a replacement. Margin is out of scope.
+  EXECUTION COSTS ARE IN THE CURVE since 2026-09-01 (Lode): each side
+  of each taken position pays commission + exchange + NFA per contract
+  from execution_costs.py (documented and sourced there; taxes
+  excluded by decision). Slippage stays in R where the engine put it;
+  costs are dollars here -- the fill and the bill never overlap.
 
 Account size: default $150,000 (Lode, 2026-09-01) -- the deployment
 scenario: most markets afford one contract, and the PA/PL/SI-class
@@ -58,6 +62,7 @@ from statistics import median
 
 import pandas as pd
 
+import execution_costs
 import run_1m
 
 HERE = Path(__file__).resolve().parent
@@ -104,11 +109,12 @@ def quantized_replay(trades, specs, start_capital, risk_pct):
     events.sort(key=lambda e: (e[0], 0 if e[1] == "exit" else 1))
     equity = start_capital
     peak, max_dd = equity, 0.0
-    open_risk, rows = {}, []
+    open_risk, rows, costs_paid = {}, [], 0.0
     for ts, kind, t in events:
         tid = id(t)
         if kind == "entry":
             spec = specs[t["market"]]
+            is_etf = spec["type"] == "etf"
             per_unit = t["rpu"] * usd_point_value(spec)
             n, refused = contract_size(equity, risk_pct, per_unit)
             row = dict(market=t["market"], type=spec["type"], n=n,
@@ -116,20 +122,30 @@ def quantized_replay(trades, specs, start_capital, risk_pct):
                        entry_date=t["entry_date"],
                        risk=n * per_unit,
                        risk_pct=n * per_unit / equity * 100.0)
-            if spec["type"] == "etf" and n:
+            if is_etf and n:
                 row["locked"] = n * t["entry"]
                 row["locked_pct"] = row["locked"] / equity * 100.0
             rows.append(row)
             if not refused:
-                open_risk[tid] = row["risk"]
+                # Execution costs, per side (execution_costs.py --
+                # documented and sourced; taxes excluded by decision).
+                # The entry side is paid the moment the order fills.
+                side = execution_costs.cost_per_side(
+                    t["market"], n, is_etf=is_etf, eurusd=EURUSD)
+                row["cost_rt"] = 2.0 * side
+                equity -= side
+                costs_paid += side
+                open_risk[tid] = (row["risk"], side)
         else:
-            risk = open_risk.pop(tid, None)
-            if risk is None:
+            got = open_risk.pop(tid, None)
+            if got is None:
                 continue  # the entry was refused; nothing to book
-            equity += t["net_r"] * risk
+            risk, side = got
+            equity += t["net_r"] * risk - side
+            costs_paid += side
             peak = max(peak, equity)
             max_dd = max(max_dd, (peak - equity) / peak * 100.0)
-    return dict(final=equity, max_dd=max_dd), rows
+    return dict(final=equity, max_dd=max_dd, costs=costs_paid), rows
 
 
 def pct(values, q):
@@ -162,9 +178,15 @@ def report_config(name, trades, specs, account, risk_pct, lines):
     w(f"   quantized, refuse-at-n=0   : final ${q['final']:,.0f}"
       f"  max DD {q['max_dd']:.2f}%  ({len(taken)} taken,"
       f" {len(refused)} refused)")
-    w(f"   quantization + refusals    : final"
+    w(f"   quantization+refusals+costs: final"
       f" {q['final'] / ideal_final * 100 - 100:+.2f}%  DD"
       f" {q['max_dd'] - ideal_dd:+.2f} points against the ideal")
+    rts = [r["cost_rt"] for r in taken if "cost_rt" in r]
+    w(f"   execution costs paid       : ${q['costs']:,.2f} total,"
+      f" median ${median(rts):,.2f} per round turn"
+      f" (execution_costs.py: IBKR commission + exchange + NFA,"
+      f" sourced; taxes excluded)" if rts else
+      "   execution costs paid       : none")
     if refused:
         w(f"   refused at order placement : "
           + ", ".join(f"{r['market']} {r['entry_date']}"
@@ -178,8 +200,10 @@ def report_config(name, trades, specs, account, risk_pct, lines):
           f"  p25 {pct(risks, .25):.3f}%  median {median(risks):.3f}%"
           f"  p75 {pct(risks, .75):.3f}%  max {max(risks):.3f}%"
           f"  (budget {risk_pct:g}%)")
-    w(f"   convergence check at x1000 account: quantized-vs-ideal"
-      f" return delta {conv * 100:.4f} pct points")
+    w(f"   at x1000 account the delta to the ideal is"
+      f" {conv * 100:.4f} pct points -- quantization and refusals"
+      f" vanish there, so this residual IS the execution-cost drag"
+      f" (the frictionless ideal pays none by design)")
 
     w("   per market (futures):")
     w(f"     {'mkt':<5} {'taken':>6} {'contracts min/med/max':>22}"
@@ -233,8 +257,8 @@ def main():
         f" integer contracts, REFUSED at n=0 (no forcing; released as"
         f" capital grows)",
         f"specs: data_center/metadata/contract_specs.json"
-        f" (built {built}); margin out of scope, execution costs the"
-        f" next step",
+        f" (built {built}); execution costs from execution_costs.py"
+        f" (sourced 2026-09-01, taxes excluded); margin out of scope",
     ]
     report_config("published baseline (variant 2, 4th/5th stop,"
                   " band 000-060)",

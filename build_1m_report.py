@@ -47,6 +47,7 @@ from pathlib import Path
 import pandas as pd
 
 import engine_1m
+import execution_costs
 import research_1m_sizing as sizing
 import run_1m
 import run_1m_matrix
@@ -202,26 +203,37 @@ def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
         t = trades[i]
         if kind == 1:
             spec = specs[t["market"]]
+            is_etf = spec["type"] == "etf"
             per_unit = t["rpu"] * sizing.usd_point_value(spec)
             n, refuse = sizing.contract_size(equity, risk_pct, per_unit)
             if refuse:
                 refused[i] = dict(per_unit=per_unit, equity=equity,
                                   budget=equity * risk_pct / 100.0)
                 continue
+            # Execution costs, per side (execution_costs.py: IBKR
+            # commission + exchange + NFA, sourced; taxes excluded by
+            # decision). The entry side is paid the moment the order
+            # fills; slippage stays in R where the engine put it.
+            side = execution_costs.cost_per_side(
+                t["market"], n, is_etf=is_etf, eurusd=sizing.EURUSD)
+            equity -= side
             m = dict(n=n, per_unit=per_unit,
                      risk_usd=n * per_unit,
-                     risk_pct=n * per_unit / equity * 100.0,
-                     etf=spec["type"] == "etf")
-            if m["etf"]:
+                     risk_pct=n * per_unit / (equity + side) * 100.0,
+                     cost_rt=2.0 * side, etf=is_etf)
+            if is_etf:
                 m["locked_usd"] = n * t["entry"]
-                m["locked_pct"] = m["locked_usd"] / equity * 100.0
+                m["locked_pct"] = m["locked_usd"] / (equity + side) * 100.0
             open_pos[i] = m
         else:
             m = open_pos.pop(i, None)
             if m is None:
                 continue  # the entry was refused
-            pnl = t["net_r"] * m["risk_usd"]
-            equity += pnl
+            # The row's P&L carries the FULL round turn's cost so the
+            # blotter attributes the bill to the trade that rang it up;
+            # the equity path paid half at entry already.
+            pnl = t["net_r"] * m["risk_usd"] - m["cost_rt"]
+            equity += t["net_r"] * m["risk_usd"] - m["cost_rt"] / 2.0
             peak = max(peak, equity)
             max_dd = max(max_dd, (peak - equity) / peak * 100.0)
             money_of[i] = dict(m, pnl_usd=pnl, balance=equity)
@@ -646,7 +658,8 @@ def blotter_html(trades, money_of, links, contracts=False):
             # size is not here at all: refused orders have their own
             # table.)
             tip = (f'risk ${m["risk_usd"]:,.0f} = {m["risk_pct"]:.2f}% '
-                   f'(${m["per_unit"]:,.0f}/contract)')
+                   f'(${m["per_unit"]:,.0f}/contract); round-turn cost '
+                   f'${m["cost_rt"]:,.2f}')
             if m.get("etf"):
                 tip += (f'; {m["n"]:,} shares locking '
                         f'${m["locked_usd"]:,.0f} = {m["locked_pct"]:.0f}% '
@@ -1250,6 +1263,11 @@ def build(data=None, out=None, variant=None, contracts=False):
                 "one contract risked more than the budget; never"
                 " forced, released as capital grows",
                 "neg" if refused_map else ""),
+            kpi("Execution costs",
+                money(sum(m["cost_rt"] for m in money_of.values())),
+                "commission + exchange + NFA, both sides, in the curve"
+                " (sourced in execution_costs.py; taxes excluded)",
+                "neg"),
         ])
 
     stats = "".join([
@@ -1316,9 +1334,16 @@ def build(data=None, out=None, variant=None, contracts=False):
         over = [m for m in etf_rows if m["locked_pct"] > 100.0]
         note += (
             " <b>And the sizing assumptions</b> (2026-08-21, refusal "
-            "policy 2026-09-01): margin is out of scope, an order whose "
+            "policy and execution costs 2026-09-01): margin is out of "
+            "scope, an order whose "
             "single contract risks more than the budget is refused at "
-            "placement rather than forced, and an ETF "
+            "placement rather than forced, <b>every side of every "
+            "position pays commission + exchange + NFA fees</b> into "
+            "the equity curve (per-market rates, sources and "
+            "confidence flags in <b>execution_costs.py</b>; where two "
+            "sources disagreed the higher figure was adopted; taxes "
+            "excluded at all times, slippage separately charged in R "
+            "by the engine), and an ETF "
             "position pays its FULL notional with no leverage modelled"
             + (f" &mdash; <b>{len(over)} of {len(etf_rows)} ETF trades "
                f"lock more than the whole account</b> to risk 1%, a ratio "

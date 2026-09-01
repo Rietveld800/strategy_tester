@@ -319,10 +319,33 @@ post-processing and cannot re-run the session lockout (a live refused
 order spends nothing and a later setup that session could enter) --
 same class of shift the geometry band needed its own engine runs for;
 acceptable while refusals are rare, and a money-aware engine pass is
-the fix if they stop being rare. NEXT STEP OF THIS WORK (Lode, same
-message): execution costs -- the per-contract cost of opening and
-closing (commissions and exchange fees, taxes ALWAYS excluded),
-documented and sourced, into the final equity curve.
+the fix if they stop being rare.
+**EXECUTION COSTS ARE IN THE DEPLOYMENT CURVE SINCE 2026-09-01
+EVENING** (Lode: "the actual cost of executing ... documented and
+sourced well and should become part of final equity curve. Let's keep
+'taxes' out of the equation at all times"). `execution_costs.py` is
+the ONE place cost lives: per contract PER SIDE, broker commission
+(IBKR fixed-rate: $0.85 US full-size, $0.25 CME micros, EUR 0.90
+Eurex) + exchange fee + NFA $0.02, every row carrying its sources
+(IBKR's own worked examples for ES $2.24/side and Eurex EUR
+1.42/side; TradeStation and TradeProFutures passthrough lists,
+retrieved 2026-09-01 -- IB and CME primary pages block automated
+retrieval), a confidence flag, and WHERE TWO SOURCES DISAGREE THE
+HIGHER FIGURE (a cost model errs expensive). Rows with no source
+(MJY, MZW, MZC, MNG, 1OZ) carry None and `cost_per_side` RAISES
+rather than pricing them silently. Standing instruction in the
+module: replace rows with real IB statement lines when the account
+exists. Wired into BOTH quantized replays (entry side paid at fill,
+exit side at close; the blotter row attributes the full round turn);
+the FRACTIONAL pages deliberately carry none -- slippage models the
+FILL in R where the engine put it, this models the BILL in dollars,
+and the two never overlap. Taxes excluded at all times, margin still
+out of scope. First reading at $150k/1%: baseline pays $2,119 total
+(median $17.82/round turn), final $269,696 at 6.52% DD (-8.4% vs the
+frictionless ideal, all three frictions in); variant 5 pays $1,422
+(median $14.82), $254,017 at 4.39% DD (-8.7%). At x1000 account the
+residual vs the ideal IS the cost drag (~1.5-2.4 pct points),
+quantization and refusals having vanished.
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the

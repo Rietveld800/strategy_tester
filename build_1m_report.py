@@ -988,6 +988,11 @@ table.trades td a:hover{text-decoration:underline}
    note: no empty gray fields). */
 .kpis{display:flex;flex-wrap:wrap}
 .kpis .kpi{flex:1 1 150px}
+/* Twelve stat tiles as 3 rows x 4 columns (Lode, 2026-09-02), the
+   winner/loser and best/worst pairs sharing one row; the shared
+   stylesheet's narrow-screen 2-column rule stays in force below
+   641px. */
+@media(min-width:641px){.stats4{grid-template-columns:repeat(4,1fr)}}
 @media print{#eq{height:300px}#ddc,#op{height:120px}}
 </style></head><body>
 <div class="wrap">
@@ -1315,27 +1320,27 @@ def build(data=None, out=None, variant=None, contracts=False):
                 "neg"),
         ])
 
+    # Twelve tiles in three rows of four (Lode, 2026-09-02): the
+    # winner/loser pair and the best/worst pair share the middle row.
     stats = "".join([
-        kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
-            "pos"),
-        kpi("Average loser", signed(avg_l) + "R", f"{len(losses)} trades",
-            "neg"),
         kpi("Expectancy", signed(net_r / len(trades)) + "R", "per trade",
             cls(net_r)),
         kpi("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
             f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
+        kpi("Longest winning run", f"{run_w}", "positions, in entry order"),
+        kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
+        kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
+            "pos"),
+        kpi("Average loser", signed(avg_l) + "R", f"{len(losses)} trades",
+            "neg"),
         kpi("Best trade", signed(best) + "R", "gross of nothing, net of all"),
         kpi("Worst trade", signed(worst) + "R",
             "a gapped or slipped stop can cost more than 1R"),
-        kpi("Longest winning run", f"{run_w}", "positions, in entry order"),
-        kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
         kpi("Average hold", held(avg_hold), "entry to exit"),
         kpi("Max concurrent", f"{max_open}", "positions open at once"),
-        # The 12th tile: .stats4 is a 3-column grid, and eleven tiles
-        # left one empty gray cell (Lode, 2026-09-02). Currently-open
-        # count from the payload's open_positions -- the same list the
-        # "Currently open" table renders; a JSON without the key shows
-        # a dash, never a false zero.
+        # Currently-open count from the payload's open_positions -- the
+        # same list the "Currently open" table renders; a JSON without
+        # the key shows a dash, never a false zero.
         kpi("Currently open",
             f"{len(data['open_positions'])}"
             if data.get("open_positions") is not None else "&mdash;",

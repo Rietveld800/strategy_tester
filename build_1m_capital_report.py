@@ -8,12 +8,18 @@ the contracts taken, the ACTUAL risk each position realized and the
 detailed execution cost per trade. The page opens with the contract
 arsenal (every market's front contract and every verified micro, with
 contract size and the min_account_1pct_stop yardstick, whole dollars)
-and the MISSED-TRADE TREND across the ladder: 27 missed at $100k
-thinning to ONE at $2M -- and that one is a finding, not a rounding
-error. GC 2026-02-02 needs $19,910 for one contract, the account had
-dipped below $1.991M in January, and the order missed BY $28: the
-refusal gate reads LIVE equity, not starting capital, exactly as it
-would at the broker.
+and the MISSED-TRADE TREND across the ladder, whose top-rung verdict
+is COMPUTED per variant: variant 2's $2M still misses one trade (GC
+2026-02-02, $19,910 a contract against a budget January's dip left
+$28 short -- the refusal gate reads LIVE equity, not starting
+capital, exactly as at the broker) while variant 5's $2M misses
+nothing.
+
+ONE PAGE PER PUBLISHED CONFIGURATION since 2026-09-02 (Lode):
+quickfix1m1dc_capitals_variant_02.html (the published baseline, from
+the published blotter) and _05.html (the hybrid stop, from the matrix
+JSON), named by the matrix's own slugs; the old single
+quickfix1m1dc_capitals.html is retired and deleted on build.
 
 THE UNIVERSE IS THE LIVE 22 FUTURES (Lode, same day: "ETF's can't be
 traded with our strategy ... We only trade the 22 markets"). The
@@ -48,13 +54,43 @@ from build_1m_report import (
     streaks)
 
 HERE = Path(__file__).resolve().parent
-OUT_HTML = HERE / "output" / "quickfix1m1dc_capitals.html"
-IN_JSON = HERE / "output" / "quickfix1m1dc_all.json"
+OUT_DIR = HERE / "output"
+IN_JSON = OUT_DIR / "quickfix1m1dc_all.json"
+MATRIX_JSON = OUT_DIR / "quickfix1m1dc_matrix.json"
 SPECS_JSON = HERE / ".." / "data_center" / "metadata" / \
     "contract_specs.json"
 
 CAPITALS = [100_000, 250_000, 500_000, 1_000_000, 2_000_000]
 RISK_PCT = 1.0
+# One ladder per published configuration (Lode, 2026-09-02): the
+# baseline and the hybrid stop, named by the matrix's own slugs
+# (quickfix1m1dc_capitals_variant_02 / _05).
+VARIANTS = [run_1m_matrix.BASELINE_NAME, "variant 5"]
+
+
+def out_path(variant):
+    return OUT_DIR / (f"quickfix1m1dc_capitals_"
+                      f"{run_1m_matrix.variant_slug(variant)}.html")
+
+
+def load_variant(variant):
+    """(trades, calendar, open_positions, source note). The baseline
+    reads the published blotter -- the run charter's study also reads;
+    any other cell reads the matrix JSON, same rule as
+    build_1m_report.variant_payload."""
+    if variant == run_1m_matrix.BASELINE_NAME:
+        data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+        return (data["trades"], data.get("calendar"),
+                data.get("open_positions"),
+                "output/quickfix1m1dc_all.json (the published blotter)")
+    m = json.loads(MATRIX_JSON.read_text(encoding="utf-8"))
+    if variant not in m["trades"]:
+        raise SystemExit(f"{variant} is not in the matrix "
+                         f"({', '.join(m['trades'])})")
+    trades = sorted(m["trades"][variant], key=lambda t: t["entry_ts"])
+    return (trades, m.get("calendar"),
+            m.get("open_positions", {}).get(variant),
+            "output/quickfix1m1dc_matrix.json (the matrix pass)")
 
 
 def cap_label(c):
@@ -379,7 +415,30 @@ def run_ladder(all_trades):
     return out
 
 
-def trend_html(ladder, n_all):
+def trend_html(ladder, n_all, all_trades):
+    # The top rung's verdict is COMPUTED, never asserted: variant 2's
+    # $2M still misses one trade (GC 2026-02-02 by $28 after January's
+    # dip) while variant 5's misses none, and a hardcoded sentence
+    # would lie on one of the two pages.
+    top = ladder[-1]
+    if top["refused"]:
+        worst = min(top["refused"].items(),
+                    key=lambda kv: kv[1]["budget"] - kv[1]["per_unit"])
+        t, r = all_trades[worst[0]], worst[1]
+        top_note = (
+            f'Even {cap_label(top["cap"])} misses '
+            f'{len(top["refused"])}, and honestly so: {esc(t["market"])} '
+            f'{t["entry_date"]} costs {money(r["per_unit"])} a contract '
+            f'and the budget at that moment was {money(r["budget"])} '
+            f'&mdash; short by {money(r["per_unit"] - r["budget"])}. The '
+            f'gate reads live equity, not starting capital, exactly as '
+            f'it would at the broker. ')
+    else:
+        top_note = (
+            f'At {cap_label(top["cap"])} nothing is missed: every '
+            f'blotter entry fit at least one contract inside the 1% '
+            f'budget at its moment. The gate reads live equity, not '
+            f'starting capital, exactly as it would at the broker. ')
     rows = []
     for r in ladder:
         taken = len(r["money_of"])
@@ -406,11 +465,7 @@ def trend_html(ladder, n_all):
         'missed trade is an order REFUSED at placement because one '
         'contract risked more than 1% of equity <b>at that moment</b> '
         '&mdash; never forced &mdash; and the refusals thin out as '
-        'capital grows. Even $2M misses ONE, and honestly so: GC '
-        '2026-02-02 costs $19,910 a contract, the account had dipped '
-        'below $1.991M in January, and the order missed by $28. The '
-        'gate reads live equity, not starting capital, exactly as it '
-        'would at the broker. '
+        'capital grows. ' + top_note +
         '<b>vs ideal</b> is the distance to the frictionless fractional '
         'replay at the same capital (quantization + refusals + '
         'execution costs together).</p>'
@@ -574,11 +629,17 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None):
              f" {r['ideal_dd']:.2f}% DD",
              cls(r["final"] - r["ideal_final"])),
     ])
+    # Twelve tiles in three rows of four (Lode, 2026-09-02): the
+    # winner/loser pair and the best/worst pair share the middle row.
     stats = "".join([
         tile("Expectancy", signed(net_r / len(taken)) + "R",
              "per taken trade", cls(net_r)),
         tile("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
              f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
+        tile("Longest winning run", f"{run_w}",
+             "positions, in entry order"),
+        tile("Longest losing run", f"{run_l}",
+             "positions, in entry order"),
         tile("Average winner",
              signed(gross_win / len(wins)) + "R" if wins else "&mdash;",
              f"{len(wins)} trades", "pos"),
@@ -590,10 +651,6 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None):
              "net of slippage"),
         tile("Worst trade", signed(min(t["net_r"] for t in taken)) + "R",
              "a gapped or slipped stop can cost more than 1R"),
-        tile("Longest winning run", f"{run_w}",
-             "positions, in entry order"),
-        tile("Longest losing run", f"{run_l}",
-             "positions, in entry order"),
         tile("Average hold", held(sum(holds) / len(holds)),
              "entry to exit"),
         tile("Max concurrent", f"{max(openpos)}",
@@ -709,7 +766,7 @@ PAGE_JS = r"""<script>
 
 PAGE = r"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>quickfix1m1dc &mdash; the capital ladder</title>
+<title>quickfix1m1dc [__VNAME__] &mdash; the capital ladder</title>
 __CSS__
 <style>
 .pane-eq{height:300px}.pane-ddc{height:130px}.pane-op{height:110px}
@@ -733,12 +790,17 @@ table.trades td a:hover{text-decoration:underline}
    middle with 14px between them (Lode, 2026-09-02: "a bit of space
    between the columns ... visually unclear"). */
 table.trades td.gapl,table.trades th.gapl{padding-left:30px}
+/* Twelve stat tiles as 3 rows x 4 columns (Lode, 2026-09-02), the
+   winner/loser and best/worst pairs sharing one row; the shared
+   stylesheet's narrow-screen 2-column rule stays in force below
+   641px. */
+@media(min-width:641px){.stats4{grid-template-columns:repeat(4,1fr)}}
 @media print{.pane-eq{height:260px}.pane-ddc,.pane-op{height:110px}}
 </style></head><body>
 <div class="wrap">
 <header>
   <div class="eyebrow">1-minute workstream &middot; deployment</div>
-  <h1>quickfix1m1dc &mdash; the capital ladder</h1>
+  <h1>quickfix1m1dc [__VNAME__] &mdash; the capital ladder</h1>
   <p class="lede">__LEDE__</p>
 </header>
 __ARSENAL__
@@ -751,14 +813,14 @@ __JS__
 </body></html>"""
 
 
-def build():
-    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+def build(variant=run_1m_matrix.BASELINE_NAME):
+    trades_in, calendar, open_positions, source = load_variant(variant)
     payload = json.loads(SPECS_JSON.read_text(encoding="utf-8"))
     # THE LIVE UNIVERSE ONLY (Lode, 2026-09-01): the blotter's ETF and
     # non-updated markets are not traded, so their trades leave before
     # any replay -- exact, the engine runs markets independently.
-    all_trades = sizing.live_trades(data["trades"])
-    calendar = data.get("calendar") or run_1m.calendar_fallback(all_trades)
+    all_trades = sizing.live_trades(trades_in)
+    calendar = calendar or run_1m.calendar_fallback(all_trades)
 
     # Charter links numbered against the FULL blotter (the list the 1m
     # study holds), shared by every section.
@@ -775,7 +837,6 @@ def build():
         links_full[key] = (f"{STUDY_BASE}?m={folder}",
                            {i: n + 1 for n, i in enumerate(order)}, folder)
 
-    open_positions = data.get("open_positions")
     n_open = (None if open_positions is None else
               sum(1 for o in open_positions
                   if o["market"] in sizing.LIVE_UNIVERSE))
@@ -790,8 +851,13 @@ def build():
                            ddc=[[d, v] for d, v in zip(days, ddc)],
                            op=[[d, v] for d, v in zip(days, openpos)]))
 
+    is_base = variant == run_1m_matrix.BASELINE_NAME
     lede = (
-        f"The published baseline&rsquo;s {len(all_trades)} live-universe "
+        f"<b>{esc(variant)}</b>"
+        + (" (the published baseline, 4th/5th stop, band 000-060)"
+           if is_base else " (the hybrid stop, band 020-060)"
+           if variant == "variant 5" else "")
+        + f": its {len(all_trades)} live-universe "
         f"trades (the 22 futures we trade; ETF and non-updated markets "
         f"dropped before the replay), "
         f"deployed in integer contracts at five starting capitals "
@@ -802,37 +868,48 @@ def build():
         f"(commission + exchange + NFA, both sides; taxes excluded) are "
         f"in every curve. A taken trade&rsquo;s R never changes down "
         f"the ladder &mdash; only which trades fit, what they risked "
-        f"and what they paid. Variant: "
-        f"{esc(run_1m_matrix.BASELINE_NAME)}, the published baseline.")
+        f"and what they paid.")
     footer = (
-        "quickfix1m1dc capital ladder, built from "
-        "output/quickfix1m1dc_all.json and data_center's "
-        "contract_specs.json by build_1m_capital_report.py; sizing "
-        "policy and costs: research_1m_sizing.py / execution_costs.py "
-        "(sourced 2026-09-01). All times UTC. Rebuilt by refresh step "
-        "capitals1m.")
+        f"quickfix1m1dc capital ladder for {esc(variant)}, built from "
+        f"{source} and data_center's "
+        f"contract_specs.json by build_1m_capital_report.py; sizing "
+        f"policy and costs: research_1m_sizing.py / execution_costs.py "
+        f"(sourced 2026-09-01). All times UTC. Rebuilt by refresh step "
+        f"capitals1m.")
 
+    out_html = out_path(variant)
     html = (PAGE
+            .replace("__VNAME__", esc(variant))
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__ARSENAL__", arsenal_html(payload)
                      + costs_html(payload)
                      + hardness_html(all_trades, payload))
-            .replace("__TREND__", trend_html(ladder, len(all_trades)))
+            .replace("__TREND__", trend_html(ladder, len(all_trades),
+                                             all_trades))
             .replace("__SECTIONS__", "".join(sections))
             .replace("__FOOTER__", footer)
             .replace("__LIB__", LIB_PATH.read_text(encoding="utf-8"))
             .replace("__JS__", PAGE_JS.replace(
                 "__SECTIONS__",
                 json.dumps(series, separators=(",", ":")))))
-    OUT_HTML.write_text(html, encoding="utf-8")
+    out_html.write_text(html, encoding="utf-8")
+    print(f"{variant}:")
     for r in ladder:
         print(f"  {cap_label(r['cap']):>6}: {len(r['money_of'])} taken, "
               f"{len(r['refused'])} missed, final ${r['final']:,.0f}, "
               f"DD {r['max_dd']:.2f}%")
-    print(f"capital ladder -> {OUT_HTML.name} "
-          f"({OUT_HTML.stat().st_size / 1024:.0f} KB)")
+    print(f"capital ladder -> {out_html.name} "
+          f"({out_html.stat().st_size / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":
-    build()
+    # One page per published configuration; the old single-variant
+    # filename is retired (renamed to _variant_02, Lode 2026-09-02).
+    stale = OUT_DIR / "quickfix1m1dc_capitals.html"
+    if stale.exists():
+        stale.unlink()
+        print(f"removed stale {stale.name} (renamed to "
+              f"{out_path(run_1m_matrix.BASELINE_NAME).name})")
+    for v in VARIANTS:
+        build(v)

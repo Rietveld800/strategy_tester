@@ -368,9 +368,17 @@ out of scope. Reading at $250k/1% on the live universe: baseline
 pays $2,720 total (median $24.70/round turn); variant 5 $1,798. At
 x1000 account the residual vs the ideal IS the cost drag,
 quantization and refusals having vanished.
-**THE CAPITAL LADDER IS `build_1m_capital_report.py` ->
-`output/quickfix1m1dc_capitals.html`** (Lode, 2026-09-01, refresh step
-`capitals1m`): the published baseline in integer contracts at $100k /
+**THE CAPITAL LADDER IS `build_1m_capital_report.py` -> ONE PAGE PER
+PUBLISHED CONFIGURATION** (Lode, 2026-09-01; split per variant
+2026-09-02): `output/quickfix1m1dc_capitals_variant_02.html` (the
+published baseline, from the published blotter) and `_05.html` (the
+hybrid stop, from the matrix JSON), named by the matrix's own slugs --
+the old single `quickfix1m1dc_capitals.html` is retired and the build
+deletes it. Refresh step `capitals1m` builds both. THE TOP-RUNG
+VERDICT IS COMPUTED PER VARIANT, never asserted: variant 2's $2M
+misses one trade (GC 2026-02-02, short by $28 after January's dip)
+while variant 5's $2M misses NOTHING -- a hardcoded sentence would
+lie on one page. Each ladder: integer contracts at $100k /
 $250k / $500k / $1M / $2M, one variant-format section per capital --
 the three panes, the refused orders, and the blotter with contracts,
 ACTUAL realized risk % and the per-trade round-turn cost. It opens
@@ -393,7 +401,11 @@ expectancy, profit factor, average winner/loser, best/worst, streaks,
 hold, max concurrent, time in market), computed on the TAKEN trades.
 On all report pages the two metric grids now sit TOGETHER above the
 panes (same instruction, "more presentable") -- the old mid-page
-"Per-trade statistics" section is gone from the variant pages.
+"Per-trade statistics" section is gone from the variant pages. THE
+STATS GRID IS 3 ROWS x 4 COLUMNS on every report page since
+2026-09-02 (Lode; the shared stylesheet's 3-column rule is overridden
+above 641px), tile order fixed so average winner/loser and best/worst
+trade share the middle row.
 SINCE 2026-09-02 THE ARSENAL ALSO CARRIES the exchange column
 (COMEX/CME/CBOT/NYMEX all suffixed /GLBX, ICE/IFUS, Eurex; the
 excluded table shows OSE and NYSE Arca) and an "Open 1 ctr $" column

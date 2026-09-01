@@ -38,11 +38,13 @@ they stop being rare.
 Contract specs come from data_center/metadata/contract_specs.json (the
 validated table built by its build_contract_specs.py) -- one source, so
 this script and anything downstream cannot disagree about a point
-value. ETFs are sized in whole shares; they pay FULL notional (no
-margin leverage), so each ETF trade also reports the capital it locks
-per 1% risked -- locked/equity = risk_pct * price / rpu, independent of
-account size, which is the number the futures-only-portfolio decision
-wants.
+value. THE UNIVERSE IS THE LIVE 22 FUTURES (LIVE_UNIVERSE below,
+Lode 2026-09-01): ETF trades and non-updated markets in the blotter
+are dropped before the replay -- we do not trade them. The ETF
+capital-lock analysis that used to run here (5 of 12 ETF trades lock
+over 100% of the account, account-size independent) is preserved in
+the CLAUDE.md record and stays the quantitative case behind that
+exclusion; the code path remains for any future ETF question.
 
 Replays the published baseline (variant 2's blotter,
 quickfix1m1dc_all.json) and variant 5 from the matrix JSON. The event
@@ -73,6 +75,28 @@ SPECS = HERE / ".." / "data_center" / "metadata" / "contract_specs.json"
 # either published universe today; the constant only exists so a
 # whole-universe replay cannot silently size FGBL in the wrong currency.
 EURUSD = 1.16
+
+# THE LIVE TRADING UNIVERSE (Lode, 2026-09-01: "ETF's can't be traded
+# with our strategy, we don't trade them. We only trade the 22
+# markets"): the 19 GLBX futures of the currently-updated Socrates set
+# + FGBL (kept despite EUR) + the two IFUS markets. EVERY DEPLOYMENT
+# LAYER -- this reading, the contracts pages, the capital ladder --
+# replays ONLY these markets' trades. The published research record
+# (run_1m.HUMAN_APPROVED, the fractional pages, charter) keeps its own
+# universe; this list says what the account actually trades. Filtering
+# the blotter by market is EXACT: the engine runs markets
+# independently (per-market sessions, lockout, band), so dropping one
+# market cannot shift another's trades -- only the shared money path,
+# which the replay recomputes anyway.
+LIVE_UNIVERSE = frozenset([
+    "GC", "BTC", "SR3", "ZW", "ZC", "YM", "6E", "6J", "LE", "HG",
+    "CL", "NG", "PA", "PL", "NQ", "ES", "SI", "ZN", "ZB",
+    "FGBL", "SB", "DX"])
+
+
+def live_trades(trades):
+    """The blotter restricted to the live trading universe."""
+    return [t for t in trades if t["market"] in LIVE_UNIVERSE]
 
 
 def load_specs():
@@ -259,14 +283,19 @@ def main():
         f"specs: data_center/metadata/contract_specs.json"
         f" (built {built}); execution costs from execution_costs.py"
         f" (sourced 2026-09-01, taxes excluded); margin out of scope",
+        f"universe: the LIVE 22 futures only (ETFs and non-updated"
+        f" markets are not traded; their blotter trades are dropped"
+        f" before the replay, which is exact -- markets are"
+        f" independent in the engine)",
     ]
+    v2 = live_trades(baseline["trades"])
+    v5 = live_trades(matrix["trades"]["variant 5"])
     report_config("published baseline (variant 2, 4th/5th stop,"
-                  " band 000-060)",
-                  baseline["trades"], specs, args.account, args.risk,
-                  lines)
-    report_config("variant 5 (hybrid stop, band 020-060)",
-                  matrix["trades"]["variant 5"], specs, args.account,
-                  args.risk, lines)
+                  " band 000-060), live universe",
+                  v2, specs, args.account, args.risk, lines)
+    report_config("variant 5 (hybrid stop, band 020-060),"
+                  " live universe",
+                  v5, specs, args.account, args.risk, lines)
 
     text = "\n".join(lines) + "\n"
     out = OUT / "quickfix1m1dc_sizing.txt"

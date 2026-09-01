@@ -57,9 +57,13 @@ CATALOG = DC / "metadata" / "micro_catalog.json"
 
 # The live-universe candidate (Lode, 2026-09-01). Order: GLBX, then the
 # kept non-CME markets.
+# The list itself lives in research_1m_sizing.LIVE_UNIVERSE since the
+# deployment layers adopted it (Lode, 2026-09-01: we only trade the 22)
+# -- one home, ordered here for the table.
 LIVE22 = ["GC", "BTC", "SR3", "ZW", "ZC", "YM", "6E", "6J", "LE", "HG",
           "CL", "NG", "PA", "PL", "NQ", "ES", "SI", "ZN", "ZB",
           "FGBL", "SB", "DX"]
+assert set(LIVE22) == set(sizing.LIVE_UNIVERSE)
 
 # The smallest LISTED smaller contract per market. ALL VERIFIED since
 # 2026-09-01 from purchased GLBX definitions (data_center

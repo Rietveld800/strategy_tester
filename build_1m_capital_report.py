@@ -8,12 +8,18 @@ the contracts taken, the ACTUAL risk each position realized and the
 detailed execution cost per trade. The page opens with the contract
 arsenal (every market's front contract and every verified micro, with
 contract size and the min_account_1pct_stop yardstick, whole dollars)
-and the MISSED-TRADE TREND across the ladder: 25 missed at $100k
+and the MISSED-TRADE TREND across the ladder: 27 missed at $100k
 thinning to ONE at $2M -- and that one is a finding, not a rounding
 error. GC 2026-02-02 needs $19,910 for one contract, the account had
-dipped to $1.978M in January, so the budget was $19,775 and the order
-missed BY $135: the refusal gate reads LIVE equity, not starting
-capital, exactly as it would at the broker.
+dipped below $1.991M in January, and the order missed BY $28: the
+refusal gate reads LIVE equity, not starting capital, exactly as it
+would at the broker.
+
+THE UNIVERSE IS THE LIVE 22 FUTURES (Lode, same day: "ETF's can't be
+traded with our strategy ... We only trade the 22 markets"). The
+blotter's ETF and non-updated markets' trades are dropped before any
+replay through research_1m_sizing.live_trades -- exact, since the
+engine runs markets independently.
 
 Money model per section: research_1m_sizing's refusal policy (floor
 sizing, refuse at n=0, release as equity grows) with execution costs
@@ -65,20 +71,19 @@ def arsenal_html(payload):
         return f"{v:,.0f}" if v else "&mdash;"
 
     rows = []
-    for key, s in markets.items():
-        if "unit_qty" not in s:
-            continue  # JGB: not covered
+    for key in sorted(sizing.LIVE_UNIVERSE,
+                      key=list(markets).index):
+        s = markets[key]
         r = by_key.get(key)
         size = f"{s['unit_qty']:g} {s['unit']}"
         rows.append(
             f'<tr><td class="l">{esc(key)}</td>'
             f'<td class="l">{esc(s["market"])}</td>'
             f'<td class="l mono">{esc(r["front"]) if r else "&mdash;"}</td>'
-            f'<td class="l">{"ETF share" if s["type"] == "etf" else size}'
-            f'</td>'
+            f'<td class="l">{size}</td>'
             f'<td class="mono">'
             f'{whole(r["min_account_1pct_stop"]) if r else "&mdash;"}</td>'
-            f'<td class="l">{"obsolete" if s.get("obsolete") else ""}</td>'
+            f'<td class="l"></td>'
             f'</tr>')
     micro_rows = []
     for m in payload["micros"]:
@@ -101,8 +106,12 @@ def arsenal_html(payload):
             '<th class="l" style="width:10%"></th></tr>')
     return (
         '<div class="section-h">The contract arsenal</div>'
-        '<p class="chartnote">Every covered market&rsquo;s <b>front '
-        'contract</b> and, below them, every <b>verified micro/mini</b> '
+        '<p class="chartnote"><b>The 22 markets we trade</b> &mdash; '
+        'the live universe: the 19 currently-updated GLBX futures, '
+        'FGBL (kept despite its EUR denomination) and the two IFUS '
+        'markets. ETFs and non-updated markets are not traded and '
+        'appear nowhere on this page. Each row: the <b>front '
+        'contract</b>; below them, every <b>verified micro/mini</b> '
         'in the arsenal (definitions bought and validated 2026-09-01). '
         '<b>Min acct, 1% stop</b> is the yardstick from '
         'data_center&rsquo;s spec table: the account at which one '
@@ -164,9 +173,9 @@ def trend_html(ladder, n_all):
         '&mdash; never forced &mdash; and the refusals thin out as '
         'capital grows. Even $2M misses ONE, and honestly so: GC '
         '2026-02-02 costs $19,910 a contract, the account had dipped '
-        'to $1.978M in January, and the order missed by $135. The gate '
-        'reads live equity, not starting capital, exactly as it would '
-        'at the broker. '
+        'below $1.991M in January, and the order missed by $28. The '
+        'gate reads live equity, not starting capital, exactly as it '
+        'would at the broker. '
         '<b>vs ideal</b> is the distance to the frictionless fractional '
         'replay at the same capital (quantization + refusals + '
         'execution costs together).</p>'
@@ -437,7 +446,10 @@ __JS__
 def build():
     data = json.loads(IN_JSON.read_text(encoding="utf-8"))
     payload = json.loads(SPECS_JSON.read_text(encoding="utf-8"))
-    all_trades = data["trades"]
+    # THE LIVE UNIVERSE ONLY (Lode, 2026-09-01): the blotter's ETF and
+    # non-updated markets are not traded, so their trades leave before
+    # any replay -- exact, the engine runs markets independently.
+    all_trades = sizing.live_trades(data["trades"])
     calendar = data.get("calendar") or run_1m.calendar_fallback(all_trades)
 
     # Charter links numbered against the FULL blotter (the list the 1m
@@ -466,7 +478,9 @@ def build():
                            op=[[d, v] for d, v in zip(days, openpos)]))
 
     lede = (
-        f"The published baseline&rsquo;s {len(all_trades)} trades, "
+        f"The published baseline&rsquo;s {len(all_trades)} live-universe "
+        f"trades (the 22 futures we trade; ETF and non-updated markets "
+        f"dropped before the replay), "
         f"deployed in integer contracts at five starting capitals "
         f"({', '.join(cap_label(c) for c in CAPITALS)}), all under the "
         f"refusal policy: an order whose single contract risks more "

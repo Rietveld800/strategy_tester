@@ -310,11 +310,28 @@ entries render in their own "Refused at order placement" table (with
 the R the blotter's trade went on to make, as release information,
 and charter links numbered against the FULL blotter -- a taken-only
 numbering would open the wrong trade); and the ideal-delta KPI
-includes the refusal cost. First reading at $150k/1% (window to
-2026-08-31): baseline 84 taken / 20 refused, final $271,935 vs ideal
-$294,401 (-7.6%), DD 6.38%; variant 5 66/23, $255,259 vs $278,157
-(-8.2%), DD 4.32%. GC, SI and NQ never traded full-size in this
-window. KNOWN APPROXIMATION, stated in the module: a refusal is
+includes the refusal cost.
+**THE DEPLOYMENT LAYERS TRADE THE LIVE 22-FUTURES UNIVERSE ONLY**
+(Lode, 2026-09-01 late: "ETF's can't be traded with our strategy, we
+don't trade them. We only trade the 22 markets"). The list is
+`research_1m_sizing.LIVE_UNIVERSE` (the feasibility scoping's 22: 19
+GLBX + FGBL + SB + DX) and `live_trades()` drops the blotter's ETF
+and non-updated markets' trades (URA/VIXY/USO/UNG/UDOW and CC) before
+ANY deployment replay -- the sizing reading, the contracts pages and
+the capital ladder. THE FILTER IS EXACT: the engine runs markets
+independently (per-market sessions, lockout, band), so dropping a
+market cannot shift another's trades; only the shared money path
+changes, and the replay recomputes that. The published RESEARCH
+record (run_1m.HUMAN_APPROVED, the fractional pages, charter's
+overlay) keeps its own universe deliberately -- changing THAT is a
+strategy-level decision nobody has taken. Per-market charter-link
+numbering survives the filter because charter numbers per market.
+First reading at $150k/1% on the live universe (window to
+2026-08-31): baseline 86 blotter trades, 66 taken / 20 refused,
+final $245,234 vs ideal $257,796 (-4.9%), DD 4.30%; variant 5 74
+blotter, 51/23, $213,232 vs $235,666 (-9.5%), DD 5.17%. GC, SI and
+NQ never traded full-size in this window. KNOWN APPROXIMATION,
+stated in the module: a refusal is
 post-processing and cannot re-run the session lockout (a live refused
 order spends nothing and a later setup that session could enter) --
 same class of shift the geometry band needed its own engine runs for;
@@ -340,12 +357,10 @@ exit side at close; the blotter row attributes the full round turn);
 the FRACTIONAL pages deliberately carry none -- slippage models the
 FILL in R where the engine put it, this models the BILL in dollars,
 and the two never overlap. Taxes excluded at all times, margin still
-out of scope. First reading at $150k/1%: baseline pays $2,119 total
-(median $17.82/round turn), final $269,696 at 6.52% DD (-8.4% vs the
-frictionless ideal, all three frictions in); variant 5 pays $1,422
-(median $14.82), $254,017 at 4.39% DD (-8.7%). At x1000 account the
-residual vs the ideal IS the cost drag (~1.5-2.4 pct points),
-quantization and refusals having vanished.
+out of scope. First reading at $150k/1% on the live universe:
+baseline pays $1,583 total (median $14.82/round turn); variant 5
+$1,007. At x1000 account the residual vs the ideal IS the cost drag
+(~1.0-1.7 pct points), quantization and refusals having vanished.
 **THE CAPITAL LADDER IS `build_1m_capital_report.py` ->
 `output/quickfix1m1dc_capitals.html`** (Lode, 2026-09-01, refresh step
 `capitals1m`): the published baseline in integer contracts at $100k /
@@ -356,13 +371,14 @@ with the CONTRACT ARSENAL (every front + every verified micro, sizes
 and whole-dollar min_account_1pct_stop -- data_center's
 contract_specs.json carries the sizing rows and micro min-accounts
 since schema_version 2, so no page reads an xlsx) and the
-MISSED-TRADE TREND: 25 -> 15 -> 8 -> 2 -> 1. EVEN $2M MISSES ONE, and
-that is a finding: GC 2026-02-02 costs $19,910 a contract, January
-had dipped the account to $1.978M, the budget was $19,775 and the
-order missed by $135 -- the refusal gate reads LIVE equity, not
-starting capital, exactly as the broker would. A taken trade's R
-never changes down the ladder; only which trades fit, what they
-risked and what they paid.
+MISSED-TRADE TREND (live universe): 27 -> 16 -> 8 -> 3 -> 1. EVEN $2M
+MISSES ONE, and that is a finding: GC 2026-02-02 costs $19,910 a
+contract, January had dipped the account below $1.991M, and the order
+missed by $28 -- the refusal gate reads LIVE equity, not starting
+capital, exactly as the broker would. A taken trade's R never changes
+down the ladder; only which trades fit, what they risked and what
+they paid. The arsenal table lists ONLY the 22 traded markets (plus
+the verified micros); ETFs appear nowhere on the page.
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the

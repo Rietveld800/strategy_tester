@@ -1128,6 +1128,28 @@ def build(data=None, out=None, variant=None, contracts=False):
     all_trades = trades
     refused_map = {}
     if contracts:
+        # THE LIVE UNIVERSE ONLY (Lode, 2026-09-01: "we only trade the
+        # 22 markets"). ETF and non-updated markets' trades are dropped
+        # before the replay -- exact, since the engine runs markets
+        # independently. Their rows also leave the per-market table,
+        # moving to the excluded list with the reason.
+        dropped = sorted({t["market"] for t in trades
+                          if t["market"] not in sizing.LIVE_UNIVERSE})
+        all_trades = trades = sizing.live_trades(trades)
+        data = dict(data,
+                    markets=[r for r in data["markets"]
+                             if r["market"] in sizing.LIVE_UNIVERSE],
+                    excluded=list(data.get("excluded", [])) + [
+                        dict(market=m,
+                             reason="outside the live trading universe"
+                                    " (ETF or not currently updated);"
+                                    " not traded, dropped before the"
+                                    " replay")
+                        for m in dropped],
+                    open_positions=(
+                        None if data.get("open_positions") is None else
+                        [o for o in data["open_positions"]
+                         if o["market"] in sizing.LIVE_UNIVERSE]))
         start = SIZING_ACCOUNT
         risk = RISK_PCT  # the budget; what each trade REALIZES is below it
         money_of, eod, final, max_dd, refused_map = replay_contracts(
@@ -1299,9 +1321,12 @@ def build(data=None, out=None, variant=None, contracts=False):
 
     survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
     sizing_lede = (
-        f" <b>Money on this page is INTEGER CONTRACTS</b>: each entry "
-        f"takes what a {risk:g}% budget affords in whole contracts "
-        f"(floor sizing, ETFs in whole shares), priced off "
+        f" <b>Money on this page is INTEGER CONTRACTS on the LIVE "
+        f"22-futures universe</b>: ETFs and non-updated markets are "
+        f"not traded and their blotter trades are dropped before the "
+        f"replay (exact &mdash; the engine runs markets "
+        f"independently). Each entry takes what a {risk:g}% budget "
+        f"affords in whole contracts (floor sizing), priced off "
         f"data_center&rsquo;s validated contract spec table. <b>An "
         f"order whose single contract risks more than the budget is "
         f"refused at placement</b> &mdash; never forced &mdash; and "
@@ -1331,11 +1356,10 @@ def build(data=None, out=None, variant=None, contracts=False):
         "See docs/quickfix1m1dc_audit.md, sections 8 and 9.")
     if contracts:
         etf_rows = [m for m in money_of.values() if m.get("etf")]
-        over = [m for m in etf_rows if m["locked_pct"] > 100.0]
         note += (
             " <b>And the sizing assumptions</b> (2026-08-21, refusal "
-            "policy and execution costs 2026-09-01): margin is out of "
-            "scope, an order whose "
+            "policy, execution costs and the live universe "
+            "2026-09-01): margin is out of scope, an order whose "
             "single contract risks more than the budget is refused at "
             "placement rather than forced, <b>every side of every "
             "position pays commission + exchange + NFA fees</b> into "
@@ -1343,15 +1367,13 @@ def build(data=None, out=None, variant=None, contracts=False):
             "confidence flags in <b>execution_costs.py</b>; where two "
             "sources disagreed the higher figure was adopted; taxes "
             "excluded at all times, slippage separately charged in R "
-            "by the engine), and an ETF "
-            "position pays its FULL notional with no leverage modelled"
-            + (f" &mdash; <b>{len(over)} of {len(etf_rows)} ETF trades "
-               f"lock more than the whole account</b> to risk 1%, a ratio "
-               f"the account size cannot fix (locked/equity = risk% "
-               f"&times; price/stop distance); hover an ETF row's "
-               f"contract count for its lock. That is the open "
-               f"futures-only-portfolio question, measured."
-               if etf_rows else "."))
+            "by the engine). ETFs are not traded at all: an ETF "
+            "position would pay its full notional with no leverage, "
+            "and the measured lock (over 100% of the account on 5 of "
+            "12 historical ETF trades, at any account size) is part "
+            "of why the universe is futures-only."
+            + ("" if not etf_rows else " (ETF rows unexpectedly"
+               " present -- check the universe filter.)"))
     blotnote = (
         "Sorted by entry, newest sort on any column. <b>The market name is a "
         "link</b>: it opens charter's 1-minute trade study centred on that "

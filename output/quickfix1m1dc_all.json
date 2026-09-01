@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 193567.74,
+    "final": 196267.42,
     "max_dd_pct": 6.17,
-    "trades": 103,
-    "win_rate": 40.8,
-    "net_r": 70.43
+    "trades": 104,
+    "win_rate": 41.3,
+    "net_r": 71.89
   },
   "calendar": [
     "2026-01-02",
@@ -192,7 +192,8 @@
     "2026-08-25",
     "2026-08-26",
     "2026-08-27",
-    "2026-08-28"
+    "2026-08-28",
+    "2026-08-31"
   ],
   "markets": [
     {
@@ -306,17 +307,17 @@
       "tick": 0.025
     },
     {
-      "trades": 7,
-      "wins": 3,
-      "win_rate": 42.9,
-      "net_r_total": 8.83,
-      "final_cash": 108769.31,
-      "return_pct": 8.77,
+      "trades": 8,
+      "wins": 4,
+      "win_rate": 50.0,
+      "net_r_total": 10.29,
+      "final_cash": 110364.6,
+      "return_pct": 10.36,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 4,
         "no_confirm": 0,
-        "close1": 3,
+        "close1": 4,
         "data_end": 0
       },
       "refused_wide": 15,
@@ -729,20 +730,20 @@
   "open_positions": [
     {
       "side": "short",
-      "contract": "HGZ6",
-      "entry_date": "2026-08-28",
-      "entry_ts": "2026-08-28 09:04:00+00:00",
-      "entry": 6.7276,
-      "stop": 6.755599999999999,
-      "rpu": 0.026999999999999247,
-      "entry_first": 6.7286,
+      "contract": "PAZ6",
+      "entry_date": "2026-08-31",
+      "entry_ts": "2026-08-30 23:45:00+00:00",
+      "entry": 1451.5,
+      "stop": 1480.0,
+      "rpu": 27.5,
+      "entry_first": 1452.5,
       "stop_tightened": null,
-      "rpu_range_ratio": 0.2389,
-      "risk_usd": 1087.69,
-      "mark_ts": "2026-08-28 17:00:28.144571591+00:00",
-      "mark": 6.659000000000001,
-      "unrealized_r": 2.5407,
-      "market": "HG"
+      "rpu_range_ratio": 0.2115,
+      "risk_usd": 943.28,
+      "mark_ts": "2026-08-31 17:00:17.479971889+00:00",
+      "mark": 1378.3000000000002,
+      "unrealized_r": 2.6618,
+      "market": "PA"
     }
   ],
   "trades": [
@@ -3114,6 +3115,29 @@
       "pnl_usd": -1386.65,
       "cash_after": 122487.18,
       "market": "ZW"
+    },
+    {
+      "side": "short",
+      "contract": "HGZ6",
+      "entry_date": "2026-08-28",
+      "entry_ts": "2026-08-28 09:04:00+00:00",
+      "entry": 6.7276,
+      "stop": 6.755599999999999,
+      "rpu": 0.026999999999999247,
+      "entry_first": 6.7286,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2389,
+      "exit_date": "2026-08-31",
+      "exit_ts": "2026-08-31 17:00:19.840515405+00:00",
+      "exit": 6.6875,
+      "reason": "close1",
+      "gross_r": 1.4852,
+      "cost_r": 0.0185,
+      "net_r": 1.4667,
+      "risk_usd": 1087.69,
+      "pnl_usd": 1595.28,
+      "cash_after": 110364.6,
+      "market": "HG"
     }
   ]
 }

@@ -275,13 +275,13 @@ A sampled week of 1m bars (~$0.66, for liquidity) stays unbought.
 (Lode: "trade it with the contracts and not with the one percent
 risk"): `build_1m_report.py --contracts` renders the SAME two trade
 lists -- the published baseline and `variant 5` -- with the money layer
-in integer contracts at the $2M account, as
+in integer contracts, as
 `output/quickfix1m1dc_contracts_variant_02.html` / `_05.html`. The
 sizing arithmetic is IMPORTED from `research_1m_sizing.contract_size`
 (one code path, so the pages and the research reading cannot
-disagree); the R columns are identical to the fractional pages by
+disagree); a taken trade's R is identical to the fractional pages by
 construction, the blotter gains a `Ctr` column (hover: dollar risk,
-realized %, an ETF's locked notional; red = forced), and the KPI row
+realized %, an ETF's locked notional), and the KPI row
 states the delta against the fractional ideal AT THE SAME ACCOUNT --
 never against the published fractional figures, which are a different
 bet size. The baseline contracts page takes the RAW blotter at the 1%
@@ -291,6 +291,38 @@ conflate two questions. Refresh step `contracts1m` (in the full run,
 after `hybrid1m`; reads the JSONs, no backtest, seconds). The pages
 are gitignored like every other HTML view; the fractional pages
 remain the research currency.
+**THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
+(Lode: "We're not going to force a trade above that 1% ... a trade is
+refused on the moment of placing the order because the 1 contract
+risk is above 1% capital risk. Once the capital grows these trades
+could find their release in real-time but also in the backtest").
+`research_1m_sizing.contract_size` returns `(n, refused)` -- at n=0
+the ORDER IS REFUSED and nothing is booked; the same setup is
+released the moment grown equity affords one contract. This
+supersedes the 2026-08-21 force-1 decision. THE DEPLOYMENT ACCOUNT IS
+$150,000 (Lode's proposal for releasing PA/PL/SI-class trades over
+time), the default of both the research script and the contracts
+pages; `--account 2000000` reproduces the everything-fits reading.
+Consequences, all deliberate: the quantized trade list is now a
+SUBSET of the blotter (no longer capital-independent -- that is the
+point); every page statistic counts TAKEN trades only; refused
+entries render in their own "Refused at order placement" table (with
+the R the blotter's trade went on to make, as release information,
+and charter links numbered against the FULL blotter -- a taken-only
+numbering would open the wrong trade); and the ideal-delta KPI
+includes the refusal cost. First reading at $150k/1% (window to
+2026-08-31): baseline 84 taken / 20 refused, final $271,935 vs ideal
+$294,401 (-7.6%), DD 6.38%; variant 5 66/23, $255,259 vs $278,157
+(-8.2%), DD 4.32%. GC, SI and NQ never traded full-size in this
+window. KNOWN APPROXIMATION, stated in the module: a refusal is
+post-processing and cannot re-run the session lockout (a live refused
+order spends nothing and a later setup that session could enter) --
+same class of shift the geometry band needed its own engine runs for;
+acceptable while refusals are rare, and a money-aware engine pass is
+the fix if they stop being rare. NEXT STEP OF THIS WORK (Lode, same
+message): execution costs -- the per-contract cost of opening and
+closing (commissions and exchange fees, taxes ALWAYS excluded),
+documented and sourced, into the final equity curve.
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the

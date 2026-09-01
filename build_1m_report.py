@@ -69,12 +69,12 @@ LIB_PATH = (HERE / ".." / "data_center" / "scripts"
 
 START_CAPITAL = 100_000.0
 RISK_PCT = 1.0
-# The integer-contract test account (Lode, 2026-09-01): large enough
-# that every market in the universe affords at least one contract
-# inside the 1% budget, so the contracts pages measure quantization
-# noise rather than granularity. research_1m_sizing defaults to the
-# same figure.
-SIZING_ACCOUNT = 2_000_000.0
+# The deployment scenario (Lode, 2026-09-01): $150,000, and an order
+# whose single contract risks more than the budget is REFUSED at
+# placement -- never forced -- and released the moment grown capital
+# affords it. research_1m_sizing defaults to the same figure and owns
+# the sizing rule.
+SIZING_ACCOUNT = 150_000.0
 CONTRACTS_STEM = "quickfix1m1dc_contracts"
 # charter serves site/ over HTTP (serve.py, port 8000 by default and the
 # next free one after that). A file:// link cannot reach the study, so the
@@ -178,12 +178,16 @@ def replay(trades, risk_pct=RISK_PCT, start=START_CAPITAL):
 def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
     """replay() in INTEGER position sizes -- the deployability rendering
     of the same trade list. Each entry takes what its budget affords in
-    whole contracts off data_center's validated contract spec table
-    (floor sizing, force-1 at n=0: research_1m_sizing.contract_size, ONE
-    code path with the research reading; decisions Lode 2026-08-21,
-    margin and commissions out of scope). ETFs are sized in whole
-    shares, which pay FULL notional -- each row records what it locked.
-    The R columns cannot move: only the money differs from replay().
+    whole contracts off data_center's validated contract spec table;
+    an entry whose SINGLE contract busts the budget is REFUSED at
+    placement and booked nowhere (research_1m_sizing.contract_size, ONE
+    code path with the research reading; refusal policy Lode
+    2026-09-01, superseding force-1; margin out of scope). ETFs are
+    sized in whole shares, which pay FULL notional -- each row records
+    what it locked. Returns (money_of, eod, final, max_dd, refused):
+    money_of covers the TAKEN trades only, refused maps the skipped
+    trade index to its sizing facts. The R columns of a taken trade
+    cannot move: only the money differs from replay().
     """
     specs, _ = sizing.load_specs()
     events = []
@@ -193,14 +197,18 @@ def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
     events.sort(key=lambda e: (e[0], e[1]))
 
     equity, peak, max_dd = start, start, 0.0
-    open_pos, money_of, eod = {}, {}, {}
+    open_pos, money_of, eod, refused = {}, {}, {}, {}
     for ts, kind, i in events:
         t = trades[i]
         if kind == 1:
             spec = specs[t["market"]]
             per_unit = t["rpu"] * sizing.usd_point_value(spec)
-            n, forced = sizing.contract_size(equity, risk_pct, per_unit)
-            m = dict(n=n, forced=forced, per_unit=per_unit,
+            n, refuse = sizing.contract_size(equity, risk_pct, per_unit)
+            if refuse:
+                refused[i] = dict(per_unit=per_unit, equity=equity,
+                                  budget=equity * risk_pct / 100.0)
+                continue
+            m = dict(n=n, per_unit=per_unit,
                      risk_usd=n * per_unit,
                      risk_pct=n * per_unit / equity * 100.0,
                      etf=spec["type"] == "etf")
@@ -209,7 +217,9 @@ def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
                 m["locked_pct"] = m["locked_usd"] / equity * 100.0
             open_pos[i] = m
         else:
-            m = open_pos.pop(i)
+            m = open_pos.pop(i, None)
+            if m is None:
+                continue  # the entry was refused
             pnl = t["net_r"] * m["risk_usd"]
             equity += pnl
             peak = max(peak, equity)
@@ -218,7 +228,7 @@ def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
             worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
                         (peak - equity) / peak * 100.0)
             eod[ts.date()] = (equity, peak, worst)
-    return money_of, eod, equity, max_dd
+    return money_of, eod, equity, max_dd, refused
 
 
 def solve_risk_pct(trades, target_dd):
@@ -496,6 +506,54 @@ def rules_html(p):
 </div>"""
 
 
+def refused_html(all_trades, refused_map, links_full):
+    """The orders the sizing policy refused (Lode, 2026-09-01: never
+    force a trade above the 1% budget; the same setup is released the
+    moment grown capital affords one contract). They are rendered as
+    their own table rather than dimmed blotter rows because they are
+    not trades: nothing was entered, nothing is booked, no statistic
+    above counts them. The R column shows what the blotter's trade went
+    on to do -- the release analysis a growing account wants to read."""
+    if not refused_map:
+        return ""
+    head = '<div class="section-h">Refused at order placement</div>'
+    note = (
+        '<p class="chartnote">Entries whose <b>single contract</b> risked '
+        'more than the 1% budget at that moment. The order is refused, '
+        'never forced, and nothing is booked; as the account grows, the '
+        'same market&rsquo;s later setups clear the bar on their own. '
+        '<b>R (not taken)</b> is what the blotter&rsquo;s trade did &mdash; '
+        'information about the release, not booked money.</p>')
+    cols = [("Market", "l", 11), ("Side", "l", 7), ("In (UTC)", "l", 15),
+            ("1 contract $", "", 13), ("Budget $", "", 12),
+            ("Equity $", "", 13), ("R (not taken)", "", 12),
+            ("Reason", "l", 17)]
+    heads = "".join(f'<th class="{c}" style="width:{w}%">{lab}</th>'
+                    for lab, c, w in cols)
+    rows = []
+    for i in sorted(refused_map, key=lambda i: all_trades[i]["entry_ts"]):
+        t, r = all_trades[i], refused_map[i]
+        link = links_full.get(t["market"])
+        name = esc(t["market"])
+        if link:
+            name = (f'<a href="{link[0]}&amp;t={link[1][i]}" '
+                    f'target="_blank">{name}</a>')
+        rows.append(
+            f'<tr>'
+            f'<td class="l">{name}</td>'
+            f'<td class="l">{t["side"]}</td>'
+            f'<td class="l mono">{stamp(t["entry_ts"])}</td>'
+            f'<td class="mono neg">{money(r["per_unit"])}</td>'
+            f'<td class="mono">{money(r["budget"])}</td>'
+            f'<td class="mono">{money(r["equity"])}</td>'
+            f'<td class="mono {cls(t["net_r"])}">{signed(t["net_r"])}</td>'
+            f'<td class="l">{REASON_TEXT.get(t["reason"], t["reason"])}'
+            f'</td></tr>')
+    return (f'{head}{note}<div class="tradecard"><table class="trades">'
+            f'<thead><tr>{heads}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div>')
+
+
 def open_html(open_positions):
     """The positions entered but not yet closed (Lode, 2026-08-29): a
     window-end entry waiting for the settlement of its market's next
@@ -584,17 +642,17 @@ def blotter_html(trades, money_of, links, contracts=False):
         if contracts:
             # The cell says how many; the tooltip carries the money behind
             # it, plus the ETF's locked notional -- the number the
-            # futures-only decision reads.
+            # futures-only decision reads. (An entry the budget could not
+            # size is not here at all: refused orders have their own
+            # table.)
             tip = (f'risk ${m["risk_usd"]:,.0f} = {m["risk_pct"]:.2f}% '
                    f'(${m["per_unit"]:,.0f}/contract)')
             if m.get("etf"):
                 tip += (f'; {m["n"]:,} shares locking '
                         f'${m["locked_usd"]:,.0f} = {m["locked_pct"]:.0f}% '
                         f'of the account')
-            if m["forced"]:
-                tip += "; FORCED: the budget afforded no contract"
-            ctr_cell = (f'<td class="mono{" neg" if m["forced"] else ""}" '
-                        f'data-s="{m["n"]}" title="{tip}">{m["n"]:,}</td>')
+            ctr_cell = (f'<td class="mono" data-s="{m["n"]}" '
+                        f'title="{tip}">{m["n"]:,}</td>')
         else:
             ctr_cell = ""
         rows.append(
@@ -929,6 +987,7 @@ __RULES__
   <th style="width:9%">Avg R</th>
   <th class="l wrap" style="width:42%">What it means</th>
 </tr></thead><tbody>__CLASSES__</tbody></table></div>
+__REFUSED__
 __OPEN__
 <div class="section-h">All trades</div>
 <p class="chartnote">__BLOTNOTE__</p>
@@ -1053,20 +1112,36 @@ def build(data=None, out=None, variant=None, contracts=False):
     p = data["params"]
     published = data["portfolio"]
 
+    all_trades = trades
+    refused_map = {}
     if contracts:
         start = SIZING_ACCOUNT
         risk = RISK_PCT  # the budget; what each trade REALIZES is below it
-        money_of, eod, final, max_dd = replay_contracts(trades, risk, start)
+        money_of, eod, final, max_dd, refused_map = replay_contracts(
+            trades, risk, start)
         # The fractional replay at the SAME account is this page's
         # yardstick: the published figures live on the fractional pages
         # and are a different bet size, so comparing to them would only
-        # measure the account, not the quantization.
+        # measure the account, not the quantization and the refusals.
         _, _, ideal_final, ideal_dd = replay(trades, risk, start)
+        # Every statistic, pane and table below counts the TAKEN trades
+        # only -- a refused order is not a trade. The refused entries
+        # get their own table, with charter links numbered against the
+        # FULL blotter (which is the list charter's study holds).
+        orig_idx = [i for i in range(len(all_trades))
+                    if i not in refused_map]
+        if not orig_idx:
+            raise SystemExit(
+                f"every trade was refused at ${start:,.0f} / {risk:g}%"
+                f" -- no page to build at this account")
+        trades = [all_trades[i] for i in orig_idx]
+        money_of = {n: money_of[o] for n, o in enumerate(orig_idx)}
     else:
         start = START_CAPITAL
         risk = data.get("risk_pct", RISK_PCT)
         money_of, eod, final, max_dd = replay(trades, risk, start)
         ideal_final = ideal_dd = None
+        orig_idx = list(range(len(trades)))
     calendar = data.get("calendar")
     if not calendar:
         calendar = run_1m.calendar_fallback(trades)
@@ -1118,25 +1193,35 @@ def build(data=None, out=None, variant=None, contracts=False):
     # different trade entirely (31 of variant 5's 66 rows). The index is
     # only meaningful inside the list it was counted in.
     vslug = data.get("slug")
-    by_market = {}
-    for i, t in enumerate(trades):
-        by_market.setdefault(t["market"], []).append(i)
-    links = {}
-    for key, idxs in by_market.items():
+    # Numbered against the FULL blotter, never the taken subset: charter's
+    # study holds every trade of the list, so on a contracts page a
+    # taken-only numbering would open the wrong trade wherever a refusal
+    # precedes it in that market.
+    by_market_full = {}
+    for i, t in enumerate(all_trades):
+        by_market_full.setdefault(t["market"], []).append(i)
+    links_full = {}
+    for key, idxs in by_market_full.items():
         try:
             folder = run_1m.market_info(key)["array_dir"]
         except (KeyError, StopIteration):
             continue
-        order = sorted(idxs, key=lambda i: trades[i]["entry_ts"])
+        order = sorted(idxs, key=lambda i: all_trades[i]["entry_ts"])
         url = f"{STUDY_BASE}?m={folder}"
         if vslug:
             url += f"&amp;v={vslug}"      # the url goes straight into an href
-        links[key] = (url, {i: n + 1 for n, i in enumerate(order)}, folder)
+        links_full[key] = (url, {i: n + 1 for n, i in enumerate(order)},
+                           folder)
+    links = {key: (url, {n: nums[o] for n, o in enumerate(orig_idx)
+                         if o in nums}, folder)
+             for key, (url, nums, folder) in links_full.items()}
 
     traded = sum(1 for r in data["markets"] if r["trades"])
     kpis = "".join([
         kpi("Closed trades", f"{len(trades)}",
-            f"{traded} markets traded of {len(data['markets'])} tested"),
+            (f"taken of {len(all_trades)} in the blotter;"
+             f" {len(refused_map)} refused by sizing" if contracts else
+             f"{traded} markets traded of {len(data['markets'])} tested")),
         kpi("Win rate", f"{wr:.1f}%", f"{len(wins)} won, {len(losses)} lost"),
         kpi("Net R", signed(net_r, 2), "after slippage"),
         kpi("Final capital", money(final),
@@ -1150,21 +1235,21 @@ def build(data=None, out=None, variant=None, contracts=False):
             "daily closing balances"),
     ])
     if contracts:
-        forced_n = sum(1 for m in money_of.values() if m["forced"])
         risks_pct = sorted(m["risk_pct"] for m in money_of.values())
-        med_risk = risks_pct[len(risks_pct) // 2]
+        med_risk = risks_pct[len(risks_pct) // 2] if risks_pct else 0.0
         delta = 100 * (final / ideal_final - 1)
         kpis += "".join([
             kpi("Against the fractional ideal",
                 signed(delta, 2) + "%",
                 f"ideal {money(ideal_final)} at {ideal_dd:.2f}% DD, same"
-                f" account", cls(delta)),
+                f" account, all {len(all_trades)} trades", cls(delta)),
             kpi("Realized risk (median)", f"{med_risk:.2f}%",
-                f"of the {risk:g}% budget; floor sizing never exceeds it"
-                f" unless forced"),
-            kpi("Forced trades", f"{forced_n}",
-                "the budget afforded no contract; took 1 anyway, tagged"
-                " in the blotter", "neg" if forced_n else ""),
+                f"of the {risk:g}% budget; floor sizing never exceeds"
+                f" it"),
+            kpi("Refused at placement", f"{len(refused_map)}",
+                "one contract risked more than the budget; never"
+                " forced, released as capital grows",
+                "neg" if refused_map else ""),
         ])
 
     stats = "".join([
@@ -1198,10 +1283,13 @@ def build(data=None, out=None, variant=None, contracts=False):
     sizing_lede = (
         f" <b>Money on this page is INTEGER CONTRACTS</b>: each entry "
         f"takes what a {risk:g}% budget affords in whole contracts "
-        f"(floor sizing, one contract anyway when it affords none, ETFs "
-        f"in whole shares), priced off data_center&rsquo;s validated "
-        f"contract spec table. The R columns are identical to the "
-        f"fractional page by construction; only the money differs."
+        f"(floor sizing, ETFs in whole shares), priced off "
+        f"data_center&rsquo;s validated contract spec table. <b>An "
+        f"order whose single contract risks more than the budget is "
+        f"refused at placement</b> &mdash; never forced &mdash; and "
+        f"released the moment grown capital affords it; refused "
+        f"entries have their own table below. A taken trade&rsquo;s R "
+        f"is identical to the fractional page by construction."
         if contracts else "")
     lede = (
         f"One shared account of {money(start)} across "
@@ -1227,9 +1315,10 @@ def build(data=None, out=None, variant=None, contracts=False):
         etf_rows = [m for m in money_of.values() if m.get("etf")]
         over = [m for m in etf_rows if m["locked_pct"] > 100.0]
         note += (
-            " <b>And the sizing assumptions</b> (decisions 2026-08-21): "
-            "margin and commissions are out of scope, a forced trade takes "
-            "one contract over budget rather than skipping, and an ETF "
+            " <b>And the sizing assumptions</b> (2026-08-21, refusal "
+            "policy 2026-09-01): margin is out of scope, an order whose "
+            "single contract risks more than the budget is refused at "
+            "placement rather than forced, and an ETF "
             "position pays its FULL notional with no leverage modelled"
             + (f" &mdash; <b>{len(over)} of {len(etf_rows)} ETF trades "
                f"lock more than the whole account</b> to risk 1%, a ratio "
@@ -1245,8 +1334,9 @@ def build(data=None, out=None, variant=None, contracts=False):
         f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
         "P&amp;L is this trade's share of the shared account."
         + (" <b>Ctr</b> is the position in whole contracts (shares for an "
-           "ETF); hover it for the dollar risk it realized, and a red "
-           "count is a FORCED trade."
+           "ETF); hover it for the dollar risk it realized. Entries the "
+           "sizing policy refused are not rows here -- see <b>Refused at "
+           "order placement</b> above."
            if contracts else ""))
     mktnote = (
         "Each market's own figures at "
@@ -1279,7 +1369,8 @@ def build(data=None, out=None, variant=None, contracts=False):
         f"All times UTC. This strategy is deliberately outside the daily "
         f"registry, so it has no cap dial, no risk dial and no variant grid."
         + (f" Money on this page: integer contracts at the {money(start)} "
-          f"test account (Lode, 2026-09-01), specs from data_center/"
+          f"deployment account with refusal at the {risk:g}% budget "
+          f"(Lode, 2026-09-01), specs from data_center/"
           f"metadata/contract_specs.json; the fractional pages remain the "
           f"research currency." if contracts else ""))
 
@@ -1296,6 +1387,8 @@ def build(data=None, out=None, variant=None, contracts=False):
             .replace("__NOTE__", note)
             .replace("__STATS__", stats)
             .replace("__CLASSES__", class_rows)
+            .replace("__REFUSED__", refused_html(all_trades, refused_map,
+                                                 links_full))
             .replace("__OPEN__", open_html(data.get("open_positions")))
             .replace("__BLOTNOTE__", blotnote)
             .replace("__BLOTTER__", blotter_html(trades, money_of, links,

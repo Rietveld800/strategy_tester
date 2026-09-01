@@ -6,17 +6,30 @@ with INTEGER position sizes and measures what quantization costs -- a
 pure post-processing pass over trades already on disk (no engine runs,
 seconds), against the idealized fractional replay those pages publish.
 
-Sizing (decisions, Lode 2026-08-21):
-  n = floor(equity * risk_pct / (rpu * point_value)), and a trade whose
-  budget affords no contract takes ONE anyway (force-1), tagged, so the
-  trade list stays capital-independent. The idealized 1% layer remains
-  the research currency; this layer is a deployability measurement on
-  top, never a replacement. Margin and commissions are out of scope.
+Sizing (Lode 2026-08-21, refusal policy revised 2026-09-01):
+  n = floor(equity * risk_pct / (rpu * point_value)); at n = 0 the
+  order is REFUSED at placement -- "We're not going to force a trade
+  above that 1%" -- and the same setup is released the moment grown
+  capital affords one contract, in the backtest exactly as in real
+  time. (The original force-1 policy is superseded; refusals make the
+  quantized trade list a SUBSET of the blotter, so this layer is no
+  longer capital-independent -- that is the point.) The idealized 1%
+  layer remains the research currency; this layer is a deployability
+  measurement on top, never a replacement. Margin is out of scope;
+  execution costs are the next step of the deployment work.
 
-Account size: default $2,000,000 (Lode, 2026-09-01) -- chosen so every
-market in the universe affords at least one contract inside the 1%
-threshold, which turns the test into a measurement of quantization
-noise rather than a fight with granularity.
+Account size: default $150,000 (Lode, 2026-09-01) -- the deployment
+scenario: most markets afford one contract, and the PA/PL/SI-class
+trades sit refused until equity grows to release them. `--account
+2000000` reproduces the everything-fits reading.
+
+KNOWN APPROXIMATION, stated rather than hidden: a refusal here is
+post-processing, so it removes the trade but cannot re-run the session
+lockout -- in the live engine a refused ORDER spends nothing and a
+later setup that session could still enter. Same class of shift the
+geometry band needed its own engine runs for; acceptable while
+refusals are rare, and a money-aware engine pass is the exact fix if
+they stop being rare.
 
 Contract specs come from data_center/metadata/contract_specs.json (the
 validated table built by its build_contract_specs.py) -- one source, so
@@ -68,12 +81,17 @@ def usd_point_value(spec):
 
 
 def contract_size(equity, risk_pct, per_unit):
-    """(contracts, forced): floor sizing, force-1 at n=0 (Lode,
-    2026-08-21). THE one sizing rule -- build_1m_report's contracts
-    pages import it from here, so the pages and this reading cannot
-    disagree about what a budget affords."""
+    """(contracts, refused): floor sizing, REFUSE at n=0 (Lode,
+    2026-09-01: "We're not going to force a trade above that 1%" --
+    the order is refused at placement when one contract risks more
+    than the budget, and the trade is released the moment grown
+    capital affords it, in the backtest exactly as in real time).
+    Supersedes the 2026-08-21 force-1 policy. THE one sizing rule --
+    build_1m_report's contracts pages import it from here, so the
+    pages and this reading cannot disagree about what a budget
+    affords."""
     n = math.floor(equity * risk_pct / 100.0 / per_unit)
-    return (1, True) if n == 0 else (n, False)
+    return (n, n == 0)
 
 
 def quantized_replay(trades, specs, start_capital, risk_pct):
@@ -92,18 +110,22 @@ def quantized_replay(trades, specs, start_capital, risk_pct):
         if kind == "entry":
             spec = specs[t["market"]]
             per_unit = t["rpu"] * usd_point_value(spec)
-            n, forced = contract_size(equity, risk_pct, per_unit)
-            risk = n * per_unit
+            n, refused = contract_size(equity, risk_pct, per_unit)
             row = dict(market=t["market"], type=spec["type"], n=n,
-                       forced=forced, per_unit=per_unit, risk=risk,
-                       risk_pct=risk / equity * 100.0)
-            if spec["type"] == "etf":
+                       refused=refused, per_unit=per_unit,
+                       entry_date=t["entry_date"],
+                       risk=n * per_unit,
+                       risk_pct=n * per_unit / equity * 100.0)
+            if spec["type"] == "etf" and n:
                 row["locked"] = n * t["entry"]
                 row["locked_pct"] = row["locked"] / equity * 100.0
             rows.append(row)
-            open_risk[tid] = risk
+            if not refused:
+                open_risk[tid] = row["risk"]
         else:
-            risk = open_risk.pop(tid)
+            risk = open_risk.pop(tid, None)
+            if risk is None:
+                continue  # the entry was refused; nothing to book
             equity += t["net_r"] * risk
             peak = max(peak, equity)
             max_dd = max(max_dd, (peak - equity) / peak * 100.0)
@@ -125,41 +147,56 @@ def report_config(name, trades, specs, account, risk_pct, lines):
     conv = abs(big["final"] / (account * 1000)
                - big_ideal / (account * 1000))
 
-    fut = [r for r in rows if r["type"] == "future"]
-    etf = [r for r in rows if r["type"] == "etf"]
-    forced = [r for r in rows if r["forced"]]
-    risks = [r["risk_pct"] for r in rows]
+    taken = [r for r in rows if not r["refused"]]
+    fut = [r for r in taken if r["type"] == "future"]
+    etf = [r for r in taken if r["type"] == "etf"]
+    refused = [r for r in rows if r["refused"]]
+    risks = [r["risk_pct"] for r in taken]
 
     w = lines.append
     w("")
-    w(f"== {name}  ({len(trades)} trades)")
+    w(f"== {name}  ({len(trades)} trades in the blotter)")
     w(f"   idealized {risk_pct:g}% fractional : final"
-      f" ${ideal_final:,.0f}  max DD {ideal_dd:.2f}%")
-    w(f"   quantized integer sizing   : final ${q['final']:,.0f}"
-      f"  max DD {q['max_dd']:.2f}%")
-    w(f"   quantization cost          : final"
+      f" ${ideal_final:,.0f}  max DD {ideal_dd:.2f}%  (all"
+      f" {len(trades)} trades)")
+    w(f"   quantized, refuse-at-n=0   : final ${q['final']:,.0f}"
+      f"  max DD {q['max_dd']:.2f}%  ({len(taken)} taken,"
+      f" {len(refused)} refused)")
+    w(f"   quantization + refusals    : final"
       f" {q['final'] / ideal_final * 100 - 100:+.2f}%  DD"
-      f" {q['max_dd'] - ideal_dd:+.2f} points")
-    w(f"   forced trades (n_intended=0): {len(forced)}"
-      + (f"  ({', '.join(sorted({r['market'] for r in forced}))})"
-         if forced else ""))
-    w(f"   realized risk per trade    : min {min(risks):.3f}%"
-      f"  p25 {pct(risks, .25):.3f}%  median {median(risks):.3f}%"
-      f"  p75 {pct(risks, .75):.3f}%  max {max(risks):.3f}%"
-      f"  (budget {risk_pct:g}%)")
+      f" {q['max_dd'] - ideal_dd:+.2f} points against the ideal")
+    if refused:
+        w(f"   refused at order placement : "
+          + ", ".join(f"{r['market']} {r['entry_date']}"
+                      f" (1 contract = ${r['per_unit']:,.0f})"
+                      for r in refused))
+        w("   release rule: the same setup is taken the moment grown"
+          " capital affords one contract inside the budget -- no trade"
+          " is ever forced above it.")
+    if risks:
+        w(f"   realized risk per trade    : min {min(risks):.3f}%"
+          f"  p25 {pct(risks, .25):.3f}%  median {median(risks):.3f}%"
+          f"  p75 {pct(risks, .75):.3f}%  max {max(risks):.3f}%"
+          f"  (budget {risk_pct:g}%)")
     w(f"   convergence check at x1000 account: quantized-vs-ideal"
       f" return delta {conv * 100:.4f} pct points")
 
     w("   per market (futures):")
-    w(f"     {'mkt':<5} {'trades':>6} {'contracts min/med/max':>22}"
-      f" {'median $/contract':>18} {'forced':>6}")
-    for m in sorted({r["market"] for r in fut}):
+    w(f"     {'mkt':<5} {'taken':>6} {'contracts min/med/max':>22}"
+      f" {'median $/contract':>18} {'refused':>7}")
+    ref_by = {}
+    for r in refused:
+        ref_by[r["market"]] = ref_by.get(r["market"], 0) + 1
+    for m in sorted({r["market"] for r in fut} | set(ref_by)):
         rs = [r for r in fut if r["market"] == m]
         ns = [r["n"] for r in rs]
-        w(f"     {m:<5} {len(rs):>6} "
-          f"{min(ns):>8}/{int(median(ns))}/{max(ns):<8}"
-          f" {median(r['per_unit'] for r in rs):>17,.0f}"
-          f" {sum(r['forced'] for r in rs):>6}")
+        band = (f"{min(ns):>8}/{int(median(ns))}/{max(ns):<8}"
+                if ns else f"{'-':>8}/{'-'}/{'-':<8}")
+        per = ([r["per_unit"] for r in rs]
+               or [r["per_unit"] for r in refused if r["market"] == m])
+        w(f"     {m:<5} {len(rs):>6} {band}"
+          f" {median(per):>17,.0f}"
+          f" {ref_by.get(m, 0):>7}")
     if etf:
         w("   ETFs (whole shares, FULL notional paid -- no leverage):")
         w(f"     {'mkt':<5} {'trades':>6} {'median shares':>13}"
@@ -179,7 +216,7 @@ def report_config(name, trades, specs, account, risk_pct, lines):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--account", type=float, default=2_000_000.0)
+    ap.add_argument("--account", type=float, default=150_000.0)
     ap.add_argument("--risk", type=float, default=1.0)
     args = ap.parse_args()
 
@@ -193,9 +230,11 @@ def main():
         "quickfix1m1dc -- quantized contract sizing"
         f" (research_1m_sizing.py, {datetime.now():%Y-%m-%d %H:%M})",
         f"account ${args.account:,.0f}, risk {args.risk:g}% per trade,"
-        f" integer contracts, force-1 at n=0",
+        f" integer contracts, REFUSED at n=0 (no forcing; released as"
+        f" capital grows)",
         f"specs: data_center/metadata/contract_specs.json"
-        f" (built {built}); margin and commissions out of scope",
+        f" (built {built}); margin out of scope, execution costs the"
+        f" next step",
     ]
     report_config("published baseline (variant 2, 4th/5th stop,"
                   " band 000-060)",

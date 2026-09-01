@@ -77,7 +77,9 @@ def arsenal_html(payload):
                       key=list(markets).index):
         s = markets[key]
         r = by_key.get(key)
-        size = f"{s['unit_qty']:g} {s['unit']}"
+        # :, .0f and not :g -- 6J's 12,500,000 JPY must not print as
+        # 1.25e+07 (every live future's unit qty is a whole number).
+        size = f"{s['unit_qty']:,.0f} {s['unit']}"
         rows.append(
             f'<tr><td class="l">{esc(key)}</td>'
             f'<td class="l">{esc(s["market"])}</td>'
@@ -106,13 +108,42 @@ def arsenal_html(payload):
             '<th class="l" style="width:22%">Size</th>'
             '<th style="width:13%">Min acct, 1% stop $</th>'
             '<th class="l" style="width:10%"></th></tr>')
+    # The 3 of the 25 currently-updated Socrates markets that are NOT
+    # in the trading universe, with the reason -- same column widths as
+    # the markets table below it, so the two line out (Lode,
+    # 2026-09-02). The reason spans the Contract..note columns.
+    excluded = [
+        ("JGB", "Japanese 10 Year Bond Futures",
+         "a futures market, but outside our data: no Databento OSE"
+         " coverage (the known gap; IBKR backfill later)"),
+        ("URA", "Global X Uranium ETF",
+         "ETF: cannot be traded with our strategy -- a share position"
+         " pays full notional with no leverage, so risking 1% locks"
+         " the account"),
+        ("VIXY", "ProShares VIX Short Term Futures ETF",
+         "ETF: cannot be traded with our strategy -- same full-notional"
+         " lock; it holds futures but trades as a share"),
+    ]
+    exc_head = ('<tr><th class="l" style="width:7%">Key</th>'
+                '<th class="l" style="width:34%">Market</th>'
+                '<th class="l wrap" style="width:59%" colspan="4">'
+                'Why it is not traded</th></tr>')
+    exc_rows = "".join(
+        f'<tr><td class="l">{esc(k)}</td>'
+        f'<td class="l">{esc(name)}</td>'
+        f'<td class="l wrap" colspan="4">{reason}</td></tr>'
+        for k, name, reason in excluded)
     return (
         '<div class="section-h">The contract arsenal</div>'
+        '<p class="chartnote"><b>3 of the 25 currently-updated Socrates '
+        'markets are not traded</b>, and the 22 below are the whole '
+        'trading universe:</p>'
+        f'<div class="tradecard"><table class="trades"><thead>{exc_head}'
+        f'</thead><tbody>{exc_rows}</tbody></table></div>'
         '<p class="chartnote"><b>The 22 markets we trade</b> &mdash; '
         'the live universe: the 19 currently-updated GLBX futures, '
         'FGBL (kept despite its EUR denomination) and the two IFUS '
-        'markets. ETFs and non-updated markets are not traded and '
-        'appear nowhere on this page. Each row: the <b>front '
+        'markets. Each row: the <b>front '
         'contract</b>; below them, every <b>verified micro/mini</b> '
         'in the arsenal (definitions bought and validated 2026-09-01). '
         '<b>Min acct, 1% stop</b> is the yardstick from '
@@ -379,7 +410,7 @@ def tile(k, v, s, tone=""):
             f'<div class="sub">{s}</div></div>')
 
 
-def section_html(idx, r, all_trades, calendar, links_full):
+def section_html(idx, r, all_trades, calendar, links_full, n_open=None):
     cap = r["cap"]
     taken_idx = sorted(r["money_of"])
     taken = [all_trades[i] for i in taken_idx]
@@ -399,6 +430,11 @@ def section_html(idx, r, all_trades, calendar, links_full):
     run_w, run_l = streaks(taken)
     holds = [(pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])
               ).total_seconds() / 60.0 for t in taken]
+    # The KPI row is an auto-fit grid (never leaves a gap); .stats4 is
+    # a strict 3-column grid, so its tile count must be a multiple of
+    # three -- Win rate and Net R live in the KPI row and the stats
+    # grid carries exactly twelve tiles (Lode, 2026-09-02: no empty
+    # gray field).
     kpis = "".join([
         tile("Start capital", money(cap), "this section's account"),
         tile("Final capital", money(r["final"]),
@@ -411,6 +447,10 @@ def section_html(idx, r, all_trades, calendar, links_full):
         tile("Taken / missed", f"{len(taken)} / {len(r['refused'])}",
              f"of {len(all_trades)} blotter trades",
              "neg" if r["refused"] else "pos"),
+        tile("Win rate", f"{100 * len(wins) / len(taken):.1f}%",
+             f"{len(wins)} won, {len(losses)} lost"),
+        tile("Net R", signed(net_r, 2), "after slippage, taken trades",
+             cls(net_r)),
         tile("Execution costs", money(costs),
              "both sides, in the curve", "neg"),
         tile("vs frictionless ideal",
@@ -420,10 +460,6 @@ def section_html(idx, r, all_trades, calendar, links_full):
              cls(r["final"] - r["ideal_final"])),
     ])
     stats = "".join([
-        tile("Win rate", f"{100 * len(wins) / len(taken):.1f}%",
-             f"{len(wins)} won, {len(losses)} lost"),
-        tile("Net R", signed(net_r, 2), "after slippage, taken trades",
-             cls(net_r)),
         tile("Expectancy", signed(net_r / len(taken)) + "R",
              "per taken trade", cls(net_r)),
         tile("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
@@ -447,6 +483,10 @@ def section_html(idx, r, all_trades, calendar, links_full):
              "entry to exit"),
         tile("Max concurrent", f"{max(openpos)}",
              "positions open at once"),
+        tile("Currently open",
+             f"{n_open}" if n_open is not None else "&mdash;",
+             "strategy-level, at the window end; the sizing gate is"
+             " not replayed for open entries"),
         tile("Time in market",
              f"{100 * sum(1 for o in openpos if o) / len(openpos):.0f}%",
              "of market days with a position open"),
@@ -559,8 +599,20 @@ __CSS__
 <style>
 .pane-eq{height:300px}.pane-ddc{height:130px}.pane-op{height:110px}
 .pane-eq,.pane-ddc,.pane-op{margin-bottom:4px}
+.panelbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin:10px 2px 4px}
 table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
 table.trades td a:hover{text-decoration:underline}
+/* The shared stylesheet caps .chartnote at 78ch, which reads as cut
+   off beside full-width tables (Lode, 2026-09-02): on this page the
+   notes run the full column like the lede does. */
+.chartnote{max-width:none}
+/* The shared .kpis is an auto-fit GRID, which leaves gray cells
+   whenever the tile count does not fill the last row. Flex with
+   stretching tiles fills every row whatever the count (same Lode
+   note: no empty gray fields). */
+.kpis{display:flex;flex-wrap:wrap}
+.kpis .kpi{flex:1 1 150px}
 @media print{.pane-eq{height:260px}.pane-ddc,.pane-op{height:110px}}
 </style></head><body>
 <div class="wrap">
@@ -603,11 +655,16 @@ def build():
         links_full[key] = (f"{STUDY_BASE}?m={folder}",
                            {i: n + 1 for n, i in enumerate(order)}, folder)
 
+    open_positions = data.get("open_positions")
+    n_open = (None if open_positions is None else
+              sum(1 for o in open_positions
+                  if o["market"] in sizing.LIVE_UNIVERSE))
+
     ladder = run_ladder(all_trades)
     sections, series = [], []
     for idx, r in enumerate(ladder):
         html, days, eq, ddc, openpos = section_html(
-            idx, r, all_trades, calendar, links_full)
+            idx, r, all_trades, calendar, links_full, n_open)
         sections.append(html)
         series.append(dict(eq=[[d, v] for d, v in zip(days, eq)],
                            ddc=[[d, v] for d, v in zip(days, ddc)],

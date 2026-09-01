@@ -978,6 +978,16 @@ __CSS__
   color:var(--ink3);font-weight:600;margin:10px 2px 4px}
 table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
 table.trades td a:hover{text-decoration:underline}
+/* The shared stylesheet caps .chartnote at 78ch, which reads as cut
+   off beside full-width tables (Lode, 2026-09-02): on these pages the
+   notes run the full column like the lede does. */
+.chartnote{max-width:none}
+/* The shared .kpis is an auto-fit GRID, which leaves gray cells
+   whenever the tile count does not fill the last row. Flex with
+   stretching tiles fills every row whatever the count (same Lode
+   note: no empty gray fields). */
+.kpis{display:flex;flex-wrap:wrap}
+.kpis .kpi{flex:1 1 150px}
 @media print{#eq{height:300px}#ddc,#op{height:120px}}
 </style></head><body>
 <div class="wrap">
@@ -1321,6 +1331,15 @@ def build(data=None, out=None, variant=None, contracts=False):
         kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
         kpi("Average hold", held(avg_hold), "entry to exit"),
         kpi("Max concurrent", f"{max_open}", "positions open at once"),
+        # The 12th tile: .stats4 is a 3-column grid, and eleven tiles
+        # left one empty gray cell (Lode, 2026-09-02). Currently-open
+        # count from the payload's open_positions -- the same list the
+        # "Currently open" table renders; a JSON without the key shows
+        # a dash, never a false zero.
+        kpi("Currently open",
+            f"{len(data['open_positions'])}"
+            if data.get("open_positions") is not None else "&mdash;",
+            "entered, waiting for the next settlement"),
         kpi("Time in market", f"{in_market:.0f}%",
             "of market days with a position open"),
     ])

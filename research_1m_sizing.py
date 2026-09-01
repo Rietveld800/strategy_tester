@@ -67,6 +67,15 @@ def usd_point_value(spec):
     return pv * EURUSD if spec.get("currency") == "EUR" else pv
 
 
+def contract_size(equity, risk_pct, per_unit):
+    """(contracts, forced): floor sizing, force-1 at n=0 (Lode,
+    2026-08-21). THE one sizing rule -- build_1m_report's contracts
+    pages import it from here, so the pages and this reading cannot
+    disagree about what a budget affords."""
+    n = math.floor(equity * risk_pct / 100.0 / per_unit)
+    return (1, True) if n == 0 else (n, False)
+
+
 def quantized_replay(trades, specs, start_capital, risk_pct):
     """portfolio_replay's loop with integer contracts. Returns the
     summary dict and the per-trade sizing rows."""
@@ -83,11 +92,7 @@ def quantized_replay(trades, specs, start_capital, risk_pct):
         if kind == "entry":
             spec = specs[t["market"]]
             per_unit = t["rpu"] * usd_point_value(spec)
-            budget = equity * risk_pct / 100.0
-            n = math.floor(budget / per_unit)
-            forced = n == 0
-            if forced:
-                n = 1
+            n, forced = contract_size(equity, risk_pct, per_unit)
             risk = n * per_unit
             row = dict(market=t["market"], type=spec["type"], n=n,
                        forced=forced, per_unit=per_unit, risk=risk,

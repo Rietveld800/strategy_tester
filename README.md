@@ -65,8 +65,8 @@ stopped in its own session draws a **vertical** line on one bar.
 ### What the Update button builds
 
 `../trading_system/refresh.py`, which is what charter's rail **Update** button runs:
-`data` → `bars` → `strategy1m` → `matrix1m` → `hybrid1m` → `levels1m` →
-`charts`, roughly **8-17 minutes** on a normal day. Measured 2026-08-21: `run_1m.py`
+`data` → `bars` → `strategy1m` → `matrix1m` → `hybrid1m` → `contracts1m` →
+`levels1m` → `charts`, roughly **8-17 minutes** on a normal day. Measured 2026-08-21: `run_1m.py`
 ~110 s, `run_1m_matrix.py` ~4-12 min depending on how many markets' files moved (it
 carries a per-market cache with a tail splice — see its module docstring — and prints
 cached/spliced counts plus a `TIMING:` line), the hybrid-stop variant 1 s (it reads the
@@ -510,7 +510,7 @@ rewrite it here.
 |---|---|
 | `engine_1m.py` | The 1-minute engine: rules 1–2 intraday, market-order entry on the first reversal print, ladder-anchored stop, exit at the next settlement. `tests/test_engine_1m.py` covers it. |
 | `run_1m.py` | The backtest and the published baseline: `output/quickfix1m1dc_all.json`, then the report and the charter hand-off. Everything else on this side reads what it writes — including the **market-day calendar** and the grid helpers every curve here is drawn on (below). |
-| `build_1m_report.py` | `output/quickfix1m1dc_report_variant_02.html` (named for its cell) from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. |
+| `build_1m_report.py` | `output/quickfix1m1dc_report_variant_02.html` (named for its cell) from the blotter alone (no backtest), and `--variant "<cell>"` for any matrix cell under its own filename. Imports `build_equity_html.CSS` so the look cannot drift. `--contracts` (2026-09-01) renders the same two trade lists (baseline + `variant 5`) with the money in INTEGER contracts at the $2M test account, as `quickfix1m1dc_contracts_variant_02.html` / `_05.html` -- sizing arithmetic imported from `research_1m_sizing` (one code path), specs from data_center's `contract_specs.json`, R columns untouched by construction, blotter gains a `Ctr` column, KPI row states the delta against the fractional ideal at the same account. Refresh step `contracts1m` runs it in the full chain. |
 | `run_1m_matrix.py` | The dial matrix: the full lockout x stop x band cross on the filtered universe (`variant 1` .. `variant 27`; the three extra cells were retired 2026-08-18, and each anchor's band ladder carries its own chosen middle slot). Since 2026-08-21 it is incremental per market (`output/quickfix1m1dc_matrix_cache.json`, `--no-reuse` to bypass): unchanged markets are reused whole, grown ones rerun only the tail with the overlap verified, and rows/account fields are derived canonically from the cached trades so no mode can drift. Curves **levered to a constant 6% max drawdown** with the risk solved per cell (the table carries both bases). |
 | `research_1m_levels.py` | The level/entry study, baseline and `--variant "<cell>"`. |
 | `build_1m_rcut_report.py` | The R-cut band grid, **one per stop anchor**: `--stop 4th5th` (default) and `--stop hybrid`, **not** in a full refresh — each page has its own update button. Its trade cache is per anchor and keyed on the dials **and** the per-file bars manifest, so it can never republish cells computed on an older window or under the other stop; unchanged data is an exact hit in seconds, grown data splices a tail (~20 min) with the recomputed overlap verified against the cache, and only real change pays the full ~232 passes (~93 min). Since 2026-08-23 every cell also carries a **per-trade Sharpe block** (Lo SE, 95% CI, annualised, PSR) for both universes, and the page renders an **all-cells evidence table** — one row per band, column-scoped shading, sortable, following the universe selector — that doubles as the **PDF report** via Ctrl+P (landscape print styles). |
@@ -1355,6 +1355,7 @@ need to tell overlays apart at a glance ever returns.)
 venv\Scripts\python.exe run_1m.py                            # backtest -> blotter, report, charter hand-off
 venv\Scripts\python.exe run_1m_matrix.py                     # dial matrix, curves levered to 6% DD
 venv\Scripts\python.exe build_1m_report.py --variant "variant 5"   # any matrix cell, by number
+venv\Scripts\python.exe build_1m_report.py --contracts       # both integer-contract pages ($2M account)
 venv\Scripts\python.exe research_1m_levels.py                # level study, baseline
 venv\Scripts\python.exe research_1m_levels.py --variant "no lockout"
 

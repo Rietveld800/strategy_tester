@@ -99,7 +99,7 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
-`hybrid1m` -> `levels1m` ->
+`hybrid1m` -> `contracts1m` -> `levels1m` ->
 `charts`, ~8-17 min on a normal day (2026-08-21; the measured record is
 `../trading_system/refresh_runtime_plan.md`). The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
@@ -231,6 +231,26 @@ dials. If account size cannot grow, the direction is MICROS (Lode,
 same day) -- a study of its own, nothing purchased; the informational
 micros sheet in data_center's `contract_specs.xlsx` is the starting
 list and every row on it needs re-verifying from GLBX definitions.
+**THE CONTRACTS PAGES EXIST SINCE 2026-09-01 AND ARE IN THE CHAIN**
+(Lode: "trade it with the contracts and not with the one percent
+risk"): `build_1m_report.py --contracts` renders the SAME two trade
+lists -- the published baseline and `variant 5` -- with the money layer
+in integer contracts at the $2M account, as
+`output/quickfix1m1dc_contracts_variant_02.html` / `_05.html`. The
+sizing arithmetic is IMPORTED from `research_1m_sizing.contract_size`
+(one code path, so the pages and the research reading cannot
+disagree); the R columns are identical to the fractional pages by
+construction, the blotter gains a `Ctr` column (hover: dollar risk,
+realized %, an ETF's locked notional; red = forced), and the KPI row
+states the delta against the fractional ideal AT THE SAME ACCOUNT --
+never against the published fractional figures, which are a different
+bet size. The baseline contracts page takes the RAW blotter at the 1%
+budget, NOT the fractional page's solved 6% sizing: the contracts
+layer defines its own money, and solving a drawdown on top would
+conflate two questions. Refresh step `contracts1m` (in the full run,
+after `hybrid1m`; reads the JSONs, no backtest, seconds). The pages
+are gitignored like every other HTML view; the fractional pages
+remain the research currency.
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the

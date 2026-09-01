@@ -27,6 +27,16 @@ trades' own `pnl_usd` / `cash_after` fields are PER MARKET (each market a
 fresh $100k) and would be a different account entirely, so they are not
 used here. The build checks its final capital and drawdown against the
 figures run_1m wrote and warns on drift.
+
+`--contracts` (2026-09-01, Lode: "trade it with the contracts and not
+with the one percent risk") builds the INTEGER-CONTRACT pages beside
+the fractional ones: the same trade list, the same page, but the money
+layer sizes every entry in whole contracts off data_center's validated
+contract spec table, at the $2,000,000 test account -- chosen so every
+market affords at least one contract inside the 1% budget. The sizing
+arithmetic is imported from research_1m_sizing (ONE code path), the R
+columns are untouched by construction, and the page states its own
+delta against the fractional ideal at the same account.
 """
 
 import json
@@ -37,6 +47,7 @@ from pathlib import Path
 import pandas as pd
 
 import engine_1m
+import research_1m_sizing as sizing
 import run_1m
 import run_1m_matrix
 from build_equity_html import CSS
@@ -58,6 +69,13 @@ LIB_PATH = (HERE / ".." / "data_center" / "scripts"
 
 START_CAPITAL = 100_000.0
 RISK_PCT = 1.0
+# The integer-contract test account (Lode, 2026-09-01): large enough
+# that every market in the universe affords at least one contract
+# inside the 1% budget, so the contracts pages measure quantization
+# noise rather than granularity. research_1m_sizing defaults to the
+# same figure.
+SIZING_ACCOUNT = 2_000_000.0
+CONTRACTS_STEM = "quickfix1m1dc_contracts"
 # charter serves site/ over HTTP (serve.py, port 8000 by default and the
 # next free one after that). A file:// link cannot reach the study, so the
 # page says what has to be running.
@@ -121,7 +139,7 @@ def held(minutes):
 
 # ------------------------------------------------------------------- numbers
 
-def replay(trades, risk_pct=RISK_PCT):
+def replay(trades, risk_pct=RISK_PCT, start=START_CAPITAL):
     """run_1m.portfolio_replay, keeping each trade's own money.
 
     Same event order (exits before entries at an equal timestamp) and the
@@ -134,7 +152,7 @@ def replay(trades, risk_pct=RISK_PCT):
         events.append((pd.Timestamp(t["exit_ts"]), 0, i))
     events.sort(key=lambda e: (e[0], e[1]))
 
-    equity, peak, max_dd = START_CAPITAL, START_CAPITAL, 0.0
+    equity, peak, max_dd = start, start, 0.0
     open_risk, money_of, eod = {}, {}, {}
     for ts, kind, i in events:
         if kind == 1:
@@ -151,6 +169,52 @@ def replay(trades, risk_pct=RISK_PCT):
             # filled again before that bell, and the running peak can be set
             # by a trade that is not the day's last. Carrying only the closing
             # balance hid 11.20% behind an 8.96% pane (Lode, 2026-08-08).
+            worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
+                        (peak - equity) / peak * 100.0)
+            eod[ts.date()] = (equity, peak, worst)
+    return money_of, eod, equity, max_dd
+
+
+def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
+    """replay() in INTEGER position sizes -- the deployability rendering
+    of the same trade list. Each entry takes what its budget affords in
+    whole contracts off data_center's validated contract spec table
+    (floor sizing, force-1 at n=0: research_1m_sizing.contract_size, ONE
+    code path with the research reading; decisions Lode 2026-08-21,
+    margin and commissions out of scope). ETFs are sized in whole
+    shares, which pay FULL notional -- each row records what it locked.
+    The R columns cannot move: only the money differs from replay().
+    """
+    specs, _ = sizing.load_specs()
+    events = []
+    for i, t in enumerate(trades):
+        events.append((pd.Timestamp(t["entry_ts"]), 1, i))
+        events.append((pd.Timestamp(t["exit_ts"]), 0, i))
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    equity, peak, max_dd = start, start, 0.0
+    open_pos, money_of, eod = {}, {}, {}
+    for ts, kind, i in events:
+        t = trades[i]
+        if kind == 1:
+            spec = specs[t["market"]]
+            per_unit = t["rpu"] * sizing.usd_point_value(spec)
+            n, forced = sizing.contract_size(equity, risk_pct, per_unit)
+            m = dict(n=n, forced=forced, per_unit=per_unit,
+                     risk_usd=n * per_unit,
+                     risk_pct=n * per_unit / equity * 100.0,
+                     etf=spec["type"] == "etf")
+            if m["etf"]:
+                m["locked_usd"] = n * t["entry"]
+                m["locked_pct"] = m["locked_usd"] / equity * 100.0
+            open_pos[i] = m
+        else:
+            m = open_pos.pop(i)
+            pnl = t["net_r"] * m["risk_usd"]
+            equity += pnl
+            peak = max(peak, equity)
+            max_dd = max(max_dd, (peak - equity) / peak * 100.0)
+            money_of[i] = dict(m, pnl_usd=pnl, balance=equity)
             worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
                         (peak - equity) / peak * 100.0)
             eod[ts.date()] = (equity, peak, worst)
@@ -182,7 +246,7 @@ def solve_risk_pct(trades, target_dd):
     return round((lo + hi) / 2, 3)
 
 
-def daily_series(trades, eod, calendar):
+def daily_series(trades, eod, calendar, start=START_CAPITAL):
     """The three panes' data, one point per MARKET DAY (see run_1m).
 
     The grid runs from a market day before the first entry to the LAST
@@ -207,11 +271,11 @@ def daily_series(trades, eod, calendar):
         on_grid[i] = (value, peak,
                       max(worst, prev[2]) if prev else worst)
     days, eq, dd, ddc, openpos = [], [], [], [], []
-    value, peak = START_CAPITAL, START_CAPITAL
+    value, peak = start, start
     # A second, gentler curve next to the worst-reached one: drawdown on the
     # CLOSING balances only, peak and trough both read at the bell. A day
     # that digs and refills before the close does not appear in it.
-    peak_close = START_CAPITAL
+    peak_close = start
     for i, d in enumerate(grid):
         if i in on_grid:
             value, peak, worst = on_grid[i]
@@ -483,11 +547,21 @@ def open_html(open_positions):
             f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
-def blotter_html(trades, money_of, links):
-    cols = [("Market", "l", 10), ("Side", "l", 5), ("In (UTC)", "l", 12.5),
-            ("Out (UTC)", "l", 12.5), ("Held", "", 5.5), ("In", "", 8),
-            ("Out", "", 8), ("Stop", "", 8), ("R/24h", "", 6),
-            ("R", "", 5.5), ("P&amp;L $", "", 7.5), ("Reason", "l", 11.5)]
+def blotter_html(trades, money_of, links, contracts=False):
+    if contracts:
+        # The extra column is the whole point of a contracts page, so the
+        # others each give up a little width; still sums to 100.
+        cols = [("Market", "l", 9), ("Side", "l", 5), ("In (UTC)", "l", 12),
+                ("Out (UTC)", "l", 12), ("Held", "", 5.5), ("In", "", 7.5),
+                ("Out", "", 7.5), ("Stop", "", 7.5), ("R/24h", "", 6),
+                ("Ctr", "", 5), ("R", "", 5.5), ("P&amp;L $", "", 7.5),
+                ("Reason", "l", 10)]
+    else:
+        cols = [("Market", "l", 10), ("Side", "l", 5),
+                ("In (UTC)", "l", 12.5), ("Out (UTC)", "l", 12.5),
+                ("Held", "", 5.5), ("In", "", 8), ("Out", "", 8),
+                ("Stop", "", 8), ("R/24h", "", 6), ("R", "", 5.5),
+                ("P&amp;L $", "", 7.5), ("Reason", "l", 11.5)]
     head = "".join(
         f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
         f'<span class="ar"></span></th>'
@@ -507,6 +581,22 @@ def blotter_html(trades, money_of, links):
         cell = (f'<a href="{link[0]}&amp;t={link[1][t]}" target="_blank" '
                 f'title="{esc(link[2])}, trade {link[1][t]} in the 1m study">'
                 f'{name}</a>') if link else name
+        if contracts:
+            # The cell says how many; the tooltip carries the money behind
+            # it, plus the ETF's locked notional -- the number the
+            # futures-only decision reads.
+            tip = (f'risk ${m["risk_usd"]:,.0f} = {m["risk_pct"]:.2f}% '
+                   f'(${m["per_unit"]:,.0f}/contract)')
+            if m.get("etf"):
+                tip += (f'; {m["n"]:,} shares locking '
+                        f'${m["locked_usd"]:,.0f} = {m["locked_pct"]:.0f}% '
+                        f'of the account')
+            if m["forced"]:
+                tip += "; FORCED: the budget afforded no contract"
+            ctr_cell = (f'<td class="mono{" neg" if m["forced"] else ""}" '
+                        f'data-s="{m["n"]}" title="{tip}">{m["n"]:,}</td>')
+        else:
+            ctr_cell = ""
         rows.append(
             f'<tr>'
             f'<td class="l" data-s="{name}">{cell}</td>'
@@ -521,6 +611,7 @@ def blotter_html(trades, money_of, links):
             f'<td class="mono" data-s="{tr["stop"]}">{price(tr["stop"])}</td>'
             f'<td class="mono" data-s="{ratio if ratio is not None else -1}">'
             f'{ratio_txt}</td>'
+            f'{ctr_cell}'
             f'<td class="mono {cls(tr["net_r"])}" data-s="{tr["net_r"]}">'
             f'{signed(tr["net_r"])}</td>'
             f'<td class="mono {cls(m["pnl_usd"])}" data-s="{m["pnl_usd"]:.2f}">'
@@ -884,6 +975,20 @@ def build_baseline():
     build(data=data)
 
 
+def build_baseline_contracts():
+    """The published baseline's trade list in integer contracts. The raw
+    blotter at the 1% budget, NOT the fractional page's solved 6%
+    sizing: the contracts layer defines its own money and solving a
+    drawdown on top of it would conflate two questions."""
+    data = json.loads(IN_JSON.read_text(encoding="utf-8"))
+    data["universe_note"] = (
+        " <b>This baseline trades the human market filter</b>: the "
+        "markets that passed the chart-structure inspection (audit "
+        "s.16); the rejected ones are under Not tested with that "
+        "reason.")
+    build(data=data, contracts=True)
+
+
 def variant_payload(name):
     """A blotter-shaped payload for one cell of run_1m_matrix.py.
 
@@ -921,9 +1026,11 @@ def variant_payload(name):
         trades=trades)
 
 
-def build(data=None, out=None, variant=None):
+def build(data=None, out=None, variant=None, contracts=False):
     """The published baseline by default; one matrix cell when `variant`
-    names one, written beside it under its own filename."""
+    names one, written beside it under its own filename. `contracts`
+    swaps the money layer for integer sizing at the test account and the
+    page lands under the contracts stem instead."""
     if variant:
         data = variant_payload(variant)
         # The matrix names its own cells, so it owns the filename form too
@@ -933,27 +1040,44 @@ def build(data=None, out=None, variant=None):
         # REPORT_STEM, never OUT_HTML.stem: the baseline's own name now
         # carries a slug, so stem-chaining would spell
         # `..._variant_02_variant_05.html`.
+        stem = CONTRACTS_STEM if contracts else REPORT_STEM
         out = OUT_HTML.with_name(
-            f"{REPORT_STEM}_{run_1m_matrix.variant_slug(variant)}.html")
+            f"{stem}_{run_1m_matrix.variant_slug(variant)}.html")
     data = data or json.loads(IN_JSON.read_text(encoding="utf-8"))
+    if out is None and contracts:
+        out = OUT_HTML.with_name(
+            f"{CONTRACTS_STEM}_"
+            f"{run_1m_matrix.variant_slug(run_1m_matrix.BASELINE_NAME)}.html")
     out = out or OUT_HTML
     trades = data["trades"]
     p = data["params"]
     published = data["portfolio"]
 
-    risk = data.get("risk_pct", RISK_PCT)
-    money_of, eod, final, max_dd = replay(trades, risk)
+    if contracts:
+        start = SIZING_ACCOUNT
+        risk = RISK_PCT  # the budget; what each trade REALIZES is below it
+        money_of, eod, final, max_dd = replay_contracts(trades, risk, start)
+        # The fractional replay at the SAME account is this page's
+        # yardstick: the published figures live on the fractional pages
+        # and are a different bet size, so comparing to them would only
+        # measure the account, not the quantization.
+        _, _, ideal_final, ideal_dd = replay(trades, risk, start)
+    else:
+        start = START_CAPITAL
+        risk = data.get("risk_pct", RISK_PCT)
+        money_of, eod, final, max_dd = replay(trades, risk, start)
+        ideal_final = ideal_dd = None
     calendar = data.get("calendar")
     if not calendar:
         calendar = run_1m.calendar_fallback(trades)
         print("WARNING: this JSON predates the market-day calendar. The "
               "panes are drawn on calendar days and stop at the last exit; "
               "re-run the runner that wrote it for the real grid.")
-    days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar)
-    if abs(final - published["final"]) > 0.01:
+    days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar, start)
+    if not contracts and abs(final - published["final"]) > 0.01:
         print(f"WARNING: replay final ${final:,.2f} against run_1m's "
               f"${published['final']:,.2f}")
-    if abs(max_dd - published["max_dd_pct"]) > 0.01:
+    if not contracts and abs(max_dd - published["max_dd_pct"]) > 0.01:
         print(f"WARNING: replay drawdown {max_dd:.2f}% against run_1m's "
               f"{published['max_dd_pct']:.2f}%")
     # The headline and the calendar's drawdown column are two renderings of
@@ -1016,14 +1140,32 @@ def build(data=None, out=None, variant=None):
         kpi("Win rate", f"{wr:.1f}%", f"{len(wins)} won, {len(losses)} lost"),
         kpi("Net R", signed(net_r, 2), "after slippage"),
         kpi("Final capital", money(final),
-            f"from {money(START_CAPITAL)}", cls(final - START_CAPITAL)),
-        kpi("Return", signed(100 * (final / START_CAPITAL - 1), 2) + "%",
-            f"at {risk}% risk per trade",
-            cls(final - START_CAPITAL)),
+            f"from {money(start)}", cls(final - start)),
+        kpi("Return", signed(100 * (final / start - 1), 2) + "%",
+            ("1% risk budget, integer contracts" if contracts
+             else f"at {risk}% risk per trade"),
+            cls(final - start)),
         kpi("Max drawdown", f"{max_dd:.2f}%", "worst reached intraday"),
         kpi("Max drawdown on closes", f"{max(ddc):.2f}%",
             "daily closing balances"),
     ])
+    if contracts:
+        forced_n = sum(1 for m in money_of.values() if m["forced"])
+        risks_pct = sorted(m["risk_pct"] for m in money_of.values())
+        med_risk = risks_pct[len(risks_pct) // 2]
+        delta = 100 * (final / ideal_final - 1)
+        kpis += "".join([
+            kpi("Against the fractional ideal",
+                signed(delta, 2) + "%",
+                f"ideal {money(ideal_final)} at {ideal_dd:.2f}% DD, same"
+                f" account", cls(delta)),
+            kpi("Realized risk (median)", f"{med_risk:.2f}%",
+                f"of the {risk:g}% budget; floor sizing never exceeds it"
+                f" unless forced"),
+            kpi("Forced trades", f"{forced_n}",
+                "the budget afforded no contract; took 1 anyway, tagged"
+                " in the blotter", "neg" if forced_n else ""),
+        ])
 
     stats = "".join([
         kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
@@ -1053,8 +1195,16 @@ def build(data=None, out=None, variant=None):
                           separators=(",", ":"))
 
     survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
+    sizing_lede = (
+        f" <b>Money on this page is INTEGER CONTRACTS</b>: each entry "
+        f"takes what a {risk:g}% budget affords in whole contracts "
+        f"(floor sizing, one contract anyway when it affords none, ETFs "
+        f"in whole shares), priced off data_center&rsquo;s validated "
+        f"contract spec table. The R columns are identical to the "
+        f"fractional page by construction; only the money differs."
+        if contracts else "")
     lede = (
-        f"One shared account of {money(START_CAPITAL)} across "
+        f"One shared account of {money(start)} across "
         f"{len(data['markets'])} tested markets, {traded} of which traded, "
         f"{days[0]} to {days[-1]}, at "
         f"{risk}% risk per trade. Rules 1 and 2 are the daily project's, "
@@ -1062,7 +1212,7 @@ def build(data=None, out=None, variant=None):
         f"order and marked out at the settlement of the day after entry. "
         f"This page is the blotter: every one of the {len(trades)} trades is "
         f"listed, and each row opens that trade in charter's 1-minute study."
-        + data.get("universe_note", ""))
+        + sizing_lede + data.get("universe_note", ""))
     note = (
         "<b>Read the execution assumptions before reading the result.</b> "
         f"Entries are market orders charged {engine_1m.ENTRY_SLIP_TICKS} ticks "
@@ -1073,15 +1223,36 @@ def build(data=None, out=None, variant=None):
         f"{100 * survivors['wins'] / survivors['n']:.0f}% of the time at "
         f"{signed(survivors['avg'])}R average, while the stop class bleeds. "
         "See docs/quickfix1m1dc_audit.md, sections 8 and 9.")
+    if contracts:
+        etf_rows = [m for m in money_of.values() if m.get("etf")]
+        over = [m for m in etf_rows if m["locked_pct"] > 100.0]
+        note += (
+            " <b>And the sizing assumptions</b> (decisions 2026-08-21): "
+            "margin and commissions are out of scope, a forced trade takes "
+            "one contract over budget rather than skipping, and an ETF "
+            "position pays its FULL notional with no leverage modelled"
+            + (f" &mdash; <b>{len(over)} of {len(etf_rows)} ETF trades "
+               f"lock more than the whole account</b> to risk 1%, a ratio "
+               f"the account size cannot fix (locked/equity = risk% "
+               f"&times; price/stop distance); hover an ETF row's "
+               f"contract count for its lock. That is the open "
+               f"futures-only-portfolio question, measured."
+               if etf_rows else "."))
     blotnote = (
         "Sorted by entry, newest sort on any column. <b>The market name is a "
         "link</b>: it opens charter's 1-minute trade study centred on that "
         "trade, which needs charter's <b>serve.py</b> running "
         f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
-        "P&amp;L is this trade's share of the shared account.")
+        "P&amp;L is this trade's share of the shared account."
+        + (" <b>Ctr</b> is the position in whole contracts (shares for an "
+           "ETF); hover it for the dollar risk it realized, and a red "
+           "count is a FORCED trade."
+           if contracts else ""))
     mktnote = (
         "Each market's own figures at "
-        + ("the same 1% risk" if risk == RISK_PCT else
+        + ("the engine's fractional 1% risk, not this page's contract "
+           "sizing" if contracts else
+           "the same 1% risk" if risk == RISK_PCT else
            "the engine's 1% risk, not this page's solved risk")
         + f", on a fresh {money(START_CAPITAL)} rather than the shared "
         "account, so the returns do not add up to the headline. "
@@ -1089,7 +1260,9 @@ def build(data=None, out=None, variant=None):
         "the day-2 rule exits.")
     last_exit = max(t["exit_ts"] for t in trades)[:10]
     chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
-                f"{risk}% risk per trade. One point per <b>market day</b> - "
+                + (f"a {risk:g}% risk budget in integer contracts"
+                   if contracts else f"{risk}% risk per trade")
+                + ". One point per <b>market day</b> - "
                 f"a day some market in the universe was open - and the line "
                 f"<b>steps</b>: the balance is held flat until a trade "
                 f"closes, and the whole move is the vertical there. It runs "
@@ -1104,10 +1277,17 @@ def build(data=None, out=None, variant=None):
         f"{'open' if p['allow_pre_activation'] else 'blocked'}). Rules, "
         f"decisions and the experiment history: docs/quickfix1m1dc_audit.md. "
         f"All times UTC. This strategy is deliberately outside the daily "
-        f"registry, so it has no cap dial, no risk dial and no variant grid.")
+        f"registry, so it has no cap dial, no risk dial and no variant grid."
+        + (f" Money on this page: integer contracts at the {money(start)} "
+          f"test account (Lode, 2026-09-01), specs from data_center/"
+          f"metadata/contract_specs.json; the fractional pages remain the "
+          f"research currency." if contracts else ""))
 
+    name = esc(data.get("strategy", "quickfix1m1dc"))
+    if contracts:
+        name += " &mdash; integer contracts"
     html = (PAGE
-            .replace("__NAME__", esc(data.get("strategy", "quickfix1m1dc")))
+            .replace("__NAME__", name)
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(p))
@@ -1118,7 +1298,8 @@ def build(data=None, out=None, variant=None):
             .replace("__CLASSES__", class_rows)
             .replace("__OPEN__", open_html(data.get("open_positions")))
             .replace("__BLOTNOTE__", blotnote)
-            .replace("__BLOTTER__", blotter_html(trades, money_of, links))
+            .replace("__BLOTTER__", blotter_html(trades, money_of, links,
+                                                 contracts))
             .replace("__MKTNOTE__", mktnote)
             .replace("__MARKETS__", markets_html(data["markets"],
                                                  data.get("excluded", []),
@@ -1148,8 +1329,18 @@ if __name__ == "__main__":
     # their pages (user); the human market filter is what the baseline
     # publishes now, so an active-list cut was a second answer to a
     # question the baseline already answers.
+    # python build_1m_report.py --contracts     BOTH integer-contract pages
+    #                                           (baseline + variant 5),
+    #                                           which is what the refresh
+    #                                           chain's contracts1m step runs
+    # python build_1m_report.py --contracts --variant "variant N"   one cell
     args = sys.argv[1:]
+    contracts = "--contracts" in args
+    args = [a for a in args if a != "--contracts"]
     if args and args[0] == "--variant":
-        build(variant=args[1])
+        build(variant=args[1], contracts=contracts)
+    elif contracts:
+        build_baseline_contracts()
+        build(variant="variant 5", contracts=True)
     else:
         build_baseline()

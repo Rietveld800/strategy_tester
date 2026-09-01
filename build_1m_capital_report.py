@@ -216,7 +216,7 @@ def costs_html(payload):
             f'{f"{cur} {per:.2f}" if per is not None else "&mdash;"}</td>'
             f'<td class="mono">'
             f'{f"{2 * usd:,.2f}" if usd is not None else "&mdash;"}</td>'
-            f'<td class="l">{esc(r["confidence"])}</td>'
+            f'<td class="l gapl">{esc(r["confidence"])}</td>'
             f'<td class="l wrap">{esc(r["note"])}</td></tr>')
 
     rows = []
@@ -234,7 +234,7 @@ def costs_html(payload):
             '<th style="width:7%">NFA</th>'
             '<th style="width:11%">Per side</th>'
             '<th style="width:11%">Round turn $</th>'
-            '<th class="l" style="width:9%">Confidence</th>'
+            '<th class="l gapl" style="width:9%">Confidence</th>'
             '<th class="l" style="width:28%">Sources / note</th></tr>')
     return (
         '<div class="section-h">Costs, in detail</div>'
@@ -333,7 +333,7 @@ def hardness_html(all_trades, payload):
             f'<td class="mono">{w(worst)}{" *" if est else ""}</td>'
             f'<td class="mono">{w(med * 100)}</td>'
             f'<td class="mono">{w(worst * 100)}</td>'
-            f'<td class="l mono">{via}</td></tr>')
+            f'<td class="l mono gapl">{via}</td></tr>')
     return (
         '<div class="section-h">What is hard to trade, on the '
         'strategy&rsquo;s own stops</div>'
@@ -358,8 +358,8 @@ def hardness_html(all_trades, payload):
         '<th style="width:14%">$/contract, worst</th>'
         '<th style="width:16%">Acct for median setup</th>'
         '<th style="width:16%">Acct for every setup</th>'
-        '<th class="l" style="width:22%">Via smallest micro (median)'
-        '</th>'
+        '<th class="l gapl" style="width:22%">Via smallest micro '
+        '(median)</th>'
         f'</tr></thead><tbody>{"".join(body)}</tbody></table></div>')
 
 
@@ -497,13 +497,13 @@ def blotter_section_html(all_trades, money_of_full, links_full):
             f'{signed_money(m["pnl_usd"])}</td>'
             f'<td class="mono" data-s="{m["balance"]:.2f}">'
             f'{money(m["balance"])}</td>'
-            f'<td class="l" data-s="{t["reason"]}">'
+            f'<td class="l gapl" data-s="{t["reason"]}">'
             f'{REASON_TEXT.get(t["reason"], t["reason"])}</td></tr>')
     cols = [("Market", "l", 9.5), ("Side", "l", 5), ("In (UTC)", "l", 12),
             ("Held", "", 5.5), ("Ctr", "", 5), ("Risk $", "", 8),
             ("Risk %", "", 6.5), ("R", "", 6), ("Costs $", "", 7),
             ("P&amp;L $", "", 9.5), ("Balance", "", 9.5),
-            ("Reason", "l", 16.5)]
+            ("Reason", "l gapl", 16.5)]
     head = "".join(f'<th class="{c}" style="width:{w}%">{lab}</th>'
                    for lab, c, w in cols)
     return (
@@ -728,6 +728,11 @@ table.trades td a:hover{text-decoration:underline}
    note: no empty gray fields). */
 .kpis{display:flex;flex-wrap:wrap}
 .kpis .kpi{flex:1 1 150px}
+/* Breathing room where a right-aligned number column meets a
+   left-aligned text column -- the two contents otherwise meet in the
+   middle with 14px between them (Lode, 2026-09-02: "a bit of space
+   between the columns ... visually unclear"). */
+table.trades td.gapl,table.trades th.gapl{padding-left:30px}
 @media print{.pane-eq{height:260px}.pane-ddc,.pane-op{height:110px}}
 </style></head><body>
 <div class="wrap">

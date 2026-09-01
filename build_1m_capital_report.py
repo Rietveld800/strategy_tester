@@ -38,6 +38,7 @@ import pandas as pd
 
 import run_1m
 import run_1m_matrix
+import research_1m_feasibility as feas
 import research_1m_sizing as sizing
 from build_equity_html import CSS
 from build_1m_report import (
@@ -126,6 +127,93 @@ def arsenal_html(payload):
         'replay yet, the micro study decides that.</p>'
         f'<div class="tradecard"><table class="trades"><thead>{head}'
         f'</thead><tbody>{"".join(micro_rows)}</tbody></table></div>')
+
+
+def hardness_html(all_trades, payload):
+    """What is REALLY hard to trade, measured on the strategy's own
+    stops (Lode, 2026-09-01: the 1%-of-price yardstick "doesn't say
+    too much because for silver 1% price movement isn't much"). Per
+    market, the per-contract dollar risk of its ACTUAL historical
+    setups -- rpu x point value, the same number the sizing gate reads
+    -- and the account each implies at the 1% threshold: acct = 100 x
+    per-contract risk. The median setup says what trading the market
+    normally takes; the worst setup says what never missing one takes.
+    A verified micro divides both by its size fraction. Markets with
+    no trades in the window fall back to the labelled range estimate
+    (0.4 x median daily range, the geometry band's midpoint)."""
+    specs, _ = sizing.load_specs()
+    micro_frac = {}
+    for m in payload["micros"]:
+        if m.get("listed") == "VERIFIED":
+            frac = None
+            s = m.get("size_vs_parent", "")
+            if s.startswith("1/"):
+                frac = 1.0 / float(s[2:])
+            # keep the SMALLEST verified fraction per parent
+            if frac and (m["parent"] not in micro_frac
+                         or frac < micro_frac[m["parent"]][1]):
+                micro_frac[m["parent"]] = (m["symbol"], frac)
+    per_market = {}
+    for t in all_trades:
+        risk = t["rpu"] * sizing.usd_point_value(specs[t["market"]])
+        per_market.setdefault(t["market"], []).append(risk)
+    rows = []
+    for key in sizing.LIVE_UNIVERSE:
+        risks = sorted(per_market.get(key, []))
+        est = None
+        if risks:
+            med, worst = risks[len(risks) // 2], risks[-1]
+        else:
+            rng = feas.median_daily_range(key)
+            if rng is None:
+                continue
+            med = worst = feas.BAND_TYPICAL * rng \
+                * sizing.usd_point_value(specs[key])
+            est = True
+        micro = micro_frac.get(key)
+        rows.append((med, key, len(risks), worst, micro, est))
+    rows.sort(reverse=True)
+    body = []
+    for med, key, n, worst, micro, est in rows:
+        def w(v):
+            return f"${v:,.0f}"
+        via = (f'{micro[0]}: {w(med * micro[1] * 100)}'
+               if micro else "&mdash;")
+        body.append(
+            f'<tr><td class="l">{esc(key)}</td>'
+            f'<td class="mono">{n if n else "&mdash;"}</td>'
+            f'<td class="mono">{w(med)}{" *" if est else ""}</td>'
+            f'<td class="mono">{w(worst)}{" *" if est else ""}</td>'
+            f'<td class="mono">{w(med * 100)}</td>'
+            f'<td class="mono">{w(worst * 100)}</td>'
+            f'<td class="l mono">{via}</td></tr>')
+    return (
+        '<div class="section-h">What is hard to trade, on the '
+        'strategy&rsquo;s own stops</div>'
+        '<p class="chartnote">The yardstick above prices a hypothetical '
+        '1%-of-price stop; the strategy&rsquo;s stops are STRUCTURAL '
+        '(ladder-anchored), and for silver they run 2-4% of price. This '
+        'table uses the real thing: each market&rsquo;s historical '
+        'setups&rsquo; <b>per-contract dollar risk</b> (stop distance '
+        '&times; point value &mdash; the exact number the sizing gate '
+        'reads at order time), and the account each implies at the 1% '
+        'threshold: <b>account = 100 &times; per-contract risk</b>. '
+        '<b>Median setup</b> is what trading the market normally takes; '
+        '<b>worst setup</b> is what never missing one takes. Sorted '
+        'hardest first. Thin per-market samples &mdash; read the order '
+        'of magnitude, not the third digit. Rows marked * have no '
+        'trades in the window and use the 0.4-&times;-daily-range '
+        'estimate instead.</p>'
+        '<div class="tradecard"><table class="trades"><thead><tr>'
+        '<th class="l" style="width:9%">Market</th>'
+        '<th style="width:9%">Trades</th>'
+        '<th style="width:14%">$/contract, median</th>'
+        '<th style="width:14%">$/contract, worst</th>'
+        '<th style="width:16%">Acct for median setup</th>'
+        '<th style="width:16%">Acct for every setup</th>'
+        '<th class="l" style="width:22%">Via smallest micro (median)'
+        '</th>'
+        f'</tr></thead><tbody>{"".join(body)}</tbody></table></div>')
 
 
 # ------------------------------------------------------------- the sections
@@ -502,7 +590,8 @@ def build():
     html = (PAGE
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
-            .replace("__ARSENAL__", arsenal_html(payload))
+            .replace("__ARSENAL__", arsenal_html(payload)
+                     + hardness_html(all_trades, payload))
             .replace("__TREND__", trend_html(ladder, len(all_trades)))
             .replace("__SECTIONS__", "".join(sections))
             .replace("__FOOTER__", footer)

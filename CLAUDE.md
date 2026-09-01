@@ -228,9 +228,16 @@ futures-only-portfolio decision, which is OPEN: Lode leans
 futures-only (2026-09-01), not decided. Writes
 `output/quickfix1m1dc_sizing.txt`; `--account` / `--risk` to move the
 dials. If account size cannot grow, the direction is MICROS (Lode,
-same day) -- a study of its own, nothing purchased; the informational
-micros sheet in data_center's `contract_specs.xlsx` is the starting
-list and every row on it needs re-verifying from GLBX definitions.
+same day) -- a study of its own, nothing purchased. AVAILABILITY IS
+MEASURED since 2026-09-01: data_center's `metadata/micro_catalog.json`
+(`scripts/micro_discovery.py`, free symbology resolution -- listing
+proven, liquidity not) feeds the micros sheet of
+`contract_specs.xlsx`; 24 roots are listed on GLBX (MNG, MZW/MZC and
+1OZ were surprises), none exist for PA/PL/LE/SR3/DX/softs/FGBL, the
+treasuries' micros are yield-quoted (a different product), and MJY's
+quote direction is unverified. Specs verify from definitions (~$0.06
+all-in) and a sampled week of 1m bars is ~$0.66 -- both quoted, neither
+bought.
 **THE CONTRACTS PAGES EXIST SINCE 2026-09-01 AND ARE IN THE CHAIN**
 (Lode: "trade it with the contracts and not with the one percent
 risk"): `build_1m_report.py --contracts` renders the SAME two trade

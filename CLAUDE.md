@@ -99,7 +99,7 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `strategy1m` -> `matrix1m` ->
-`hybrid1m` -> `contracts1m` -> `levels1m` ->
+`hybrid1m` -> `contracts1m` -> `capitals1m` -> `levels1m` ->
 `charts`, ~8-17 min on a normal day (2026-08-21; the measured record is
 `../trading_system/refresh_runtime_plan.md`). The old
 `strategy` step (`run_pipeline.py`) is GONE with the daily registry. Measured
@@ -346,6 +346,23 @@ frictionless ideal, all three frictions in); variant 5 pays $1,422
 (median $14.82), $254,017 at 4.39% DD (-8.7%). At x1000 account the
 residual vs the ideal IS the cost drag (~1.5-2.4 pct points),
 quantization and refusals having vanished.
+**THE CAPITAL LADDER IS `build_1m_capital_report.py` ->
+`output/quickfix1m1dc_capitals.html`** (Lode, 2026-09-01, refresh step
+`capitals1m`): the published baseline in integer contracts at $100k /
+$250k / $500k / $1M / $2M, one variant-format section per capital --
+the three panes, the refused orders, and the blotter with contracts,
+ACTUAL realized risk % and the per-trade round-turn cost. It opens
+with the CONTRACT ARSENAL (every front + every verified micro, sizes
+and whole-dollar min_account_1pct_stop -- data_center's
+contract_specs.json carries the sizing rows and micro min-accounts
+since schema_version 2, so no page reads an xlsx) and the
+MISSED-TRADE TREND: 25 -> 15 -> 8 -> 2 -> 1. EVEN $2M MISSES ONE, and
+that is a finding: GC 2026-02-02 costs $19,910 a contract, January
+had dipped the account to $1.978M, the budget was $19,775 and the
+order missed by $135 -- the refusal gate reads LIVE equity, not
+starting capital, exactly as the broker would. A taken trade's R
+never changes down the ladder; only which trades fit, what they
+risked and what they paid.
 
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the

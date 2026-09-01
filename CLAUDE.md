@@ -206,6 +206,32 @@ specific cell coordinates are taste. The lower cut adds ~0.02 SR: the money
 is in the UPPER cut, the one with the s.15b mechanism. Verdict bounded by
 ~80 trades and ~30% ZW concentration: "not rejected", never "confirmed".
 
+**THE QUANTIZED SIZING READING IS `research_1m_sizing.py`** (2026-09-01,
+Lode: real futures trades take integer contracts, not equity fractions;
+test account $2,000,000, chosen to afford one contract per market
+inside the 1% threshold). Pure post-processing of the published blotter
+and the matrix's `variant 5` (no engine passes, seconds); specs come
+from data_center's validated `metadata/contract_specs.json` (built
+2026-09-01, the per-root primitive from the 2026-08-21 decisions --
+sizing `n = floor(equity x risk% / (rpu x point_value))`, force-1 at
+n=0, margin/commissions out of scope). First reading (window to
+2026-08-31): AT $2M QUANTIZATION IS NOISE -- baseline final -0.06% /
+DD +0.02 points against the fractional ideal, variant 5 +0.23% /
+-0.05, realized risk median 0.99% against the 1% budget, one forced
+trade (GC) on the baseline and none on variant 5 -- where the $100k
+measurement of 2026-08-21 blew the 6% DD budget 2.3x on sizing noise
+alone. THE ETF FINDING IS ACCOUNT-SIZE INDEPENDENT: an ETF pays full
+notional, `locked/equity = risk% x price/rpu`, and 5 of 12 ETF trades
+lock over 100% of the account (USO up to 245%) -- unfillable without
+margin at ANY account size. That is the quantitative case in the
+futures-only-portfolio decision, which is OPEN: Lode leans
+futures-only (2026-09-01), not decided. Writes
+`output/quickfix1m1dc_sizing.txt`; `--account` / `--risk` to move the
+dials. If account size cannot grow, the direction is MICROS (Lode,
+same day) -- a study of its own, nothing purchased; the informational
+micros sheet in data_center's `contract_specs.xlsx` is the starting
+list and every row on it needs re-verifying from GLBX definitions.
+
 **RULE 1'S TESTED-REVERSAL COUNT IS A DIAL AND HAS A SWEEP PAGE** (Lode,
 2026-08-26). `engine_1m.run_market(min_reversals=...)`, default 3 (the
 module constant `MIN_REVERSALS`, unchanged everywhere else; minimum 1).

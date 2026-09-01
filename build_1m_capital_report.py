@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import execution_costs
 import run_1m
 import run_1m_matrix
 import research_1m_feasibility as feas
@@ -60,6 +61,23 @@ def cap_label(c):
     return f"${c / 1000:,.0f}k" if c < 1_000_000 else f"${c / 1e6:g}M"
 
 
+# The MIC codes the definitions carry, in the venue-family form Lode
+# asked the arsenal to show (2026-09-02). CME's four exchanges all
+# trade on Globex, hence one family.
+EXCHANGE_LABEL = {"XCME": "CME/GLBX", "XCEC": "COMEX/GLBX",
+                  "XNYM": "NYMEX/GLBX", "XCBT": "CBOT/GLBX",
+                  "IFUS": "ICE/IFUS", "XEUR": "Eurex"}
+
+
+def open_cost(key):
+    """USD cost of OPENING one contract (one side), from the sourced
+    execution-cost table; None where the row has no source."""
+    try:
+        return execution_costs.cost_per_side(key, 1, eurusd=sizing.EURUSD)
+    except (KeyError, ValueError):
+        return None
+
+
 # ------------------------------------------------------------- the arsenal
 
 def arsenal_html(payload):
@@ -72,6 +90,9 @@ def arsenal_html(payload):
     def whole(v):
         return f"{v:,.0f}" if v else "&mdash;"
 
+    def cost_cell(v):
+        return f"{v:,.2f}" if v is not None else "&mdash;"
+
     rows = []
     for key in sorted(sizing.LIVE_UNIVERSE,
                       key=list(markets).index):
@@ -83,11 +104,14 @@ def arsenal_html(payload):
         rows.append(
             f'<tr><td class="l">{esc(key)}</td>'
             f'<td class="l">{esc(s["market"])}</td>'
+            f'<td class="l">'
+            f'{EXCHANGE_LABEL.get(s.get("exchange"), s.get("exchange"))}'
+            f'</td>'
             f'<td class="l mono">{esc(r["front"]) if r else "&mdash;"}</td>'
             f'<td class="l">{size}</td>'
+            f'<td class="mono">{cost_cell(open_cost(key))}</td>'
             f'<td class="mono">'
             f'{whole(r["min_account_1pct_stop"]) if r else "&mdash;"}</td>'
-            f'<td class="l"></td>'
             f'</tr>')
     micro_rows = []
     for m in payload["micros"]:
@@ -96,43 +120,47 @@ def arsenal_html(payload):
         micro_rows.append(
             f'<tr><td class="l">{esc(m["parent"])}</td>'
             f'<td class="l">{esc(m["name"])}</td>'
+            f'<td class="l">CME/GLBX</td>'
             f'<td class="l mono">{esc(m["symbol"])}</td>'
             f'<td class="l">{esc(m["contract_unit"])}'
             f' ({esc(m["size_vs_parent"])})</td>'
+            f'<td class="mono">{cost_cell(open_cost(m["symbol"]))}</td>'
             f'<td class="mono">{whole(m.get("min_account_1pct_stop"))}'
-            f'</td>'
-            f'<td class="l"></td></tr>')
-    head = ('<tr><th class="l" style="width:7%">Key</th>'
-            '<th class="l" style="width:34%">Market</th>'
-            '<th class="l" style="width:14%">Contract</th>'
-            '<th class="l" style="width:22%">Size</th>'
-            '<th style="width:13%">Min acct, 1% stop $</th>'
-            '<th class="l" style="width:10%"></th></tr>')
+            f'</td></tr>')
+    head = ('<tr><th class="l" style="width:6%">Key</th>'
+            '<th class="l" style="width:28%">Market</th>'
+            '<th class="l" style="width:11%">Exchange</th>'
+            '<th class="l" style="width:13%">Contract</th>'
+            '<th class="l" style="width:18%">Size</th>'
+            '<th style="width:11%">Open 1 ctr $</th>'
+            '<th style="width:13%">Min acct, 1% stop $</th></tr>')
     # The 3 of the 25 currently-updated Socrates markets that are NOT
     # in the trading universe, with the reason -- same column widths as
     # the markets table below it, so the two line out (Lode,
     # 2026-09-02). The reason spans the Contract..note columns.
     excluded = [
-        ("JGB", "Japanese 10 Year Bond Futures",
+        ("JGB", "Japanese 10 Year Bond Futures", "OSE",
          "a futures market, but outside our data: no Databento OSE"
          " coverage (the known gap; IBKR backfill later)"),
-        ("URA", "Global X Uranium ETF",
+        ("URA", "Global X Uranium ETF", "NYSE Arca",
          "ETF: cannot be traded with our strategy -- a share position"
          " pays full notional with no leverage, so risking 1% locks"
          " the account"),
-        ("VIXY", "ProShares VIX Short Term Futures ETF",
+        ("VIXY", "ProShares VIX Short Term Futures ETF", "NYSE Arca",
          "ETF: cannot be traded with our strategy -- same full-notional"
          " lock; it holds futures but trades as a share"),
     ]
-    exc_head = ('<tr><th class="l" style="width:7%">Key</th>'
-                '<th class="l" style="width:34%">Market</th>'
-                '<th class="l wrap" style="width:59%" colspan="4">'
+    exc_head = ('<tr><th class="l" style="width:6%">Key</th>'
+                '<th class="l" style="width:28%">Market</th>'
+                '<th class="l" style="width:11%">Exchange</th>'
+                '<th class="l wrap" style="width:55%" colspan="4">'
                 'Why it is not traded</th></tr>')
     exc_rows = "".join(
         f'<tr><td class="l">{esc(k)}</td>'
         f'<td class="l">{esc(name)}</td>'
+        f'<td class="l">{esc(venue)}</td>'
         f'<td class="l wrap" colspan="4">{reason}</td></tr>'
-        for k, name, reason in excluded)
+        for k, name, venue, reason in excluded)
     return (
         '<div class="section-h">The contract arsenal</div>'
         '<p class="chartnote"><b>3 of the 25 currently-updated Socrates '
@@ -159,6 +187,93 @@ def arsenal_html(payload):
         'replay yet, the micro study decides that.</p>'
         f'<div class="tradecard"><table class="trades"><thead>{head}'
         f'</thead><tbody>{"".join(micro_rows)}</tbody></table></div>')
+
+
+def costs_html(payload):
+    """The execution-cost model rendered in full (Lode, 2026-09-02:
+    "a detailed examen of all the costs involved and resourced, the
+    actual real numbers"): every live market's per-contract per-side
+    components, the round turn, the confidence flag and the sourcing
+    note, straight from execution_costs.py -- the single home of the
+    numbers the replays subtract."""
+    markets = payload["markets"]
+
+    def row_html(key, r, label):
+        nfa = r.get("nfa", execution_costs.NFA_PER_SIDE_USD)
+        per = r["commission"] + r["exchange_fee"] + nfa \
+            if r["exchange_fee"] is not None else None
+        cur = r["currency"]
+        usd = (per * sizing.EURUSD if (per and cur == "EUR") else per)
+        return (
+            f'<tr><td class="l">{esc(key)}</td>'
+            f'<td class="l">{label}</td>'
+            f'<td class="mono">{r["commission"]:.2f}</td>'
+            f'<td class="mono">'
+            f'{f"{r["exchange_fee"]:.2f}" if r["exchange_fee"] is not None
+               else "no source"}</td>'
+            f'<td class="mono">{nfa:.2f}</td>'
+            f'<td class="mono">'
+            f'{f"{cur} {per:.2f}" if per is not None else "&mdash;"}</td>'
+            f'<td class="mono">'
+            f'{f"{2 * usd:,.2f}" if usd is not None else "&mdash;"}</td>'
+            f'<td class="l">{esc(r["confidence"])}</td>'
+            f'<td class="l wrap">{esc(r["note"])}</td></tr>')
+
+    rows = []
+    for key in sorted(sizing.LIVE_UNIVERSE, key=list(markets).index):
+        r = execution_costs.FUTURES[key]
+        label = EXCHANGE_LABEL.get(markets[key].get("exchange"),
+                                   markets[key].get("exchange"))
+        rows.append(row_html(key, r, label))
+    micro_rows = [row_html(sym, execution_costs.MICROS[sym], "CME/GLBX")
+                  for sym in execution_costs.MICROS]
+    head = ('<tr><th class="l" style="width:6%">Key</th>'
+            '<th class="l" style="width:10%">Exchange</th>'
+            '<th style="width:9%">IBKR comm.</th>'
+            '<th style="width:9%">Exch. fee</th>'
+            '<th style="width:7%">NFA</th>'
+            '<th style="width:11%">Per side</th>'
+            '<th style="width:11%">Round turn $</th>'
+            '<th class="l" style="width:9%">Confidence</th>'
+            '<th class="l" style="width:28%">Sources / note</th></tr>')
+    return (
+        '<div class="section-h">Costs, in detail</div>'
+        '<p class="chartnote">The execution-cost model the deployment '
+        'replays subtract, per contract PER SIDE: <b>IBKR fixed-rate '
+        'commission</b> ($0.85 full-size US futures, $0.25 CME micros, '
+        'EUR 0.90 on Eurex) + the <b>exchange fee</b> + the <b>NFA '
+        'regulatory fee</b> ($0.02; none on Eurex). A round turn pays '
+        'two sides; the entry side is charged the moment the order '
+        'fills. <b>Sources</b> (retrieved 2026-09-01): IBKR&rsquo;s own '
+        'worked examples &mdash; 1 ES contract = $0.85 + $1.38 = $2.24 '
+        'per side, 1 Eurex contract = EUR 0.90 + EUR 0.52 = EUR 1.42 '
+        'per side &mdash; and the TradeStation and Trade Pro Futures '
+        'exchange-fee pass-through lists (IBKR&rsquo;s and CME&rsquo;s '
+        'primary pages block automated retrieval). <b>Where two sources '
+        'disagree the HIGHER figure is adopted</b> &mdash; a cost model '
+        'errs expensive &mdash; and both readings stay on the row; a '
+        'row with no source refuses to price rather than guess. FGBL '
+        f'converts at EURUSD {sizing.EURUSD} (research-grade). Taxes '
+        'are excluded at all times, margin is out of scope, and '
+        'slippage is a separate thing entirely: it models the FILL and '
+        'is charged in R by the engine, this models the BILL in '
+        'dollars. The standing instruction in execution_costs.py: '
+        'replace every row with the fee lines of real IB statements '
+        'once the account exists. What no cost row covers is '
+        '<b>liquidity</b> &mdash; whether the size can be filled at '
+        'all &mdash; which is measured separately, on the entry '
+        'minutes&rsquo; own printed volume, in '
+        'research_1m_liquidity.py.</p>'
+        f'<div class="tradecard"><div class="tradescroll">'
+        f'<table class="trades"><thead>{head}</thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div></div>'
+        '<p class="chartnote"><b>Micros and minis</b> &mdash; the same '
+        'model for the arsenal&rsquo;s smaller contracts; the rows '
+        'marked <b>no source</b> are never priced silently and need '
+        'IB&rsquo;s own numbers before any micro trades.</p>'
+        f'<div class="tradecard"><div class="tradescroll">'
+        f'<table class="trades"><thead>{head}</thead>'
+        f'<tbody>{"".join(micro_rows)}</tbody></table></div></div>')
 
 
 def hardness_html(all_trades, payload):
@@ -696,6 +811,7 @@ def build():
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__ARSENAL__", arsenal_html(payload)
+                     + costs_html(payload)
                      + hardness_html(all_trades, payload))
             .replace("__TREND__", trend_html(ladder, len(all_trades)))
             .replace("__SECTIONS__", "".join(sections))

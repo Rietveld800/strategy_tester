@@ -393,7 +393,32 @@ expectancy, profit factor, average winner/loser, best/worst, streaks,
 hold, max concurrent, time in market), computed on the TAKEN trades.
 On all report pages the two metric grids now sit TOGETHER above the
 panes (same instruction, "more presentable") -- the old mid-page
-"Per-trade statistics" section is gone from the variant pages. BESIDE THE
+"Per-trade statistics" section is gone from the variant pages.
+SINCE 2026-09-02 THE ARSENAL ALSO CARRIES the exchange column
+(COMEX/CME/CBOT/NYMEX all suffixed /GLBX, ICE/IFUS, Eurex; the
+excluded table shows OSE and NYSE Arca) and an "Open 1 ctr $" column
+(one side's cost from execution_costs; unsourced micro rows show a
+dash), and the page gains a "COSTS, IN DETAIL" SECTION: every live
+market's and every micro's per-side components (IBKR commission,
+exchange fee, NFA), round turn, confidence flag and sourcing note,
+rendered straight from execution_costs.py with the model and the
+retrieval provenance spelled out in the section note.
+**ENTRY-MINUTE LIQUIDITY IS MEASURED, NOT ASSUMED, SINCE 2026-09-02**
+(Lode: "do we just assume there's always liquidity minus the
+slippage?"). `research_1m_liquidity.py` reads each live trade's exact
+entry minute's ON-BOOK volume from the contract's own bars
+(expand_process.load_bars -- what the engine traded) and compares it
+with the deployment sizes; writes
+`output/quickfix1m1dc_liquidity.txt`. First reading: the fill model
+IS optimistic at size in the thin markets -- at $2M the worst entries
+take multiples of the minute's print (DX 409 contracts into a 16-lot
+minute, PL 21 into 1, PA 29 into 4; ZW/HG/LE also flag), while the
+index/metals majors stay under ~10% at $250k. Printed volume is a
+FLOOR on activity, not resting depth, so this flags rather than
+condemns -- but real capacity in DX/PA/PL/ZW at size needs the order
+book (IB later), and fixed tick slippage does not model market
+impact. At $250k only DX and PA/PL/HG/ZW/LE breach 20% of the
+minute's print on their worst entries. BESIDE THE
 ARSENAL SITS THE REAL-STOPS DIFFICULTY TABLE (Lode, same day: the
 1%-of-price yardstick "doesn't say too much because for silver 1%
 price movement isn't much"): per market, the historical setups'

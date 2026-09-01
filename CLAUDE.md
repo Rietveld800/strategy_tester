@@ -228,8 +228,34 @@ futures-only-portfolio decision, which is OPEN: Lode leans
 futures-only (2026-09-01), not decided. Writes
 `output/quickfix1m1dc_sizing.txt`; `--account` / `--risk` to move the
 dials. If account size cannot grow, the direction is MICROS (Lode,
-same day) -- a study of its own, nothing purchased. AVAILABILITY IS
-MEASURED since 2026-09-01: data_center's `metadata/micro_catalog.json`
+same day) -- a study of its own, nothing purchased.
+**THE LIVE-UNIVERSE CANDIDATE IS 22 MARKETS** (Lode, 2026-09-01, a
+scoping decision for the deployment study, NOT an adopted trading
+universe): the 19 GLBX futures of the currently-updated Socrates set
++ FGBL (KEPT despite being EUR-denominated -- an accepted
+complication, not an exclusion) + the two IFUS markets (SB, DX). JGB
+stays OUT (the data gap); the ETFs (URA, VIXY) are outside this
+scoping, consistent with the futures-only lean. STANDARDISATION is a
+named point of attention: every market that needs a micro is a second
+operational regime. **THE $100K FEASIBILITY READING IS
+`research_1m_feasibility.py`** (same day, seconds, no engine passes;
+writes `output/quickfix1m1dc_feasibility.txt`; `--account`/`--risk`).
+Evidence: real per-contract risk (rpu x point_value) from the v2 AND
+v5 blotters where trades exist -- the WIDER anchor decides, erring
+safe -- the measured micro catalog as gap-filler, and a labelled
+0.4-x-median-daily-range estimate for the seven markets with no
+trades in the window. First reading at $100k / 1% ($1,000 per trade):
+**13 of 22 trade FULL SIZE** (SR3, ZW, ZC, YM, 6E, 6J, LE, NG, ZN,
+ZB, FGBL, SB, DX), **6 more through micros** (GC, BTC, HG, CL, NQ,
+ES -- all verified fractions), and **3 are GAPS: PA, PL, SI**. PA/PL:
+MPA/MPL were probed and do NOT exist; the per-trade skip rule prices
+out at 0% (no PA or PL trade in the sample fit $1,000); the
+non-standard outs (TOCOM minis -- outside our data, JPY; PPLT/PALL
+ETFs -- excluded by the lean) are recorded in the output. SI is the
+surprise: SIL exists but at 1/5 it is NOT small enough -- median
+$2,106 through the micro, and 0% of SI trades fit even micro-sized.
+So a $100k account trades 19 of the 22 (13 uniform + 6 micro regime)
+and cannot touch PA, PL or SI at this threshold. data_center's `metadata/micro_catalog.json`
 (`scripts/micro_discovery.py`, free symbology resolution -- listing
 proven, liquidity not) feeds the micros sheet of
 `contract_specs.xlsx`; 24 roots are listed on GLBX (MNG, MZW/MZC and

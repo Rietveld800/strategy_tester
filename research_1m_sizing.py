@@ -22,7 +22,8 @@ Sizing (Lode 2026-08-21, refusal policy revised 2026-09-01):
   excluded by decision). Slippage stays in R where the engine put it;
   costs are dollars here -- the fill and the bill never overlap.
 
-Account size: default $150,000 (Lode, 2026-09-01) -- the deployment
+Account size: default $250,000 (Lode, 2026-09-02; was $150k for a
+day) -- the deployment
 scenario: most markets afford one contract, and the PA/PL/SI-class
 trades sit refused until equity grows to release them. `--account
 2000000` reproduces the everything-fits reading.
@@ -264,7 +265,7 @@ def report_config(name, trades, specs, account, risk_pct, lines):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--account", type=float, default=150_000.0)
+    ap.add_argument("--account", type=float, default=250_000.0)
     ap.add_argument("--risk", type=float, default=1.0)
     args = ap.parse_args()
 

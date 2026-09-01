@@ -43,7 +43,8 @@ import research_1m_sizing as sizing
 from build_equity_html import CSS
 from build_1m_report import (
     LIB_PATH, STUDY_BASE, REASON_TEXT, cls, daily_series, esc, held,
-    money, price, replay, replay_contracts, signed, signed_money, stamp)
+    money, price, replay, replay_contracts, signed, signed_money, stamp,
+    streaks)
 
 HERE = Path(__file__).resolve().parent
 OUT_HTML = HERE / "output" / "quickfix1m1dc_capitals.html"
@@ -361,7 +362,7 @@ def blotter_section_html(all_trades, money_of_full, links_full):
                    for lab, c, w in cols)
     return (
         '<p class="chartnote">Every trade this capital took, in entry '
-        'order. <b>Ctr</b> is whole contracts (shares for an ETF), '
+        'order. <b>Ctr</b> is whole contracts, '
         '<b>Risk %</b> the risk the opened position ACTUALLY took of '
         'equity at entry (floor sizing keeps it at or under 1%), '
         '<b>Costs $</b> the trade&rsquo;s full round turn of commission '
@@ -372,6 +373,12 @@ def blotter_section_html(all_trades, money_of_full, links_full):
         f'<tbody>{"".join(rows)}</tbody></table></div></div>')
 
 
+def tile(k, v, s, tone=""):
+    return (f'<div class="kpi"><div class="k">{k}</div>'
+            f'<div class="v{" " + tone if tone else ""}">{v}</div>'
+            f'<div class="sub">{s}</div></div>')
+
+
 def section_html(idx, r, all_trades, calendar, links_full):
     cap = r["cap"]
     taken_idx = sorted(r["money_of"])
@@ -379,35 +386,76 @@ def section_html(idx, r, all_trades, calendar, links_full):
     days, eq, dd, ddc, openpos = daily_series(
         taken, r["eod"], calendar, float(cap))
     costs = sum(m["cost_rt"] for m in r["money_of"].values())
-    wins = sum(1 for t in taken if t["net_r"] > 0)
+
+    # The variant reports' full metric set, per section (Lode,
+    # 2026-09-02) -- computed on the TAKEN trades, since those are the
+    # only ones this account traded.
+    wins = [t for t in taken if t["net_r"] > 0]
+    losses = [t for t in taken if t["net_r"] <= 0]
+    net_r = sum(t["net_r"] for t in taken)
+    gross_win = sum(t["net_r"] for t in wins)
+    gross_loss = -sum(t["net_r"] for t in losses)
+    pf = gross_win / gross_loss if gross_loss else None
+    run_w, run_l = streaks(taken)
+    holds = [(pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])
+              ).total_seconds() / 60.0 for t in taken]
     kpis = "".join([
-        f'<div class="kpi"><div class="k">{k}</div>'
-        f'<div class="v{" " + tone if tone else ""}">{v}</div>'
-        f'<div class="sub">{s}</div></div>'
-        for k, v, s, tone in [
-            ("Start capital", money(cap), "this section's account", ""),
-            ("Final capital", money(r["final"]),
+        tile("Start capital", money(cap), "this section's account"),
+        tile("Final capital", money(r["final"]),
              f"{signed(100 * (r['final'] / cap - 1), 1)}% return",
              cls(r["final"] - cap)),
-            ("Max drawdown", f"{r['max_dd']:.2f}%",
-             "worst reached intraday", ""),
-            ("Taken / missed",
-             f"{len(taken)} / {len(r['refused'])}",
-             f"of {len(all_trades)} blotter trades;"
-             f" {wins} of the taken won",
+        tile("Max drawdown", f"{r['max_dd']:.2f}%",
+             "worst reached intraday"),
+        tile("Max drawdown on closes", f"{max(ddc):.2f}%",
+             "daily closing balances"),
+        tile("Taken / missed", f"{len(taken)} / {len(r['refused'])}",
+             f"of {len(all_trades)} blotter trades",
              "neg" if r["refused"] else "pos"),
-            ("Execution costs", money(costs),
+        tile("Execution costs", money(costs),
              "both sides, in the curve", "neg"),
-            ("vs frictionless ideal",
+        tile("vs frictionless ideal",
              f"{100 * (r['final'] / r['ideal_final'] - 1):+.2f}%",
              f"ideal {money(r['ideal_final'])} at"
              f" {r['ideal_dd']:.2f}% DD",
              cls(r["final"] - r["ideal_final"])),
-        ]])
+    ])
+    stats = "".join([
+        tile("Win rate", f"{100 * len(wins) / len(taken):.1f}%",
+             f"{len(wins)} won, {len(losses)} lost"),
+        tile("Net R", signed(net_r, 2), "after slippage, taken trades",
+             cls(net_r)),
+        tile("Expectancy", signed(net_r / len(taken)) + "R",
+             "per taken trade", cls(net_r)),
+        tile("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
+             f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
+        tile("Average winner",
+             signed(gross_win / len(wins)) + "R" if wins else "&mdash;",
+             f"{len(wins)} trades", "pos"),
+        tile("Average loser",
+             signed(-gross_loss / len(losses)) + "R" if losses
+             else "&mdash;",
+             f"{len(losses)} trades", "neg"),
+        tile("Best trade", signed(max(t["net_r"] for t in taken)) + "R",
+             "net of slippage"),
+        tile("Worst trade", signed(min(t["net_r"] for t in taken)) + "R",
+             "a gapped or slipped stop can cost more than 1R"),
+        tile("Longest winning run", f"{run_w}",
+             "positions, in entry order"),
+        tile("Longest losing run", f"{run_l}",
+             "positions, in entry order"),
+        tile("Average hold", held(sum(holds) / len(holds)),
+             "entry to exit"),
+        tile("Max concurrent", f"{max(openpos)}",
+             "positions open at once"),
+        tile("Time in market",
+             f"{100 * sum(1 for o in openpos if o) / len(openpos):.0f}%",
+             "of market days with a position open"),
+    ])
     return (
         f'<div class="section-h" id="cap{idx}">'
         f'Starting capital {cap_label(cap)}</div>'
         f'<div class="kpis">{kpis}</div>'
+        f'<div class="stats4">{stats}</div>'
         f'<div class="card">'
         f'<div class="charthead"><div class="t">One shared account, '
         f'{cap_label(cap)} start</div>'

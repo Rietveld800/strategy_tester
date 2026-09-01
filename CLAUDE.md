@@ -300,9 +300,16 @@ could find their release in real-time but also in the backtest").
 the ORDER IS REFUSED and nothing is booked; the same setup is
 released the moment grown equity affords one contract. This
 supersedes the 2026-08-21 force-1 decision. THE DEPLOYMENT ACCOUNT IS
-$150,000 (Lode's proposal for releasing PA/PL/SI-class trades over
-time), the default of both the research script and the contracts
-pages; `--account 2000000` reproduces the everything-fits reading.
+$250,000 SINCE 2026-09-02 (Lode; it was $150k for a day), the default
+of both the research script and the contracts pages -- AND THE
+FRACTIONAL VARIANT PAGES RENDER AT $250,000 TOO (same instruction):
+`build_1m_report.PAGE_START` opens the fractional account there,
+while the self-check still replays at the $100k ENGINE BASE, the
+start run_1m publishes its figures at (fractional percentages are
+start-invariant, so drawdowns check directly and finals check at the
+base). `--account 2000000` reproduces the everything-fits reading.
+The $250k contracts baseline and the capital ladder's $250k rung are
+the same computation and must always agree to the cent.
 Consequences, all deliberate: the quantized trade list is now a
 SUBSET of the blotter (no longer capital-independent -- that is the
 point); every page statistic counts TAKEN trades only; refused
@@ -326,11 +333,11 @@ record (run_1m.HUMAN_APPROVED, the fractional pages, charter's
 overlay) keeps its own universe deliberately -- changing THAT is a
 strategy-level decision nobody has taken. Per-market charter-link
 numbering survives the filter because charter numbers per market.
-First reading at $150k/1% on the live universe (window to
-2026-08-31): baseline 86 blotter trades, 66 taken / 20 refused,
-final $245,234 vs ideal $257,796 (-4.9%), DD 4.30%; variant 5 74
-blotter, 51/23, $213,232 vs $235,666 (-9.5%), DD 5.17%. GC, SI and
-NQ never traded full-size in this window. KNOWN APPROXIMATION,
+Reading at $250k/1% on the live universe (window to
+2026-08-31): baseline 86 blotter trades, 70 taken / 16 refused,
+final $421,207 vs ideal $429,660 (-2.0%), DD 4.31%; variant 5 74
+blotter, 58/16, $375,237 vs $392,777 (-4.5%), DD 5.38%. GC and SI
+never traded full-size in this window. KNOWN APPROXIMATION,
 stated in the module: a refusal is
 post-processing and cannot re-run the session lockout (a live refused
 order spends nothing and a later setup that session could enter) --
@@ -357,10 +364,10 @@ exit side at close; the blotter row attributes the full round turn);
 the FRACTIONAL pages deliberately carry none -- slippage models the
 FILL in R where the engine put it, this models the BILL in dollars,
 and the two never overlap. Taxes excluded at all times, margin still
-out of scope. First reading at $150k/1% on the live universe:
-baseline pays $1,583 total (median $14.82/round turn); variant 5
-$1,007. At x1000 account the residual vs the ideal IS the cost drag
-(~1.0-1.7 pct points), quantization and refusals having vanished.
+out of scope. Reading at $250k/1% on the live universe: baseline
+pays $2,720 total (median $24.70/round turn); variant 5 $1,798. At
+x1000 account the residual vs the ideal IS the cost drag,
+quantization and refusals having vanished.
 **THE CAPITAL LADDER IS `build_1m_capital_report.py` ->
 `output/quickfix1m1dc_capitals.html`** (Lode, 2026-09-01, refresh step
 `capitals1m`): the published baseline in integer contracts at $100k /
@@ -378,7 +385,15 @@ missed by $28 -- the refusal gate reads LIVE equity, not starting
 capital, exactly as the broker would. A taken trade's R never changes
 down the ladder; only which trades fit, what they risked and what
 they paid. The arsenal table lists ONLY the 22 traded markets (plus
-the verified micros); ETFs appear nowhere on the page. BESIDE THE
+the verified micros); ETFs appear nowhere on the page. EVERY SECTION
+CARRIES THE VARIANT REPORTS' FULL METRIC SET since 2026-09-02 (Lode):
+the KPI row (start/final/return, both drawdown maxima, taken/missed,
+costs, vs-ideal) plus the per-trade statistics grid (win rate, net R,
+expectancy, profit factor, average winner/loser, best/worst, streaks,
+hold, max concurrent, time in market), computed on the TAKEN trades.
+On all report pages the two metric grids now sit TOGETHER above the
+panes (same instruction, "more presentable") -- the old mid-page
+"Per-trade statistics" section is gone from the variant pages. BESIDE THE
 ARSENAL SITS THE REAL-STOPS DIFFICULTY TABLE (Lode, same day: the
 1%-of-price yardstick "doesn't say too much because for silver 1%
 price movement isn't much"): per market, the historical setups'

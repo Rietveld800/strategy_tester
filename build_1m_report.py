@@ -68,14 +68,21 @@ OUT_HTML = HERE / "output" / (
 LIB_PATH = (HERE / ".." / "data_center" / "scripts"
             / "lightweight-charts.4.2.3.standalone.js")
 
+# The ENGINE BASE: run_1m and the matrix publish their figures at this
+# start, and the page's self-check replays against it. Fractional
+# percentages are start-invariant, so the check holds whatever the
+# page renders at.
 START_CAPITAL = 100_000.0
+# What the PAGES RENDER AT (Lode, 2026-09-02): both the fractional
+# variant reports and the integer-contract pages open the account at
+# $250,000.
+PAGE_START = 250_000.0
 RISK_PCT = 1.0
-# The deployment scenario (Lode, 2026-09-01): $150,000, and an order
-# whose single contract risks more than the budget is REFUSED at
-# placement -- never forced -- and released the moment grown capital
-# affords it. research_1m_sizing defaults to the same figure and owns
-# the sizing rule.
-SIZING_ACCOUNT = 150_000.0
+# The deployment scenario: $250,000 (Lode, 2026-09-02; was $150k), and
+# an order whose single contract risks more than the budget is REFUSED
+# at placement -- never forced -- and released the moment grown capital
+# affords it. research_1m_sizing owns the sizing rule.
+SIZING_ACCOUNT = 250_000.0
 CONTRACTS_STEM = "quickfix1m1dc_contracts"
 # charter serves site/ over HTTP (serve.py, port 8000 by default and the
 # next free one after that). A file:// link cannot reach the study, so the
@@ -981,6 +988,7 @@ table.trades td a:hover{text-decoration:underline}
 </header>
 __RULES__
 <div class="kpis">__KPIS__</div>
+<div class="stats4">__STATS__</div>
 <div class="card">
   <div class="charthead"><div class="t">One shared account</div>
   <div class="s">__CHARTSUB__</div></div>
@@ -990,8 +998,6 @@ __RULES__
   <div class="panelbl">Open positions</div><div id="op"></div>
 </div>
 <div class="note">__NOTE__</div>
-<div class="section-h">Per-trade statistics</div>
-<div class="stats4">__STATS__</div>
 <div class="section-h">Where the trades end</div>
 <div class="tradecard"><table class="trades"><thead><tr>
   <th class="l" style="width:20%">Exit class</th>
@@ -1172,7 +1178,7 @@ def build(data=None, out=None, variant=None, contracts=False):
         trades = [all_trades[i] for i in orig_idx]
         money_of = {n: money_of[o] for n, o in enumerate(orig_idx)}
     else:
-        start = START_CAPITAL
+        start = PAGE_START
         risk = data.get("risk_pct", RISK_PCT)
         money_of, eod, final, max_dd = replay(trades, risk, start)
         ideal_final = ideal_dd = None
@@ -1184,12 +1190,19 @@ def build(data=None, out=None, variant=None, contracts=False):
               "panes are drawn on calendar days and stop at the last exit; "
               "re-run the runner that wrote it for the real grid.")
     days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar, start)
-    if not contracts and abs(final - published["final"]) > 0.01:
-        print(f"WARNING: replay final ${final:,.2f} against run_1m's "
-              f"${published['final']:,.2f}")
-    if not contracts and abs(max_dd - published["max_dd_pct"]) > 0.01:
-        print(f"WARNING: replay drawdown {max_dd:.2f}% against run_1m's "
-              f"{published['max_dd_pct']:.2f}%")
+    if not contracts:
+        # The self-check replays at the ENGINE BASE, because that is
+        # the start run_1m published its figures at; the page itself
+        # renders at PAGE_START, and fractional drawdown percentages
+        # are start-invariant so max_dd checks directly.
+        _, _, check_final, _ = replay(trades, risk, START_CAPITAL)
+        if abs(check_final - published["final"]) > 0.01:
+            print(f"WARNING: replay final ${check_final:,.2f} at the "
+                  f"${START_CAPITAL:,.0f} base against run_1m's "
+                  f"${published['final']:,.2f}")
+        if abs(max_dd - published["max_dd_pct"]) > 0.01:
+            print(f"WARNING: replay drawdown {max_dd:.2f}% against "
+                  f"run_1m's {published['max_dd_pct']:.2f}%")
     # The headline and the calendar's drawdown column are two renderings of
     # one curve, so the deepest point of the series has to BE the headline.
     # It was not, for as long as it carried closing balances only.
@@ -1380,10 +1393,10 @@ def build(data=None, out=None, variant=None, contracts=False):
         "trade, which needs charter's <b>serve.py</b> running "
         f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
         "P&amp;L is this trade's share of the shared account."
-        + (" <b>Ctr</b> is the position in whole contracts (shares for an "
-           "ETF); hover it for the dollar risk it realized. Entries the "
-           "sizing policy refused are not rows here -- see <b>Refused at "
-           "order placement</b> above."
+        + (" <b>Ctr</b> is the position in whole contracts; hover it for "
+           "the dollar risk it realized. Entries the sizing policy "
+           "refused are not rows here -- see <b>Refused at order "
+           "placement</b> above."
            if contracts else ""))
     mktnote = (
         "Each market's own figures at "

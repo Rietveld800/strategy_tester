@@ -1039,7 +1039,8 @@ position.
 <b style="color:var(--opened)">Purple</b> is a position opened,
 <b style="color:var(--closed)">blue</b> one closed. Capital is the shared
 account at the end of that day; drawdown is the worst it reached at any
-point during it, which is why a day can close higher than it dug.</p>
+trade close during it, which is why a day can close higher than it
+dug.</p>
 __CALENDAR__
 <footer>__FOOTER__</footer>
 </div>
@@ -1051,7 +1052,7 @@ __JS__
 def build_baseline():
     """The published baseline page, sized to a drawdown budget (Lode,
     2026-08-11, audit s.17): risk per trade is SOLVED by bisection so the
-    worst drawdown reached intraday is 6%, the same TARGET_DD the daily
+    worst drawdown reached at any trade close is 6%, the TARGET_DD the daily
     project publishes at. Re-solved on every build; the page states the
     number. The trade list itself is untouched - risk moves only the
     money columns, never the R columns."""
@@ -1067,8 +1068,8 @@ def build_baseline():
         "markets that passed the chart-structure inspection (audit s.16); "
         "the rejected ones are under Not tested with that reason. <b>And "
         "it is sized to a drawdown budget</b>: risk per trade is solved "
-        f"to <b>{risk:g}%</b> so the worst drawdown reached intraday is "
-        "6%, the daily project's target.")
+        f"to <b>{risk:g}%</b> so the worst drawdown reached at any "
+        "trade close is 6%, the daily project's target.")
     build(data=data)
 
 

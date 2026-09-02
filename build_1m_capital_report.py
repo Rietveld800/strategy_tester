@@ -68,9 +68,10 @@ RISK_PCT = 1.0
 VARIANTS = [run_1m_matrix.BASELINE_NAME, "variant 5"]
 
 
-def out_path(variant):
-    return OUT_DIR / (f"quickfix1m1dc_capitals_"
-                      f"{run_1m_matrix.variant_slug(variant)}.html")
+def out_path(variant, micro=False):
+    stem = ("quickfix1m1dc_capitals_micro_" if micro
+            else "quickfix1m1dc_capitals_")
+    return OUT_DIR / f"{stem}{run_1m_matrix.variant_slug(variant)}.html"
 
 
 def load_variant(variant):
@@ -129,6 +130,13 @@ def arsenal_html(payload):
     def cost_cell(v):
         return f"{v:,.2f}" if v is not None else "&mdash;"
 
+    def tick_cell(v):
+        # plain decimals, never scientific: MJY's 0.000001 must not
+        # print as 1e-06
+        if v is None:
+            return "&mdash;"
+        return f"{v:.7f}".rstrip("0").rstrip(".") if v < 0.001 else f"{v:g}"
+
     rows = []
     for key in sorted(sizing.LIVE_UNIVERSE,
                       key=list(markets).index):
@@ -145,6 +153,7 @@ def arsenal_html(payload):
             f'</td>'
             f'<td class="l mono">{esc(r["front"]) if r else "&mdash;"}</td>'
             f'<td class="l">{size}</td>'
+            f'<td class="mono">{tick_cell(s.get("tick"))}</td>'
             f'<td class="mono">{cost_cell(open_cost(key))}</td>'
             f'<td class="mono">'
             f'{whole(r["min_account_1pct_stop"]) if r else "&mdash;"}</td>'
@@ -160,16 +169,18 @@ def arsenal_html(payload):
             f'<td class="l mono">{esc(m["symbol"])}</td>'
             f'<td class="l">{esc(m["contract_unit"])}'
             f' ({esc(m["size_vs_parent"])})</td>'
+            f'<td class="mono">{tick_cell(m.get("tick"))}</td>'
             f'<td class="mono">{cost_cell(open_cost(m["symbol"]))}</td>'
             f'<td class="mono">{whole(m.get("min_account_1pct_stop"))}'
             f'</td></tr>')
     head = ('<tr><th class="l" style="width:6%">Key</th>'
-            '<th class="l" style="width:28%">Market</th>'
-            '<th class="l" style="width:11%">Exchange</th>'
+            '<th class="l" style="width:25%">Market</th>'
+            '<th class="l" style="width:10%">Exchange</th>'
             '<th class="l" style="width:13%">Contract</th>'
-            '<th class="l" style="width:18%">Size</th>'
-            '<th style="width:11%">Open 1 ctr $</th>'
-            '<th style="width:13%">Min acct, 1% stop $</th></tr>')
+            '<th class="l" style="width:16%">Size</th>'
+            '<th style="width:8%">Tick</th>'
+            '<th style="width:10%">Open 1 ctr $</th>'
+            '<th style="width:12%">Min acct, 1% stop $</th></tr>')
     # The 3 of the 25 currently-updated Socrates markets that are NOT
     # in the trading universe, with the reason -- same column widths as
     # the markets table below it, so the two line out (Lode,
@@ -187,15 +198,15 @@ def arsenal_html(payload):
          " lock; it holds futures but trades as a share"),
     ]
     exc_head = ('<tr><th class="l" style="width:6%">Key</th>'
-                '<th class="l" style="width:28%">Market</th>'
-                '<th class="l" style="width:11%">Exchange</th>'
-                '<th class="l wrap" style="width:55%" colspan="4">'
+                '<th class="l" style="width:25%">Market</th>'
+                '<th class="l" style="width:10%">Exchange</th>'
+                '<th class="l wrap" style="width:59%" colspan="5">'
                 'Why it is not traded</th></tr>')
     exc_rows = "".join(
         f'<tr><td class="l">{esc(k)}</td>'
         f'<td class="l">{esc(name)}</td>'
         f'<td class="l">{esc(venue)}</td>'
-        f'<td class="l wrap" colspan="4">{reason}</td></tr>'
+        f'<td class="l wrap" colspan="5">{reason}</td></tr>'
         for k, name, venue, reason in excluded)
     return (
         '<div class="section-h">The contract arsenal</div>'
@@ -312,6 +323,125 @@ def costs_html(payload):
         f'<tbody>{"".join(micro_rows)}</tbody></table></div></div>')
 
 
+def row_cost(m):
+    """A money row's round-turn cost, full-only or mixed-stack."""
+    return m.get("cost_rt",
+                 m.get("cost_full_rt", 0.0) + m.get("cost_micro_rt", 0.0))
+
+
+def tradeoffs_html(gates, payload):
+    """THE DISADVANTAGES OF THE MICROS, stated before any micro result
+    is read (Lode, 2026-09-02: "The disadvantage of the micro contracts
+    is what we need to put in the reports"). Three measured tables --
+    the fidelity/liquidity gates with every FAIL named, the relative
+    cost of micro exposure, and the tick grids -- plus the caveats no
+    table carries."""
+    markets = payload["markets"]
+    g_rows = []
+    for key in sorted(gates["candidates"]):
+        for c in gates["candidates"][key]:
+            verdict = ("PASS" if c["passed"]
+                       else "FAIL: " + ", ".join(c["why_failed"]))
+            g_rows.append(
+                f'<tr><td class="l">{esc(key)}</td>'
+                f'<td class="l mono">{esc(c["root"])}</td>'
+                f'<td class="mono">1/{round(1 / c["fraction"])}</td>'
+                f'<td class="mono">{c["n_entries"]}</td>'
+                f'<td class="mono">{c["coverage"] * 100:.0f}%</td>'
+                f'<td class="mono">'
+                f'{c["median_diff_ticks"] if c["median_diff_ticks"]
+                   is not None else "&mdash;"}</td>'
+                f'<td class="mono">'
+                f'{c["p90_diff_ticks"] if c["p90_diff_ticks"]
+                   is not None else "&mdash;"}</td>'
+                f'<td class="mono">'
+                f'{f"{c["median_minute_volume"]:,.0f}"
+                   if c["median_minute_volume"] is not None
+                   else "&mdash;"}</td>'
+                f'<td class="mono">{c["needed_volume"]:.0f}</td>'
+                f'<td class="l gapl {"pos" if c["passed"] else "neg"}">'
+                f'{verdict}</td></tr>')
+    c_rows = []
+    for key in sorted(gates["candidates"]):
+        for c in gates["candidates"][key]:
+            root, frac = c["root"], c["fraction"]
+            try:
+                m_side = execution_costs.cost_per_side(root, 1)
+                p_side = execution_costs.cost_per_side(
+                    key, 1, eurusd=sizing.EURUSD)
+            except (KeyError, ValueError):
+                continue
+            mult = (m_side / frac) / p_side
+            p_tick = markets[key]["tick"]
+            c_rows.append(
+                f'<tr><td class="l">{esc(key)}</td>'
+                f'<td class="l mono">{esc(root)}</td>'
+                f'<td class="mono">{p_side:,.2f}</td>'
+                f'<td class="mono">{m_side:,.2f}</td>'
+                f'<td class="mono">{m_side / frac:,.2f}</td>'
+                f'<td class="mono neg">{mult:,.2f}x</td>'
+                f'<td class="mono">{p_tick:g}</td>'
+                f'<td class="mono">{c["tick"]:g}</td>'
+                f'<td class="l gapl">'
+                f'{"coarser -- micro stops round AWAY from entry"
+                   if c["tick"] > p_tick else "same grid"}</td></tr>')
+    ghead = ('<tr><th class="l" style="width:6%">Mkt</th>'
+             '<th class="l" style="width:7%">Root</th>'
+             '<th style="width:7%">Size</th>'
+             '<th style="width:7%">Entries</th>'
+             '<th style="width:9%">Coverage</th>'
+             '<th style="width:9%">Med dT</th>'
+             '<th style="width:9%">P90 dT</th>'
+             '<th style="width:10%">Med vol</th>'
+             '<th style="width:8%">Need</th>'
+             '<th class="l gapl" style="width:28%">Verdict</th></tr>')
+    chead = ('<tr><th class="l" style="width:6%">Mkt</th>'
+             '<th class="l" style="width:7%">Root</th>'
+             '<th style="width:12%">Full $/side</th>'
+             '<th style="width:12%">Micro $/side</th>'
+             '<th style="width:14%">Micro, full-equiv $</th>'
+             '<th style="width:11%">Cost multiple</th>'
+             '<th style="width:9%">Full tick</th>'
+             '<th style="width:9%">Micro tick</th>'
+             '<th class="l gapl" style="width:20%">Grid</th></tr>')
+    return (
+        '<div class="section-h">The micro trade-offs</div>'
+        '<p class="chartnote"><b>The disadvantages come first, because '
+        'they gate everything on this page.</b> A reversal level is a '
+        'price of the underlying and every verified micro quotes in the '
+        'parent&rsquo;s exact price space, so the levels themselves '
+        'need no scaling &mdash; but four real costs remain. '
+        '<b>(1) Fidelity is measured, not assumed</b>: the table below '
+        'compares the micro&rsquo;s print with the parent&rsquo;s at '
+        'our actual entry minutes, in parent ticks. A market FAILS the '
+        'gate and stays full-contracts-only unless coverage, median and '
+        'p90 all pass. Part of a thin micro&rsquo;s measured gap is a '
+        'STALE PRINT (its last trade in the minute is older than the '
+        'parent&rsquo;s), which overstates the tradable spread &mdash; '
+        'the strict verdict stands anyway until IB order-book data can '
+        'prove better, because real money does not trade on a '
+        'benefit-of-the-doubt. <b>(2) Micro exposure costs a multiple</b>: '
+        'commissions and fees per dollar of exposure run 2-4x the full '
+        'contract (table below) &mdash; a stack of ten micros is the '
+        'expensive way to hold one contract. <b>(3) Coarser tick grids '
+        'on some roots</b>: a stop computed in the parent&rsquo;s price '
+        'space may not exist on the micro&rsquo;s grid, so the '
+        'micro leg&rsquo;s stop is rounded AWAY from entry (equal or '
+        'wider, never tighter) and its risk is sized on that wider '
+        'distance. <b>(4) Operational: two instruments per position</b> '
+        '&mdash; more orders, split fills, and a stop that can trigger '
+        'one tick apart between legs. Roots with unsourced fee rows '
+        '(MJY, MZW, MZC, MNG, 1OZ) are excluded outright until IB '
+        'statements price them.</p>'
+        f'<div class="tradecard"><table class="trades"><thead>{ghead}'
+        f'</thead><tbody>{"".join(g_rows)}</tbody></table></div>'
+        '<p class="chartnote"><b>The cost of micro exposure</b> &mdash; '
+        'per side, per full-contract-equivalent, against the parent; '
+        'and the tick grids.</p>'
+        f'<div class="tradecard"><table class="trades"><thead>{chead}'
+        f'</thead><tbody>{"".join(c_rows)}</tbody></table></div>')
+
+
 def hardness_html(all_trades, payload):
     """What is REALLY hard to trade, measured on the strategy's own
     stops (Lode, 2026-09-01: the 1%-of-price yardstick "doesn't say
@@ -399,14 +529,149 @@ def hardness_html(all_trades, payload):
         f'</tr></thead><tbody>{"".join(body)}</tbody></table></div>')
 
 
+# --------------------------------------------------------- the micro stack
+
+GATES_JSON = OUT_DIR / "quickfix1m1dc_micro_gates.json"
+
+
+def micro_route():
+    """market -> routed micro leg spec, from the measured gates
+    (research_1m_micro.py). Only markets whose candidate PASSED both
+    fidelity and liquidity route; everything else stays full-only."""
+    gates = json.loads(GATES_JSON.read_text(encoding="utf-8"))
+    route = {}
+    for key, root in gates["routing"].items():
+        if root is None:
+            continue
+        cand = next(c for c in gates["candidates"][key]
+                    if c["root"] == root)
+        route[key] = dict(root=root, fraction=cand["fraction"],
+                          tick=cand["tick"])
+    return route, gates
+
+
+def rounded_micro_stop(entry, stop, tick):
+    """The parent-space stop price on the MICRO's tick grid, rounded
+    AWAY from entry -- a micro stop may only be equal or wider, never
+    tighter, than the parent's (Lode: the stop placement on the micro
+    is the critical piece; conservatism is the rule).
+
+    Rounded on the EXCHANGE'S ABSOLUTE PRICE GRID (multiples of the
+    micro tick), never on an entry-anchored offset grid: the slipped
+    entry fill can sit off-grid, and an order book only accepts grid
+    prices. The epsilon absorbs float dust so a stop already on the
+    grid stays exactly where it is."""
+    import math as _m
+    steps = stop / tick
+    eps = 1e-9 * max(1.0, abs(steps))
+    if stop > entry:      # short: the stop sits above, round UP
+        return _m.ceil(steps - eps) * tick
+    return _m.floor(steps + eps) * tick
+
+
+def replay_micro(trades, risk_pct, start, route, specs):
+    """The mixed-stack replay: full contracts first, then the routed
+    micro tops the remainder up toward the budget. Refused only when
+    even one micro does not fit (or the market has no routed micro and
+    one full contract does not fit).
+
+    Booking, precise by construction: the micro leg's RISK uses its
+    own rounded stop distance (>= the parent's); a STOP exit books the
+    micro leg at that wider distance (net_r scaled on its own risk
+    base), any other exit books the identical per-unit price move the
+    parent leg made (net_r x parent rpu x micro point value). Costs
+    are charged per leg per side from the sourced table and reported
+    split."""
+    events = []
+    for i, t in enumerate(trades):
+        events.append((pd.Timestamp(t["entry_ts"]), 1, i))
+        events.append((pd.Timestamp(t["exit_ts"]), 0, i))
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    equity, peak, max_dd = start, start, 0.0
+    open_pos, money_of, eod, refused = {}, {}, {}, {}
+    for ts, kind, i in events:
+        t = trades[i]
+        if kind == 1:
+            spec = specs[t["market"]]
+            pv_full = sizing.usd_point_value(spec)
+            full_risk = t["rpu"] * pv_full
+            budget = equity * risk_pct / 100.0
+            n = int(budget // full_risk)
+            r = route.get(t["market"])
+            k, rpu_m, pv_m, root = 0, None, None, None
+            if r is not None:
+                root = r["root"]
+                # The SAME risk anchor as the parent's R: level to
+                # stop (entry_first), never the slipped fill -- the
+                # two legs must denominate one distance, the micro's
+                # merely rounded to its own grid.
+                anchor = t.get("entry_first") or t["entry"]
+                stop_m = rounded_micro_stop(anchor, t["stop"],
+                                            r["tick"])
+                rpu_m = abs(anchor - stop_m)
+                pv_m = pv_full * r["fraction"]
+                micro_risk = rpu_m * pv_m
+                k = int((budget - n * full_risk) // micro_risk)
+            if n == 0 and k == 0:
+                refused[i] = dict(per_unit=full_risk, equity=equity,
+                                  budget=budget)
+                continue
+            side = execution_costs.cost_per_side(
+                t["market"], n, eurusd=sizing.EURUSD) if n else 0.0
+            side_m = execution_costs.cost_per_side(
+                root, k, eurusd=sizing.EURUSD) if k else 0.0
+            equity -= side + side_m
+            risk_usd = n * full_risk + (k * rpu_m * pv_m if k else 0.0)
+            m = dict(n=n, k=k, root=root, rpu_m=rpu_m, pv_m=pv_m,
+                     full_risk=full_risk, risk_usd=risk_usd,
+                     risk_pct=risk_usd / (equity + side + side_m) * 100.0,
+                     cost_full_rt=2.0 * side, cost_micro_rt=2.0 * side_m)
+            open_pos[i] = m
+        else:
+            m = open_pos.pop(i, None)
+            if m is None:
+                continue
+            pnl_full = t["net_r"] * m["n"] * m["full_risk"]
+            if m["k"]:
+                if t["reason"] == "stop":
+                    # the micro leg is stopped at ITS OWN rounded stop:
+                    # the loss per unit is its wider distance
+                    pnl_micro = t["net_r"] * m["k"] * m["rpu_m"] * m["pv_m"]
+                else:
+                    # any other exit fills both legs at the same price,
+                    # so the per-unit move is the parent's
+                    pnl_micro = t["net_r"] * t["rpu"] * m["pv_m"] * m["k"]
+            else:
+                pnl_micro = 0.0
+            pnl = (pnl_full + pnl_micro
+                   - m["cost_full_rt"] / 2.0 - m["cost_micro_rt"] / 2.0)
+            equity += pnl
+            peak = max(peak, equity)
+            max_dd = max(max_dd, (peak - equity) / peak * 100.0)
+            money_of[i] = dict(
+                m, pnl_usd=pnl_full + pnl_micro
+                - m["cost_full_rt"] - m["cost_micro_rt"],
+                balance=equity)
+            worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
+                        (peak - equity) / peak * 100.0)
+            eod[ts.date()] = (equity, peak, worst)
+    return money_of, eod, equity, max_dd, refused
+
+
 # ------------------------------------------------------------- the sections
 
-def run_ladder(all_trades):
-    """One refusal-policy replay per capital."""
+def run_ladder(all_trades, route=None, specs=None):
+    """One refusal-policy replay per capital; with `route`, the
+    mixed-stack micro replay instead."""
     out = []
     for cap in CAPITALS:
-        money_of, eod, final, max_dd, refused = replay_contracts(
-            all_trades, RISK_PCT, float(cap))
+        if route is None:
+            money_of, eod, final, max_dd, refused = replay_contracts(
+                all_trades, RISK_PCT, float(cap))
+        else:
+            money_of, eod, final, max_dd, refused = replay_micro(
+                all_trades, RISK_PCT, float(cap), route, specs)
         _, _, ideal_final, ideal_dd = replay(all_trades, RISK_PCT,
                                              float(cap))
         out.append(dict(cap=cap, money_of=money_of, eod=eod, final=final,
@@ -443,7 +708,7 @@ def trend_html(ladder, n_all, all_trades):
     for r in ladder:
         taken = len(r["money_of"])
         missed = len(r["refused"])
-        costs = sum(m["cost_rt"] for m in r["money_of"].values())
+        costs = sum(row_cost(m) for m in r["money_of"].values())
         rows.append(
             f'<tr><td class="l mono">{cap_label(r["cap"])}</td>'
             f'<td class="mono">{taken}</td>'
@@ -518,9 +783,14 @@ def refused_section_html(all_trades, refused, links_full):
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
 
 
-def blotter_section_html(all_trades, money_of_full, links_full):
+def blotter_section_html(all_trades, money_of_full, links_full,
+                         micro=False):
     """The taken trades of one capital: contracts, ACTUAL risk %, and
-    the detailed execution cost, attributed per trade."""
+    the detailed execution cost, attributed per trade. In micro mode
+    the position is a STACK (n full + k micro), shown as such, with
+    the full leg's and the micro leg's round-turn costs in their own
+    columns (Lode: the costs of adding micro contracts detailed per
+    trade, with a clear view of the open contract positions)."""
     rows = []
     for i in sorted(money_of_full, key=lambda i: all_trades[i]["entry_ts"]):
         t, m = all_trades[i], money_of_full[i]
@@ -531,22 +801,18 @@ def blotter_section_html(all_trades, money_of_full, links_full):
         if link:
             name = (f'<a href="{link[0]}&amp;t={link[1][i]}" '
                     f'target="_blank">{name}</a>')
-        rows.append(
+        common_a = (
             f'<tr><td class="l" data-s="{esc(t["market"])}">{name}</td>'
             f'<td class="l" data-s="{t["side"]}">{t["side"]}</td>'
             f'<td class="l mono" data-s="{t["entry_ts"]}">'
             f'{stamp(t["entry_ts"])}</td>'
-            f'<td class="mono" data-s="{mins:.0f}">{held(mins)}</td>'
-            f'<td class="mono" data-s="{m["n"]}">{m["n"]:,}</td>'
-            f'<td class="mono" data-s="{m["risk_usd"]:.0f}"'
-            f' title="${m["per_unit"]:,.0f} per contract">'
-            f'{money(m["risk_usd"])}</td>'
+            f'<td class="mono" data-s="{mins:.0f}">{held(mins)}</td>')
+        common_b = (
             f'<td class="mono" data-s="{m["risk_pct"]:.3f}">'
             f'{m["risk_pct"]:.2f}%</td>'
             f'<td class="mono {cls(t["net_r"])}" data-s="{t["net_r"]}">'
-            f'{signed(t["net_r"])}</td>'
-            f'<td class="mono neg" data-s="{m["cost_rt"]:.2f}">'
-            f'{money(m["cost_rt"])}</td>'
+            f'{signed(t["net_r"])}</td>')
+        common_c = (
             f'<td class="mono {cls(m["pnl_usd"])}"'
             f' data-s="{m["pnl_usd"]:.2f}">'
             f'{signed_money(m["pnl_usd"])}</td>'
@@ -554,22 +820,75 @@ def blotter_section_html(all_trades, money_of_full, links_full):
             f'{money(m["balance"])}</td>'
             f'<td class="l gapl" data-s="{t["reason"]}">'
             f'{REASON_TEXT.get(t["reason"], t["reason"])}</td></tr>')
-    cols = [("Market", "l", 9.5), ("Side", "l", 5), ("In (UTC)", "l", 12),
-            ("Held", "", 5.5), ("Ctr", "", 5), ("Risk $", "", 8),
-            ("Risk %", "", 6.5), ("R", "", 6), ("Costs $", "", 7),
-            ("P&amp;L $", "", 9.5), ("Balance", "", 9.5),
-            ("Reason", "l gapl", 16.5)]
+        if micro:
+            stack = " + ".join(
+                ([f'{m["n"]} {t["market"]}'] if m["n"] else [])
+                + ([f'{m["k"]} {m["root"]}'] if m["k"] else []))
+            tip = (f'micro stop rounded to {m["root"]}\'s grid: risk '
+                   f'{m["rpu_m"]:g}/unit vs parent {t["rpu"]:g}'
+                   if m["k"] else "no micro leg")
+            rows.append(
+                common_a
+                + f'<td class="l mono" data-s="{m["n"] * 1000 + m["k"]}"'
+                  f' title="{tip}">{stack}</td>'
+                + f'<td class="mono" data-s="{m["risk_usd"]:.0f}">'
+                  f'{money(m["risk_usd"])}</td>'
+                + common_b
+                + f'<td class="mono neg" data-s="{m["cost_full_rt"]:.2f}">'
+                  f'{money(m["cost_full_rt"])}</td>'
+                + f'<td class="mono neg" data-s="{m["cost_micro_rt"]:.2f}">'
+                  f'{money(m["cost_micro_rt"])}</td>'
+                + common_c)
+        else:
+            rows.append(
+                common_a
+                + f'<td class="mono" data-s="{m["n"]}">{m["n"]:,}</td>'
+                + f'<td class="mono" data-s="{m["risk_usd"]:.0f}"'
+                  f' title="${m["per_unit"]:,.0f} per contract">'
+                  f'{money(m["risk_usd"])}</td>'
+                + common_b
+                + f'<td class="mono neg" data-s="{m["cost_rt"]:.2f}">'
+                  f'{money(m["cost_rt"])}</td>'
+                + common_c)
+    if micro:
+        cols = [("Market", "l", 8.5), ("Side", "l", 4.5),
+                ("In (UTC)", "l", 11), ("Held", "", 5),
+                ("Stack", "l", 11), ("Risk $", "", 7.5),
+                ("Risk %", "", 6), ("R", "", 5),
+                ("Full cost $", "", 6.5), ("Micro cost $", "", 6.5),
+                ("P&amp;L $", "", 8.5), ("Balance", "", 8.5),
+                ("Reason", "l gapl", 11)]
+        note = (
+            '<p class="chartnote">Every trade this capital took, in '
+            'entry order. <b>Stack</b> is the open position&rsquo;s '
+            'composition &mdash; full contracts of the parent plus the '
+            'routed micro&rsquo;s top-up (hover a stacked row for the '
+            'micro leg&rsquo;s rounded stop distance). <b>Risk %</b> is '
+            'what the whole stack ACTUALLY risked of equity at entry; '
+            '<b>Full cost $</b> and <b>Micro cost $</b> are each '
+            'leg&rsquo;s round turn of commission + exchange + NFA '
+            '(sourced in execution_costs.py; taxes excluded), both '
+            'already inside P&amp;L and Balance.</p>')
+    else:
+        cols = [("Market", "l", 9.5), ("Side", "l", 5),
+                ("In (UTC)", "l", 12), ("Held", "", 5.5), ("Ctr", "", 5),
+                ("Risk $", "", 8), ("Risk %", "", 6.5), ("R", "", 6),
+                ("Costs $", "", 7), ("P&amp;L $", "", 9.5),
+                ("Balance", "", 9.5), ("Reason", "l gapl", 16.5)]
+        note = (
+            '<p class="chartnote">Every trade this capital took, in entry '
+            'order. <b>Ctr</b> is whole contracts, '
+            '<b>Risk %</b> the risk the opened position ACTUALLY took of '
+            'equity at entry (floor sizing keeps it at or under 1%), '
+            '<b>Costs $</b> the trade&rsquo;s full round turn of '
+            'commission + exchange + NFA fees (sourced in '
+            'execution_costs.py; taxes excluded), already inside '
+            'P&amp;L and Balance.</p>')
     head = "".join(f'<th class="{c}" style="width:{w}%">{lab}</th>'
                    for lab, c, w in cols)
     return (
-        '<p class="chartnote">Every trade this capital took, in entry '
-        'order. <b>Ctr</b> is whole contracts, '
-        '<b>Risk %</b> the risk the opened position ACTUALLY took of '
-        'equity at entry (floor sizing keeps it at or under 1%), '
-        '<b>Costs $</b> the trade&rsquo;s full round turn of commission '
-        '+ exchange + NFA fees (sourced in execution_costs.py; taxes '
-        'excluded), already inside P&amp;L and Balance.</p>'
-        '<div class="tradecard"><div class="tradescroll">'
+        note
+        + '<div class="tradecard"><div class="tradescroll">'
         f'<table class="trades"><thead><tr>{head}</tr></thead>'
         f'<tbody>{"".join(rows)}</tbody></table></div></div>')
 
@@ -580,13 +899,14 @@ def tile(k, v, s, tone=""):
             f'<div class="sub">{s}</div></div>')
 
 
-def section_html(idx, r, all_trades, calendar, links_full, n_open=None):
+def section_html(idx, r, all_trades, calendar, links_full, n_open=None,
+                 micro=False):
     cap = r["cap"]
     taken_idx = sorted(r["money_of"])
     taken = [all_trades[i] for i in taken_idx]
     days, eq, dd, ddc, openpos = daily_series(
         taken, r["eod"], calendar, float(cap))
-    costs = sum(m["cost_rt"] for m in r["money_of"].values())
+    costs = sum(row_cost(m) for m in r["money_of"].values())
 
     # The variant reports' full metric set, per section (Lode,
     # 2026-09-02) -- computed on the TAKEN trades, since those are the
@@ -621,6 +941,15 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None):
              f"{len(wins)} won, {len(losses)} lost"),
         tile("Net R", signed(net_r, 2), "after slippage, taken trades",
              cls(net_r)),
+        (tile("Micro top-ups",
+              f"{sum(m.get('k', 0) for m in r['money_of'].values()):,}"
+              f" ctr",
+              f"on {sum(1 for m in r['money_of'].values()
+                        if m.get('k'))} of {len(taken)} trades;"
+              f" ${sum(m.get('cost_micro_rt', 0.0)
+                       for m in r['money_of'].values()):,.2f} of the"
+              f" costs")
+         if micro else ""),
         tile("Execution costs", money(costs),
              "both sides, in the curve", "neg"),
         tile("vs frictionless ideal",
@@ -682,7 +1011,8 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None):
         f'<div id="op{idx}" class="pane-op"></div>'
         f'</div>'
         + refused_section_html(all_trades, r["refused"], links_full)
-        + blotter_section_html(all_trades, r["money_of"], links_full)
+        + blotter_section_html(all_trades, r["money_of"], links_full,
+                               micro)
     ), days, eq, ddc, openpos
 
 
@@ -813,9 +1143,13 @@ __JS__
 </body></html>"""
 
 
-def build(variant=run_1m_matrix.BASELINE_NAME):
+def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
     trades_in, calendar, open_positions, source = load_variant(variant)
     payload = json.loads(SPECS_JSON.read_text(encoding="utf-8"))
+    route, gates, specs = {}, None, None
+    if micro:
+        route, gates = micro_route()
+        specs, _ = sizing.load_specs()
     # THE LIVE UNIVERSE ONLY (Lode, 2026-09-01): the blotter's ETF and
     # non-updated markets are not traded, so their trades leave before
     # any replay -- exact, the engine runs markets independently.
@@ -841,22 +1175,34 @@ def build(variant=run_1m_matrix.BASELINE_NAME):
               sum(1 for o in open_positions
                   if o["market"] in sizing.LIVE_UNIVERSE))
 
-    ladder = run_ladder(all_trades)
+    ladder = run_ladder(all_trades, route if micro else None, specs)
     sections, series = [], []
     for idx, r in enumerate(ladder):
         html, days, eq, ddc, openpos = section_html(
-            idx, r, all_trades, calendar, links_full, n_open)
+            idx, r, all_trades, calendar, links_full, n_open, micro)
         sections.append(html)
         series.append(dict(eq=[[d, v] for d, v in zip(days, eq)],
                            ddc=[[d, v] for d, v in zip(days, ddc)],
                            op=[[d, v] for d, v in zip(days, openpos)]))
 
     is_base = variant == run_1m_matrix.BASELINE_NAME
+    micro_lede = (
+        " <b>THE MICRO LADDER</b>: every position is topped up toward "
+        "the full 1% with contracts of the routed micro -- but ONLY on "
+        "markets whose micro passed the measured fidelity and "
+        "liquidity gates (see The micro trade-offs below; currently "
+        + esc(", ".join(f"{k}->{r['root']}"
+                        for k, r in sorted(route.items()))
+              or "none")
+        + "), and only micros with sourced execution costs. A refused "
+        "entry here means even ONE MICRO did not fit the budget."
+        if micro else "")
     lede = (
         f"<b>{esc(variant)}</b>"
         + (" (the published baseline, 4th/5th stop, band 000-060)"
            if is_base else " (the hybrid stop, band 020-060)"
            if variant == "variant 5" else "")
+        + micro_lede
         + f": its {len(all_trades)} live-universe "
         f"trades (the 22 futures we trade; ETF and non-updated markets "
         f"dropped before the replay), "
@@ -877,12 +1223,14 @@ def build(variant=run_1m_matrix.BASELINE_NAME):
         f"(sourced 2026-09-01). All times UTC. Rebuilt by refresh step "
         f"capitals1m.")
 
-    out_html = out_path(variant)
+    out_html = out_path(variant, micro)
     html = (PAGE
-            .replace("__VNAME__", esc(variant))
+            .replace("__VNAME__", esc(variant)
+                     + (" &middot; micro stacks" if micro else ""))
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__ARSENAL__", arsenal_html(payload)
+                     + (tradeoffs_html(gates, payload) if micro else "")
                      + costs_html(payload)
                      + hardness_html(all_trades, payload))
             .replace("__TREND__", trend_html(ladder, len(all_trades),
@@ -894,7 +1242,7 @@ def build(variant=run_1m_matrix.BASELINE_NAME):
                 "__SECTIONS__",
                 json.dumps(series, separators=(",", ":")))))
     out_html.write_text(html, encoding="utf-8")
-    print(f"{variant}:")
+    print(f"{variant}{' [micro]' if micro else ''}:")
     for r in ladder:
         print(f"  {cap_label(r['cap']):>6}: {len(r['money_of'])} taken, "
               f"{len(r['refused'])} missed, final ${r['final']:,.0f}, "
@@ -913,3 +1261,11 @@ if __name__ == "__main__":
               f"{out_path(run_1m_matrix.BASELINE_NAME).name})")
     for v in VARIANTS:
         build(v)
+    # The micro ladders need the measured gates; without them the
+    # micro pages are SKIPPED with a note, never built on assumptions.
+    if GATES_JSON.exists():
+        for v in VARIANTS:
+            build(v, micro=True)
+    else:
+        print("micro ladders skipped: no "
+              f"{GATES_JSON.name} (run research_1m_micro.py)")

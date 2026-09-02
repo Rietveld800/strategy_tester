@@ -372,6 +372,46 @@ out of scope. Reading at $250k/1% on the live universe: baseline
 pays $2,720 total (median $24.70/round turn); variant 5 $1,798. At
 x1000 account the residual vs the ideal IS the cost drag,
 quantization and refusals having vanished.
+**THE MICRO LADDERS EXIST SINCE 2026-09-02 EVENING** (Lode approved
+the $22.11 bars purchase; `quickfix1m1dc_capitals_micro_variant_02` /
+`_05.html`, built by the same script whenever
+`output/quickfix1m1dc_micro_gates.json` exists, else skipped with a
+note). THE STRUCTURAL FOUNDATION: a reversal level is a price of the
+underlying and every verified micro quotes in the parent's exact
+price space, so THE LEVELS NEED NO SCALING -- the critical piece is
+the STOP, and the rule is: the micro leg's stop is the parent-space
+stop price rounded to the micro's tick grid AWAY from entry, ON THE
+EXCHANGE'S ABSOLUTE PRICE GRID (never an entry-anchored offset grid
+-- a slipped fill sits off-grid and an order book only accepts grid
+prices), and its risk is denominated on the SAME anchor as the
+parent's R (level-to-stop, entry_first), merely rounded. Equal grids
+give bit-equal distances; coarser grids only ever widen. Booking: a
+stop exit books the micro leg at its own rounded distance, any other
+exit books the parent's per-unit move; each leg's costs are charged
+from the sourced table and REPORTED SPLIT per trade (Full cost /
+Micro cost columns), with the position's composition as a Stack
+column ("2 ES + 3 MES", hover for the micro stop distance).
+**ROUTING IS GATED BY MEASUREMENT** (`research_1m_micro.py`, reads
+the $22.11 micro bars in data_center `data/_micros/`, writes the
+gates JSON + txt): fidelity (coverage >= 90%, median micro-vs-parent
+print diff <= 1 parent tick, p90 <= 2 at OUR entry minutes) and
+liquidity (median entry-minute micro volume >= 2x the largest top-up
+stack). FIRST READING: ONLY MES AND MNQ PASS; MGC/SIL/MHG/QG/MYM/XW
+fail on print divergence (2-4 parent ticks -- partly STALE PRINTS in
+thin minutes, which overstates the tradable spread; the strict
+verdict stands until IB order-book data can prove better), XW also on
+coverage and liquidity. Unsourced fee rows (MJY, MZW, MZC, MNG, 1OZ)
+are excluded outright. A failed gate means FULL CONTRACTS ONLY, never
+a worse assumption. The micro pages open with "The micro trade-offs"
+-- the DISADVANTAGES first, by instruction: the gates table with
+every FAIL named, the cost-multiple table (micro exposure runs 2-4x
+the parent's fees per dollar), the tick grids, and the operational
+caveats. Net effect at first reading: +5 trades at $100k (ES/NQ
+released), roughly cost-neutral elsewhere -- the big refusals (GC,
+SI) stay locked behind failed gates, not behind missing code. The
+arsenal tables on ALL capital pages carry a Tick column since the
+same day.
+
 **THE CAPITAL LADDER IS `build_1m_capital_report.py` -> ONE PAGE PER
 PUBLISHED CONFIGURATION** (Lode, 2026-09-01; split per variant
 2026-09-02): `output/quickfix1m1dc_capitals_variant_02.html` (the

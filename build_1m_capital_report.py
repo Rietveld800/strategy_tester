@@ -1127,7 +1127,11 @@ PAGE_JS = r"""<script>
         priceFormat: { type: 'custom', formatter: pct } });
     });
     mk('op', sec.op, function (c) {
-      return c.addHistogramSeries({ color: cssv('--bars') });
+      // Positions are counted, in or out: the scale steps in INTEGERS
+      // (minMove 1), so the thin gray gridlines land on whole numbers
+      // and never on a 2.50 nobody can hold (Lode, 2026-09-02).
+      return c.addHistogramSeries({ color: cssv('--bars'),
+        priceFormat: { type: 'price', precision: 0, minMove: 1 } });
     });
     // One label column per SECTION so its three time axes align.
     var w = 0;

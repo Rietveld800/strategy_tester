@@ -855,7 +855,11 @@ PAGE_JS = r"""<script>
       priceFormat: { type: 'custom', formatter: pct } });
   });
   mk('op', __OP__, function (c) {
-    return c.addHistogramSeries({ color: cssv('--bars') });
+    // Positions are counted, in or out: the scale steps in INTEGERS
+    // (minMove 1), so the thin gray gridlines land on whole numbers
+    // and never on a 2.50 nobody can hold (Lode, 2026-09-02).
+    return c.addHistogramSeries({ color: cssv('--bars'),
+      priceFormat: { type: 'price', precision: 0, minMove: 1 } });
   });
   // One label column for all panes: force every price scale to the widest
   // one, so the time axes, and with them the month ticks, sit exactly

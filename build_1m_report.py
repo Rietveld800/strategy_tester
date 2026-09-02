@@ -1533,6 +1533,6 @@ if __name__ == "__main__":
         build(variant=args[1], contracts=contracts)
     elif contracts:
         build_baseline_contracts()
-        build(variant="variant 5", contracts=True)
+        build(variant="variant 4", contracts=True)
     else:
         build_baseline()

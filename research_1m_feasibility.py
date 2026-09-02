@@ -141,7 +141,7 @@ def main():
     v2 = json.loads((OUT / "quickfix1m1dc_all.json")
                     .read_text(encoding="utf-8"))["trades"]
     v5 = json.loads((OUT / "quickfix1m1dc_matrix.json")
-                    .read_text(encoding="utf-8"))["trades"]["variant 5"]
+                    .read_text(encoding="utf-8"))["trades"]["variant 4"]
     r2, r5 = per_contract_risks(v2, specs), per_contract_risks(v5, specs)
 
     lines = [

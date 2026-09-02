@@ -402,7 +402,7 @@ def test_combine_applies_the_agreement_rules():
                     reason="set EXIT_SLOW=1 to load every market's bars")
 def test_every_published_trade_reproduces_its_booking():
     samples, _anchors, _rule1, _b, _m = ep.load_samples()
-    trades = samples["variant 2 (published)"]
+    trades = samples["variant 1 (published)"]
     keys = {t["market"] for t in trades}
     runs, ticks, _exc = ep.load_runs(keys)
     rows, failures = ep.profile_rows(trades, runs, ticks)

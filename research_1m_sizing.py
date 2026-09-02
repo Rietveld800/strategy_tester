@@ -47,8 +47,9 @@ over 100% of the account, account-size independent) is preserved in
 the CLAUDE.md record and stays the quantitative case behind that
 exclusion; the code path remains for any future ETF question.
 
-Replays the published baseline (variant 2's blotter,
-quickfix1m1dc_all.json) and variant 5 from the matrix JSON. The event
+Replays the published baseline (variant 1's blotter,
+quickfix1m1dc_all.json; `variant 2` before the 2026-09-03
+renumbering) and variant 4 from the matrix JSON. The event
 ordering mirrors run_1m.portfolio_replay exactly (exits before entries
 at one timestamp), so with the account grown without bound the
 quantized curve converges on the idealized one -- checked and printed.
@@ -289,14 +290,14 @@ def main():
         f" before the replay, which is exact -- markets are"
         f" independent in the engine)",
     ]
-    v2 = live_trades(baseline["trades"])
-    v5 = live_trades(matrix["trades"]["variant 5"])
-    report_config("published baseline (variant 2, 4th/5th stop,"
+    v1 = live_trades(baseline["trades"])
+    v4 = live_trades(matrix["trades"]["variant 4"])
+    report_config("published baseline (variant 1, 4th/5th stop,"
                   " band 000-060), live universe",
-                  v2, specs, args.account, args.risk, lines)
-    report_config("variant 5 (hybrid stop, band 020-060),"
+                  v1, specs, args.account, args.risk, lines)
+    report_config("variant 4 (hybrid stop, band 000-060),"
                   " live universe",
-                  v5, specs, args.account, args.risk, lines)
+                  v4, specs, args.account, args.risk, lines)
 
     text = "\n".join(lines) + "\n"
     out = OUT / "quickfix1m1dc_sizing.txt"

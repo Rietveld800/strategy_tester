@@ -95,7 +95,7 @@ MIN_N = 30                # reading rule 1: below this a horizon is dimmed
 FLAT_R = 0.25             # reading rule / decision 1: point estimate cap
 TOP_SHARE_MAX = 35.0      # reading rule 2: not carried by one market
 DISCONTINUED = frozenset(["CC", "KC", "UDOW", "UNG", "USO"])
-SECONDARY_CELL = "variant 5"
+SECONDARY_CELL = "variant 4"
 PATH_LABEL = {"unconstrained": "signal path (no stop)",
               "truncated": "trade path (stop as booked)"}
 STOP_LABEL = {"ladder": "4th/5th stop", "ladder_or_extreme": "hybrid stop",
@@ -755,13 +755,13 @@ def load_samples():
     blotter = json.loads(BLOTTER.read_text(encoding="utf-8"))
     matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
     samples = {
-        "variant 2 (published)": [t for t in blotter["trades"]
+        "variant 1 (published)": [t for t in blotter["trades"]
                                   if t["reason"] != "data_end"],
         SECONDARY_CELL: [t for t in matrix["trades"][SECONDARY_CELL]
                          if t["reason"] != "data_end"],
     }
     anchors = {
-        "variant 2 (published)": STOP_LABEL[blotter["params"]["stop_mode"]],
+        "variant 1 (published)": STOP_LABEL[blotter["params"]["stop_mode"]],
         SECONDARY_CELL: STOP_LABEL[
             matrix["variants"][SECONDARY_CELL]["dials"]["stop_mode"]],
     }

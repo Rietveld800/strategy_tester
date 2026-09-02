@@ -122,7 +122,7 @@ def main():
     v2 = json.loads((OUT / "quickfix1m1dc_all.json")
                     .read_text(encoding="utf-8"))["trades"]
     v5 = json.loads((OUT / "quickfix1m1dc_matrix.json")
-                    .read_text(encoding="utf-8"))["trades"]["variant 5"]
+                    .read_text(encoding="utf-8"))["trades"]["variant 4"]
     # One measurement set per (market, contract, entry minute): the two
     # blotters overlap heavily and a duplicate minute is not evidence.
     seen, entries = set(), []

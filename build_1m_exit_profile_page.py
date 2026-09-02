@@ -50,7 +50,7 @@ HERE = Path(__file__).resolve().parent
 OUT_HTML = HERE / "output" / "quickfix1m1dc_exit_profile.html"
 CI_REPS = 4000
 
-PAGE_SAMPLES = ("variant 5",)
+PAGE_SAMPLES = ("variant 4",)
 PAGE_UNIVERSES = ("all",)
 PAGE_HORIZONS = [n for n in ep.H_NAMES
                  if not (n.startswith("settle") and int(n[6:]) >= 2)]
@@ -405,7 +405,7 @@ def build():
     parts = [f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
              f"<title>quickfix1m1dc - exit-timing profile (pre-registered)</title>"
              f"<style>{CSS}</style></head><body>",
-             "<h1>quickfix1m1dc &mdash; the exit-timing profile, variant 5 "
+             "<h1>quickfix1m1dc &mdash; the exit-timing profile, variant 4 "
              "(hybrid stop), every taken trade</h1>",
              f"<div class='meta'>study built {esc(data['built'])} &middot; "
              f"pre-registration <code>{esc(data['doc'])}</code> &middot; reading "
@@ -420,10 +420,10 @@ def build():
              "exit moment), and for days 1-12 each session's first print "
              "(openN) and last print (closeN). "
              "<b>This page is one reading of the study.</b> The pre-registered "
-             "study reads two samples (the published variant 2 and variant 5), "
+             "study reads two samples (the published variant 1 and variant 4), "
              "two universes (every taken trade / the 17 surviving markets) and "
              f"{len(ep.H_NAMES)} horizons; the whole of it is in the .txt. This "
-             "page shows ONE of those readings: <b>variant 5</b>, universe "
+             "page shows ONE of those readings: <b>variant 4</b>, universe "
              "<b>all</b> (every taken trade, the discontinued markets CC, KC, "
              f"UDOW, UNG, USO included), at {len(PAGE_HORIZONS)} of the "
              f"{len(ep.H_NAMES)} horizons - settle2 .. settle12 are left out, "
@@ -439,7 +439,7 @@ def build():
              "qualifying trigger, followed as if no stop existed. <i>Trade path "
              "(stop as booked)</i> = the same path frozen at the trade's OWN stop "
              "- the one the blotter recorded at entry, the hybrid stop for "
-             "variant 5, named in each heading - from the first bar after the "
+             "variant 4, named in each heading - from the first bar after the "
              "entry bar that prints it; "
              "no scheduled exit, so a point on it is the position still open "
              "with its stop, marked at that moment. "

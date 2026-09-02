@@ -114,7 +114,8 @@ stop 1s (it reads the matrix JSON), the level study ~55s, charts ~70s. The
 matrix became the full factorial on 2026-08-13 (27 cells; 30 briefly, until
 the extras went on 2026-08-18), quietly grew to ~30 min once the
 geometry-ratio pane's series dominated, and came back down on 2026-08-21
-with the ratio rewrite and the cache; `hybrid1m` builds `variant 5`,
+with the ratio rewrite and the cache; `hybrid1m` builds `variant 4`
+(the hybrid report cell; `variant 5` before 2026-09-03),
 and `levels1m` builds the baseline study. A VARIANT WITH A REPORT
 BELONGS IN THE CHAIN -- a page built once ages out of date beside the
 grid it came from, which is exactly what happened to the hybrid stop
@@ -280,7 +281,7 @@ A sampled week of 1m bars (~$0.66, for liquidity) stays unbought.
 risk"): `build_1m_report.py --contracts` renders the SAME two trade
 lists -- the published baseline and `variant 5` -- with the money layer
 in integer contracts, as
-`output/quickfix1m1dc_contracts_variant_02.html` / `_05.html`. The
+`output/quickfix1m1dc_contracts_variant_01.html` / `_04.html`. The
 sizing arithmetic is IMPORTED from `research_1m_sizing.contract_size`
 (one code path, so the pages and the research reading cannot
 disagree); a taken trade's R is identical to the fractional pages by
@@ -376,7 +377,8 @@ quantization and refusals having vanished.
 NIGHT** (Lode: "4 reports should reduce to 2 ... for each initial
 capital section show the curve when only full contracts are traded
 and the equity curve when combined with mini and micro contracts").
-`quickfix1m1dc_capitals_variant_02/05.html` now carry BOTH sizings
+`quickfix1m1dc_capitals_variant_01/04.html` (`_02/_05` before the
+2026-09-03 renumbering) now carry BOTH sizings
 per section: the combined full+micro replay is the accent curve and
 every headline figure, table and blotter row; the full-contracts-only
 replay draws as the thin gray reference in the equity and drawdown
@@ -451,8 +453,8 @@ finer-tick fill is proven live.
 
 **THE CAPITAL LADDER IS `build_1m_capital_report.py` -> ONE PAGE PER
 PUBLISHED CONFIGURATION** (Lode, 2026-09-01; split per variant
-2026-09-02): `output/quickfix1m1dc_capitals_variant_02.html` (the
-published baseline, from the published blotter) and `_05.html` (the
+2026-09-02): `output/quickfix1m1dc_capitals_variant_01.html` (the
+published baseline, from the published blotter) and `_04.html` (the
 hybrid stop, from the matrix JSON), named by the matrix's own slugs --
 the old single `quickfix1m1dc_capitals.html` is retired and the build
 deletes it. Refresh step `capitals1m` builds both. THE TOP-RUNG
@@ -613,6 +615,24 @@ every cell's curve LEVERED to a constant 6% drawdown (risk solved per
 cell, table carries both bases) on a window-height plot - comparing
 curves at one bet size hands the deepest hole the tallest line (Lode,
 2026-08-11).
+**THE CELL NUMBERS MOVED ON 2026-09-03** (Lode's explicit instruction,
+the one recorded exception to "the numbering never may move"): the
+band axis became SHARED AND UNIFORM -- every anchor runs `000-060` /
+`020-060` / `full` -- replacing the per-anchor ladders of 2026-08-18
+(`000-050` fixed comparison + each anchor's chosen band). With bands
+innermost in the numbering, THE PUBLISHED BASELINE IS NOW `variant 1`
+(4th/5th, 000-060 -- the same dials that were `variant 2`) AND THE
+HYBRID REPORT IS `variant 4` (hybrid at 000-060 -- a CHANGED
+configuration: both report cells now sit at the same band; the old
+published hybrid 020-060 lives on unchanged as `variant 5`, a row in
+the grid). Every report filename follows (`_variant_01` /
+`_variant_04`), the refresh step `hybrid1m` builds variant 4, the
+rule-1 sweep re-measures variants 1 and 4, and the sizing / micro /
+feasibility / exit-profile readings all read variant 4 as the hybrid
+sample. Variant numbers quoted in text dated BEFORE 2026-09-03 use
+the old numbering -- read them against their date. Charter's `?v=`
+slugs follow the matrix JSON on its next charts build.
+
 **THE MATRIX IS A FULL FACTORIAL AND ITS CELLS ARE NUMBERED**
 (2026-08-13, Lode). It used to be one axis (the lockout) with four
 one-dial cells beside it, each NAMED for the dial it moved -- `hybrid
@@ -627,32 +647,31 @@ three EXTRA cells appended after them. **`wick`
 IS the engine's existing `extreme` mode** (confirmed by Lode) -- one
 tick beyond the session's running extreme AT ENTRY, which is the only
 extreme that exists at entry -- so this cost NO engine change. Cells are
-`variant 1` .. `variant 27`, the published baseline is **`variant 2`**
+`variant 1` .. `variant 27`, the published baseline is **`variant 1`**
+(`variant 2` before 2026-09-03, see the renumbering block above)
 and it is an ordinary row: every row carries a checkbox (default on,
 plus all-on / all-off) and the baseline can be switched off like any
 other. Colour is a FAMILY, not an identity: hue is the stop anchor,
-the shade within a hue is the band, lightness is the lockout, the two
-extra BAND cells take the outermost shade of their own anchor's hue,
-and the one 31-market cell is magenta -- outside every family, because
-what makes it different is not one of those three dials.
+the shade within a hue is the band, lightness is the lockout.
 **THE GRID IS THE FACTORIAL AND NOTHING ELSE** (Lode, 2026-08-18). The
 three extras are gone -- `variant 28` (015-020), `variant 29` (025-065)
 and `variant 30` (the market filter's off-state) -- with their reports
-deleted and their refresh steps removed. Numbering below 28 did not move
-and never may: variants 1..27 are read by number in the audit, in
-charter's `?v=` links and in every report filename.
-**THE BAND AXIS IS NESTED UNDER THE STOP ANCHOR** (same day). It was one
-shared ladder, which cannot express what the re-swept grids say: each
-anchor wants its own cuts, and `variant 2` and `variant 5` sit in the
-SAME slot, so a shared axis would force one band on both. Each anchor now
-keeps `000-050` and `full` as fixed comparison points and carries its own
-chosen band in the middle slot -- **4th/5th `000-060`, hybrid `020-060`,
-wick `020-050`** -- so the cross is still 3x3x3. Chosen BROAD on purpose:
-the sweep's best hybrid cell was 0.45-0.55 on 36 trades with 48% of them
-one market (Lode: "too narrow ... we're probably just price-fitting"),
-and 0.65 was left alone for sitting on the edge of the measured region.
-`run_1m.BASELINE` follows `variant 2`, so the published band is
-**0.00-0.60**.
+deleted and their refresh steps removed. Variants 1..27 are read by
+number in the audit, in charter's `?v=` links and in every report
+filename; the numbering held from 2026-08-18 until Lode's own
+renumbering of 2026-09-03 (the block above), and moves for nobody
+else.
+**THE BAND AXIS IS SHARED AND UNIFORM AGAIN SINCE 2026-09-03** (Lode;
+it was nested per anchor from 2026-08-18): every anchor runs
+**`000-060` / `020-060` / `full`**, so anchors compare at the same
+band and both report cells sit at 000-060. The per-anchor history --
+`000-050` as the fixed comparison plus each anchor's own R-cut chosen
+band (4th/5th 000-060, hybrid 020-060, wick 020-050), chosen broad on
+purpose against the price-fitting trap -- is in git and in the audit;
+s.19's caveat that a band measured on one anchor is not evidence
+about the other survives as a reading rule.
+`run_1m.BASELINE` follows `variant 1`, so the published band is
+**0.00-0.60** (unchanged in substance -- only the cell number moved).
 
 
 **THE GEOMETRY RATIO IS NOW READABLE AT EVERY MINUTE, NOT ONLY AT THE
@@ -833,7 +852,7 @@ the only strategy left, with its own report, its own charter overlay
 pyarrow and pytest for this (requirements.txt updated). Run the tests
 with `venv\Scripts\python.exe -m pytest tests -q`.
 
-**THE REPORT IS `build_1m_report.py` -> `output/quickfix1m1dc_report_variant_02.html`**
+**THE REPORT IS `build_1m_report.py` -> `output/quickfix1m1dc_report_variant_01.html`** (`_02` before the 2026-09-03 renumbering)
 (2026-08-06, Lode: "so I can look up the different trades", in the format of
 the daily reports). It rebuilds from `quickfix1m1dc_all.json` alone, no
 backtest, and carries the v2 rule block and dials, the KPI row, the three
@@ -896,11 +915,11 @@ the list it was counted in. `variant_payload()` therefore carries the cell's
 `slug` and `build()` puts it in every row's href. The old dark
 `quickfix1m1dc_equity.html` and `run_1m.build_html` are GONE (2026-08-06) --
 the report says everything they said.
-`build_1m_report.py --variant "variant 5"` builds a report for ANY cell of
+`build_1m_report.py --variant "variant 4"` builds a report for ANY cell of
 `run_1m_matrix.py` straight from the matrix trades, with no extra backtest
 (the matrix already ran every dial over one data load) and under its own
 filename (`run_1m_matrix.variant_slug()`, so
-`output/quickfix1m1dc_report_variant_05.html`). A variant worth keeping a report for
+`output/quickfix1m1dc_report_variant_04.html`). A variant worth keeping a report for
 belongs IN the matrix rather than in a page built once: the hybrid stop was
 left outside it and quietly aged a full grid out of date before anyone
 looked (2026-08-08). Only the published baseline goes through `run_1m.py`, because that

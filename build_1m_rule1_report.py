@@ -7,13 +7,13 @@
 # the (first touch of, or retrace to) the FIRST reversal - on the two
 # published configurations:
 #
-#   4th/5th stop, band 000-060   (the dials of `variant 2`, the baseline)
-#   hybrid stop,  band 020-060   (the dials of `variant 5`)
+#   4th/5th stop, band 000-060   (the dials of `variant 1`, the baseline)
+#   hybrid stop,  band 000-060   (the dials of `variant 4`)
 #
 # Ten cells, each its own engine run over the filtered universe: rule 1
 # decides WHEN a setup arms, so a different count shifts which minute (and
 # which session) triggers, and no blotter filter can reproduce that. The
-# rule-1 = 3 rows ARE variant 2 and variant 5, re-measured on this pass, so
+# rule-1 = 3 rows ARE variant 1 and variant 4, re-measured on this pass, so
 # the page carries its own control. At rule 1 = 1 the setup arms on the
 # first touch of the first reversal itself (added 2026-08-26, Lode): the
 # touch bar needs its close back beyond the level - OHLC cannot order the
@@ -51,15 +51,15 @@ REFRESH_STEP = "reversals1m"
 
 REVERSAL_COUNTS = (1, 2, 3, 4, 5)
 PUBLISHED_COUNT = 3        # the module constant in engine_1m; rows at 3 are
-                           # variant 2 / variant 5 re-measured
+                           # variant 1 / variant 4 re-measured
 # Everything off the sweep axis sits at the published baseline, exactly as
 # the matrix runs it.
 BASE = dict(tighten=False, allow_pre_activation=False, confirm=False,
             max_entries_per_session=1, range_mode="trading_day")
-# The two configurations, each carrying its OWN adopted band - the middle
-# slot of that anchor's ladder in the matrix, never a literal here.
-ANCHORS = [("4th/5th", "variant 2 (published baseline)"),
-           ("hybrid", "variant 5")]
+# The two published configurations -- SLOT 0 of the shared band ladder
+# (000-060 for both anchors since 2026-09-03), never a literal here.
+ANCHORS = [("4th/5th", "variant 1 (published baseline)"),
+           ("hybrid", "variant 4")]
 # Lightness per tested-reversal count, same idea as the matrix's lockout
 # axis: one hue per stop anchor, the published count darkest, and the
 # further from it the lighter.
@@ -70,7 +70,7 @@ def build_cells():
     """The eight cells: (key, props, dials), in table order."""
     out = []
     for label, matrix_cell in ANCHORS:
-        lo, hi = mx.BAND_CUTS_BY_STOP[label][1]
+        lo, hi = mx.BAND_CUTS_BY_STOP[label][0]
         for n in REVERSAL_COUNTS:
             dials = dict(BASE, stop_mode=mx.STOP_MODE_BY_LABEL[label],
                          min_rpu_range_ratio=lo, max_rpu_range_ratio=hi,
@@ -199,12 +199,12 @@ def main():
               f"-> at 6% DD: {m['risk_6pct']}% risk, "
               f"${m['final_6pct']:,.0f}", flush=True)
 
-    # The rule-1 = 3 rows are variant 2 and variant 5; when the matrix JSON
+    # The rule-1 = 3 rows are variant 1 and variant 4; when the matrix JSON
     # is present and on the same data, they must agree - print the check.
     try:
         mjs = json.loads(mx.OUT_JSON.read_text(encoding="utf-8"))
-        for name, vname in (("4th5th r3", "variant 2"),
-                            ("hybrid r3", "variant 5")):
+        for name, vname in (("4th5th r3", "variant 1"),
+                            ("hybrid r3", "variant 4")):
             v = mjs["variants"][vname]
             r = report[name]
             tag = ("MATCH" if (v["trades"], v["net_r"]) ==
@@ -693,8 +693,8 @@ before the setup arms</b>
 session's running extreme; entry is still the retrace to the FIRST
 reversal. This page runs the same model at <b style="color:#222">1, 2, 3,
 4 and 5</b> tested reversals, on the two published configurations - the
-4th/5th stop with its band 000-060 (the dials of variant 2, the published
-baseline) and the hybrid stop with its band 020-060 (variant 5). At
+4th/5th stop with its band 000-060 (the dials of variant 1, the published
+baseline) and the hybrid stop, also at band 000-060 (variant 4). At
 <b style="color:#222">rule 1 = 1</b> the setup arms on the first touch of
 the first reversal itself: the touch bar needs its close back beyond the
 level (OHLC cannot order the events inside one bar), and any later print
@@ -703,8 +703,8 @@ day open is judged against the ladder's second reversal, tested or not.
 Every cell is its own engine run on the filtered universe (22 markets,
 s.16): rule 1 decides WHEN a setup arms, so a different count shifts which
 minute triggers and which session spends its lockout - no blotter filter
-can reproduce that. The rows at rule 1 = 3 (marked *) ARE variant 2 and
-variant 5, re-measured on this pass. Everything else sits at the published
+can reproduce that. The rows at rule 1 = 3 (marked *) ARE variant 1 and
+variant 4, re-measured on this pass. Everything else sits at the published
 baseline: lockout 1, no tightening, overnight window blocked, no
 confirmation clause, trading-day range window.</span>
 <div class="note" style="margin-top:8px"><b style="color:#222">The curves

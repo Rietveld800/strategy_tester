@@ -1260,7 +1260,7 @@ def page(p):
         stop_note = ("the ladder stop OR the session's running extreme at "
                      "entry, <b class=\"k\">whichever is wider</b> "
                      "(<code>ladder_or_extreme</code>, matrix cell "
-                     "<b class=\"k\">variant 5</b>). NOT the published dial.")
+                     "<b class=\"k\">variant 4</b>). NOT the published dial.")
         band_note = ("<b class=\"k\">ADOPTED (Lode): lower 0.20, upper "
                      "0.60</b> is this anchor's own band (audit s.19k, "
                      "2026-08-18) - it no longer borrows the 4th/5th one, and "

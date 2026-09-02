@@ -9,7 +9,8 @@ detailed execution cost per trade. The page opens with the contract
 arsenal (every market's front contract and every verified micro, with
 contract size and the min_account_1pct_stop yardstick, whole dollars)
 and the MISSED-TRADE TREND across the ladder, whose top-rung verdict
-is COMPUTED per variant: variant 2's $2M still misses one trade (GC
+is COMPUTED per variant (numbers below predate the 2026-09-03
+renumbering): variant 2's $2M still misses one trade (GC
 2026-02-02, $19,910 a contract against a budget January's dip left
 $28 short -- the refusal gate reads LIVE equity, not starting
 capital, exactly as at the broker) while variant 5's $2M misses
@@ -65,8 +66,9 @@ CAPITALS = [100_000, 250_000, 500_000, 1_000_000, 2_000_000]
 RISK_PCT = 1.0
 # One ladder per published configuration (Lode, 2026-09-02): the
 # baseline and the hybrid stop, named by the matrix's own slugs
-# (quickfix1m1dc_capitals_variant_02 / _05).
-VARIANTS = [run_1m_matrix.BASELINE_NAME, "variant 5"]
+# (quickfix1m1dc_capitals_variant_01 / _04 since the uniform band axis
+# of 2026-09-03).
+VARIANTS = [run_1m_matrix.BASELINE_NAME, "variant 4"]
 
 
 def out_path(variant):
@@ -1448,8 +1450,8 @@ def build(variant=run_1m_matrix.BASELINE_NAME):
     lede = (
         f"<b>{esc(variant)}</b>"
         + (" (the published baseline, 4th/5th stop, band 000-060)"
-           if is_base else " (the hybrid stop, band 020-060)"
-           if variant == "variant 5" else "")
+           if is_base else " (the hybrid stop, band 000-060)"
+           if variant == "variant 4" else "")
         + micro_lede
         + f": its {len(all_trades)} live-universe "
         f"trades (the 22 futures we trade; ETF and non-updated markets "
@@ -1507,7 +1509,11 @@ if __name__ == "__main__":
     # left to rot beside their replacements.
     for stale in [OUT_DIR / "quickfix1m1dc_capitals.html",
                   OUT_DIR / "quickfix1m1dc_capitals_micro_variant_02.html",
-                  OUT_DIR / "quickfix1m1dc_capitals_micro_variant_05.html"]:
+                  OUT_DIR / "quickfix1m1dc_capitals_micro_variant_05.html",
+                  # the pre-renumbering pages (variants 2/5 -> 1/4,
+                  # 2026-09-03)
+                  OUT_DIR / "quickfix1m1dc_capitals_variant_02.html",
+                  OUT_DIR / "quickfix1m1dc_capitals_variant_05.html"]:
         if stale.exists():
             stale.unlink()
             print(f"removed stale {stale.name} (merged into the"

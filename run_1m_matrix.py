@@ -16,26 +16,28 @@ columns on the page instead of prose in a name:
             ladder_or_extreme / extreme - "wick" is one tick beyond the
             session's running extreme AT ENTRY, above the high for a
             short and below the low for a long)
-  band    : 000-050 / 020-050 / full  (the geometry cut; `full` = dial
-            off), plus the hand-picked bands of two extra cells
+  band    : 000-060 / 020-060 / full  (the geometry cut; `full` = dial
+            off; one SHARED ladder for all three anchors)
   markets : 22 (the human market filter, s.16) / 31 (the whole universe)
 
 27 cells are the full cross of lockout x stop x band on the FILTERED
 universe, and since 2026-08-18 that is the WHOLE grid: the three extra
 cells (`variant 28` 015-020, `variant 29` 025-065, `variant 30` the
 market filter's off-state) were removed at Lode's call along with their
-reports. The published baseline is `variant 2` (lockout 1, 4th/5th,
+reports. The published baseline is `variant 1` (lockout 1, 4th/5th,
 000-060, 22 markets) and it is an ordinary row here: it can be switched
 off on the chart like any other.
 
-THE BAND AXIS IS NESTED UNDER THE STOP ANCHOR (Lode, 2026-08-18), which
-is why the cross is still 3x3x3. Each anchor keeps `000-050` and `full`
-as fixed comparison points and carries its OWN chosen band in the middle
-slot - 4th/5th `000-060`, hybrid `020-060`, wick `020-050` - read off
-that anchor's own re-swept R-cut grid. A shared ladder could not express
-it: `variant 2` and `variant 5` sit in the same slot, so one axis would
-force one band on both anchors, and the band reads the stop anchor's
-output (audit s.19).
+THE BAND AXIS IS SHARED AND UNIFORM SINCE 2026-09-03 (Lode): every
+anchor runs 000-060 / 020-060 / full, so the grid compares anchors at
+the same band and the two report cells sit in slot 0 at 000-060 --
+`variant 1` (4th/5th) and `variant 4` (hybrid). This replaced the
+per-anchor ladders of 2026-08-18 (000-050 fixed comparison plus each
+anchor's own R-cut chosen band), and it MOVED THE MEANING OF THE CELL
+NUMBERS: the published baseline was `variant 2`, the hybrid report was
+`variant 5` (its 020-060 configuration survives unchanged AS
+`variant 5`). Audit s.19's caveat -- a band measured on one anchor is
+not evidence about the other -- still applies as a reading rule.
 
 Everything not on those four axes stays at the published baseline: no
 tightening, overnight window blocked, no confirmation clause. Read the
@@ -138,28 +140,25 @@ def band_label(lo, hi):
     return f"{round(lo * 100):03d}-{round(hi * 100):03d}"
 
 
-# THE BAND AXIS IS PER STOP ANCHOR (Lode, 2026-08-18). It was one shared
-# ladder, which cannot express what the re-swept grids say: under the
-# trading-day window the two anchors want DIFFERENT cuts, and `variant 2`
-# and `variant 5` sit in the same slot of that ladder, so a shared axis
-# could only ever give them the same band. THE BAND READS THE STOP
-# ANCHOR'S OUTPUT (audit s.19) - a band measured on one anchor was never
-# evidence about the other - so the axis being nested under the stop is
-# the honest shape, not a special case.
-#
-# Slot 0 and slot 2 are the fixed comparison points every anchor keeps
-# (`000-050` and the dial OFF). Slot 1 is that anchor's CHOSEN band, read
-# off its own R-cut grid, and it is the slot the published cells sit in:
-# `variant 2` (4th/5th) and `variant 5` (hybrid). Chosen deliberately
-# BROAD rather than at the grid's optimum - the sweep's best hybrid cell
-# was 0.45-0.55 on 36 trades with 48% of them one market, which is the
-# curve-fitting trap the page warns about (Lode: "too narrow ... we're
-# probably just price-fitting"), and 0.65 was left on the table for being
-# on the edge of the measured region.
+# THE BAND AXIS IS SHARED AGAIN, AND UNIFORM (Lode, 2026-09-03: every
+# anchor's slot 0 is `000-060`, every slot 1 is `020-060`, slot 2 stays
+# the dial OFF). The per-anchor ladders of 2026-08-18 (`000-050` as the
+# fixed comparison, plus each anchor's own R-cut chosen band) are
+# retired: with one ladder for all three anchors the grid compares
+# anchors at the SAME band, and the two published report cells sit in
+# slot 0 at `000-060` -- `variant 1` (4th/5th, exactly the published
+# baseline's band) and `variant 4` (hybrid, now also at 000-060; its
+# former 020-060 configuration lives on unchanged as `variant 5`).
+# CONSEQUENCE, DELIBERATE AND ON RECORD: the meanings of the cell
+# NUMBERS moved -- the published baseline is `variant 1` (was
+# `variant 2`) and the hybrid report is `variant 4` (was `variant 5`).
+# The caveat that the ratio's evidence does not carry across stop
+# anchors (audit s.19) still stands as a READING rule; the axis shape
+# no longer encodes it.
 BAND_CUTS_BY_STOP = {
-    "4th/5th": [(0.00, 0.50), (0.00, 0.60), (None, None)],
-    "hybrid":  [(0.00, 0.50), (0.20, 0.60), (None, None)],
-    "wick":    [(0.00, 0.50), (0.20, 0.50), (None, None)],
+    "4th/5th": [(0.00, 0.60), (0.20, 0.60), (None, None)],
+    "hybrid":  [(0.00, 0.60), (0.20, 0.60), (None, None)],
+    "wick":    [(0.00, 0.60), (0.20, 0.60), (None, None)],
 }
 BANDS_BY_STOP = {
     stop: [(band_label(lo, hi),
@@ -205,8 +204,7 @@ STOP_HUE = {"4th/5th": 145, "hybrid": 215, "wick": 25}
 # the same hue (4th/5th 105-165, hybrid 195-255, wick 5-45).
 # Slot 0 / slot 1 / slot 2 of a stop's own ladder, so a cell still reads
 # as its anchor's family whatever cuts that anchor chose.
-BAND_SHIFT = {"000-050": -20, "020-050": 0, "000-060": 0, "020-060": 0,
-              "full": 20}
+BAND_SHIFT = {"000-060": -20, "020-060": 0, "full": 20}
 LOCK_LIGHT = {"1": 32, "2": 46, "none": 61}
 # Kept for the day a cell leaves the 22-market universe again: it would
 # otherwise wear a stop anchor's hue and read as a dial on those axes.
@@ -281,11 +279,12 @@ def build_grid():
 
 
 VARIANTS = build_grid()
-# The published run (lockout 1, 4th/5th, 020-050, 22 markets). It is an
+# The published run (lockout 1, 4th/5th, 000-060, 22 markets). It is an
 # ORDINARY row on the page - it carries a checkbox like every other cell
 # and can be switched off (Lode, 2026-08-13) - and this constant only
-# marks it in the table and the JSON.
-BASELINE_NAME = "variant 2"
+# marks it in the table and the JSON. `variant 1` since the uniform
+# band axis of 2026-09-03 (the same dials sat at `variant 2` before).
+BASELINE_NAME = "variant 1"
 COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 
 # --- the per-market cache (2026-08-21; tail splice added the same day) ------
@@ -1147,20 +1146,17 @@ extreme at entry is further away, <b>wick</b> the running extreme alone -
 a tick above the entry day's high for a short, below its low for a long.
 <b>band</b> = the geometry cut: refuse an entry whose level-to-stop
 distance is outside that fraction of the PREVIOUS TRADING DAY's high-low range
-(<b>full</b> = no cut). THE BAND LADDER IS THE STOP ANCHOR'S OWN: each
-keeps <b>000-050</b> and <b>full</b> as fixed comparison points and
-carries its chosen band in the middle slot &mdash; 4th/5th
-<b>000-060</b>, hybrid <b>020-060</b>, wick <b>020-050</b> &mdash; read
-off that anchor's own R-cut grid under the trading-day window. A band
-measured on one anchor was never evidence about the other.
+(<b>full</b> = no cut). THE BAND LADDER IS SHARED AND UNIFORM since
+2026-09-03: every anchor runs <b>000-060</b> / <b>020-060</b> /
+<b>full</b>, so anchors compare at the same band and the two report
+cells sit at 000-060 &mdash; <b>variant 1</b> (4th/5th) and
+<b>variant 4</b> (hybrid). Keep audit s.19's caveat in mind while
+reading: a band measured on one anchor is not evidence about the
+other.
 
 <b>markets</b>: {len(HUMAN_APPROVED)} = the chart-structure inspection's
 universe (audit s.16, never a judgment on a market's backtest result),
-31 = every market that produced a run. <b>variant 30</b> is the market
-filter's OFF-STATE and the only cell that leaves the filtered universe;
-it sits at lockout 1 / hybrid / 000-050 rather than at the published
-dials, so it pairs with <b>variant 4</b> and the filter is the only
-difference between them.
+31 = every market that produced a run.
 The published baseline is <b>{BASELINE_NAME}</b> (marked *), and it is an
 ordinary row here.
 Read the losing streak and the drawdown first.</span>
@@ -1172,10 +1168,7 @@ cell was allowed to dig. The 1% figures stay in the table beside the
 solved ones. <b style="color:#222">Colour reads as a family</b>: hue is
 the stop anchor (green 4th/5th, blue hybrid, orange wick), the shade
 within a hue is the band, and the lighter the line the looser the
-lockout. The two extra BAND cells take the outermost shade of their own
-anchor's hue, so they still read as part of that family; the one
-31-market cell is magenta, outside every family, because what makes it
-different is not one of those three dials.</div>
+lockout.</div>
 <div id="chart"></div>
 <div id="ctl"><button id="allon">all on</button>
 <button id="alloff">all off</button>

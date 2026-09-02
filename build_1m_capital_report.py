@@ -1102,8 +1102,14 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None,
         tile("Final capital", money(r["final"]),
              f"{signed(100 * (r['final'] / cap - 1), 1)}% return",
              cls(r["final"] - cap)),
+        # "At any trade close", not "intraday" (Lode, 2026-09-03: the
+        # two maxima are near-identical here and that is honest --
+        # equity books only when a trade closes, so this differs from
+        # the closes curve only on multi-exit days; open positions are
+        # NOT marked to market between entry and exit).
         tile("Max drawdown", f"{r['max_dd']:.2f}%",
-             "worst reached intraday"),
+             "worst reached at any trade close; open positions are"
+             " not marked to market"),
         tile("Max drawdown on closes", f"{max(ddc):.2f}%",
              "daily closing balances"),
         tile("Taken / missed", f"{len(taken)} / {len(r['refused'])}",

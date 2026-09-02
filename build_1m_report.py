@@ -1297,7 +1297,13 @@ def build(data=None, out=None, variant=None, contracts=False):
             ("1% risk budget, integer contracts" if contracts
              else f"at {risk}% risk per trade"),
             cls(final - start)),
-        kpi("Max drawdown", f"{max_dd:.2f}%", "worst reached intraday"),
+        # "At any trade close", not "intraday" (Lode, 2026-09-03):
+        # equity books only when a trade closes, so this can exceed the
+        # closes figure only on multi-exit days; open positions are NOT
+        # marked to market between entry and exit.
+        kpi("Max drawdown", f"{max_dd:.2f}%",
+            "worst reached at any trade close; open positions are not"
+            " marked to market"),
         kpi("Max drawdown on closes", f"{max(ddc):.2f}%",
             "daily closing balances"),
     ])

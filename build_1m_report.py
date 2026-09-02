@@ -1498,7 +1498,11 @@ def build(data=None, out=None, variant=None, contracts=False):
             .replace("__LIB__", LIB_PATH.read_text(encoding="utf-8"))
             .replace("__JS__", PAGE_JS
                      .replace("__EQ__", ser(eq))
-                     .replace("__DDC__", ser(ddc))
+                     # Drawdown reads DOWNWARD from zero, like the
+                     # R-cut pages: percent below the peak, negated
+                     # (Lode, 2026-09-03: that is the correct
+                     # visualisation of a drawdown).
+                     .replace("__DDC__", ser([-v for v in ddc]))
                      .replace("__OP__", ser(openpos))))
     out.write_text(html, encoding="utf-8")
     print(f"report: {len(trades)} trades, final ${final:,.2f}, max drawdown "

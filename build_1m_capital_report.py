@@ -1412,14 +1412,17 @@ def build(variant=run_1m_matrix.BASELINE_NAME):
             idx, r, all_trades, calendar, links_full, n_open, micro,
             comparison[idx])
         sections.append(html)
+        # Drawdown reads DOWNWARD from zero, like the R-cut pages:
+        # percent below the peak, negated (Lode, 2026-09-03: that is
+        # the correct visualisation of a drawdown).
         entry = dict(
             eq=[[d, v] for d, v in zip(ser["days"], ser["eq"])],
-            ddc=[[d, v] for d, v in zip(ser["days"], ser["ddc"])],
+            ddc=[[d, -v] for d, v in zip(ser["days"], ser["ddc"])],
             op=[[d, v] for d, v in zip(ser["days"], ser["op"])])
         if ser["eq_f"] is not None:
             entry["eqf"] = [[d, v]
                             for d, v in zip(ser["days_f"], ser["eq_f"])]
-            entry["ddf"] = [[d, v]
+            entry["ddf"] = [[d, -v]
                             for d, v in zip(ser["days_f"], ser["ddc_f"])]
         series.append(entry)
 

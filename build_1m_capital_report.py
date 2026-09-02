@@ -843,12 +843,14 @@ def blotter_section_html(all_trades, money_of_full, links_full,
         if link:
             name = (f'<a href="{link[0]}&amp;t={link[1][i]}" '
                     f'target="_blank">{name}</a>')
+        held_cls = "mono gapl" if micro else "mono"
         common_a = (
             f'<tr><td class="l" data-s="{esc(t["market"])}">{name}</td>'
             f'<td class="l" data-s="{t["side"]}">{t["side"]}</td>'
             f'<td class="l mono" data-s="{t["entry_ts"]}">'
             f'{stamp(t["entry_ts"])}</td>'
-            f'<td class="mono" data-s="{mins:.0f}">{held(mins)}</td>')
+            f'<td class="{held_cls}" data-s="{mins:.0f}">'
+            f'{held(mins)}</td>')
         common_b = (
             f'<td class="mono" data-s="{m["risk_pct"]:.3f}">'
             f'{m["risk_pct"]:.2f}%</td>'
@@ -872,7 +874,8 @@ def blotter_section_html(all_trades, money_of_full, links_full,
             drift = m.get("drift_usd", 0.0)
             rows.append(
                 common_a
-                + f'<td class="l mono" data-s="{m["n"] * 1000 + m["k"]}"'
+                + f'<td class="l mono gapl"'
+                  f' data-s="{m["n"] * 1000 + m["k"]}"'
                   f' title="{tip}">{stack}</td>'
                 + f'<td class="mono" data-s="{m["risk_usd"]:.0f}">'
                   f'{money(m["risk_usd"])}</td>'
@@ -899,12 +902,15 @@ def blotter_section_html(all_trades, money_of_full, links_full,
                   f'{money(m["cost_rt"])}</td>'
                 + common_c)
     if micro:
+        # In (UTC) carries a 16-character mono timestamp and needs the
+        # width; Held takes the gapl so the timestamp's end and the
+        # right-aligned duration never meet (Lode, 2026-09-02).
         cols = [("Market", "l", 8), ("Side", "l", 4.5),
-                ("In (UTC)", "l", 10.5), ("Held", "", 4.5),
-                ("Stack", "l", 10.5), ("Risk $", "", 7),
+                ("In (UTC)", "l", 12.5), ("Held", "gapl", 5.5),
+                ("Stack", "l gapl", 10.5), ("Risk $", "", 6.5),
                 ("Risk %", "", 5.5), ("R", "", 4.5),
-                ("Full cost $", "", 6.5), ("Micro cost $", "", 6.5),
-                ("Drift $", "", 6.5),
+                ("Full $", "", 5.5), ("Micro $", "", 5.5),
+                ("Drift $", "", 5.5),
                 ("P&amp;L $", "", 8), ("Balance", "", 8),
                 ("Reason", "l gapl", 9.5)]
         note = (
@@ -914,7 +920,7 @@ def blotter_section_html(all_trades, money_of_full, links_full,
             'routed micro&rsquo;s top-up (hover a stacked row for the '
             'micro leg&rsquo;s rounded stop distance). <b>Risk %</b> is '
             'what the whole stack ACTUALLY risked of equity at entry; '
-            '<b>Full cost $</b> and <b>Micro cost $</b> are each '
+            '<b>Full $</b> and <b>Micro $</b> are each '
             'leg&rsquo;s round turn of commission + exchange + NFA '
             '(sourced in execution_costs.py; taxes excluded). '
             '<b>Drift $</b> is the MEASURED micro-vs-parent print at '

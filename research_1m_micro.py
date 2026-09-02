@@ -1,4 +1,22 @@
-"""Micro fidelity and liquidity: the gates for micro routing.
+"""Micro fidelity and liquidity: measured per entry, priced not gated.
+
+REVISED 2026-09-02 (Lode: "We could still take the trade and report
+the drift as a cost ... with negative drift it's an advantage. This
+cost can then be incalculated in the equity curve"). Fidelity no
+longer refuses a market -- the measured drift becomes a PRICED
+FRICTION per trade: this script emits, for every parent entry, the
+SIGNED basis (micro close minus parent close, in price units) and the
+micro's own minute volume, and the micro ladders book
+side_sign x basis x point_value x contracts into the curve at entry
+(a cost when the micro is on the wrong side of the parent, a credit
+when it is on the right one). Liquidity is handled per trade too: no
+micro bar at the entry minute means no micro leg for THAT trade, and
+the top-up is capped at half the minute's printed volume. The old
+PASS/FAIL table remains in the output as the drift profile.
+
+Original framing below, kept for the record:
+
+Micro fidelity and liquidity: the gates for micro routing.
 
 Before a single micro contract carries real money, two things are
 MEASURED per market on the bars just bought (data_center
@@ -123,6 +141,7 @@ def main():
     known_syms = set(micro["symbol"].unique())
 
     parent_cache = {}
+    per_entry = {}
     results, lines = {}, [
         "quickfix1m1dc -- micro fidelity and liquidity gates"
         f" (research_1m_micro.py, {datetime.now():%Y-%m-%d %H:%M})",
@@ -148,6 +167,7 @@ def main():
             v = verified[root]
             frac = v["fraction"]
             diffs, vols, matched = [], [], 0
+            primary = root == roots[0]
             for t in trades:
                 sym = micro_symbol(root, t["contract"], key, known_syms)
                 if sym is None:
@@ -170,6 +190,14 @@ def main():
                 matched += 1
                 diffs.append(abs(mclose - pclose) / spec_tick)
                 vols.append(int(row["volume"]))
+                if primary:
+                    # the routed root's per-entry record: SIGNED basis
+                    # in price units (micro minus parent -- the sign is
+                    # applied against the trade's side at replay time)
+                    # and the micro's own printed volume that minute
+                    per_entry[f"{key}|{t['contract']}|{t['entry_ts']}"] = \
+                        dict(root=root, basis=round(mclose - pclose, 10),
+                             volume=int(row["volume"]))
             n = len(trades)
             coverage = matched / n if n else 0.0
             need = LIQ_MULT / frac
@@ -207,24 +235,40 @@ def main():
                 f" {med_v if med_v is not None else 0:>8,.0f}"
                 f" {need:>5.0f}"
                 f"  {'PASS' if passed else 'FAIL: ' + ', '.join(why)}")
-    routed = {k: next((r for r in rs if r["passed"]), None)
+    # ROUTING SINCE THE DRIFT-PRICING REVISION: every market's primary
+    # sourced candidate routes; the drift is priced per trade rather
+    # than gating the market, and a trade with no per-entry record
+    # simply gets no micro leg. The PASS/FAIL verdicts above stay as
+    # the drift profile.
+    routed = {k: dict(root=rs[0]["root"], fraction=rs[0]["fraction"],
+                      tick=rs[0]["tick"])
               for k, rs in results.items()}
-    lines += ["", "== routing (first passing candidate per market):"]
+    lines += ["", "== routing (primary sourced candidate; drift priced"
+              " per trade, not gated):"]
     for k in sorted(results):
         r = routed[k]
-        lines.append(f"  {k:<4} -> " + (f"{r['root']} (1/{round(1 / r['fraction'])})"
-                                        if r else "FULL CONTRACTS ONLY"))
-    lines += ["", "no sourced candidate (full only): 6J, LE, PA, PL, SI"
-              " has SIL" , "unsourced fee rows (excluded until IB):"
+        lines.append(f"  {k:<4} -> {r['root']}"
+                     f" (1/{round(1 / r['fraction'])})")
+    lines += ["",
+              "per-trade rules at replay: no micro bar at the entry"
+              " minute = no micro leg for that trade; top-up capped at"
+              " half the minute's printed volume; entry drift booked"
+              " signed against the side (cost or credit) into the"
+              " curve.",
+              "no sourced candidate (full only): 6J, LE, PA, PL",
+              "unsourced fee rows (excluded until IB):"
               " MJY, MZW, MZC, MNG, 1OZ"]
     payload = dict(
         built=datetime.now().strftime("%Y-%m-%d %H:%M"),
         gates=dict(coverage_min=COVERAGE_MIN,
                    median_ticks_max=MEDIAN_TICKS_MAX,
-                   p90_ticks_max=P90_TICKS_MAX, liq_mult=LIQ_MULT),
+                   p90_ticks_max=P90_TICKS_MAX, liq_mult=LIQ_MULT,
+                   note="informational drift profile since the"
+                        " drift-pricing revision; routing is not"
+                        " gated on these"),
         candidates=results,
-        routing={k: (r["root"] if r else None)
-                 for k, r in routed.items()},
+        routing={k: r["root"] for k, r in routed.items()},
+        per_entry=per_entry,
     )
     GATES_JSON.write_text(json.dumps(payload, indent=1) + "\n",
                           encoding="utf-8")

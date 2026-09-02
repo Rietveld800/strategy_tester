@@ -391,26 +391,36 @@ exit books the parent's per-unit move; each leg's costs are charged
 from the sourced table and REPORTED SPLIT per trade (Full cost /
 Micro cost columns), with the position's composition as a Stack
 column ("2 ES + 3 MES", hover for the micro stop distance).
-**ROUTING IS GATED BY MEASUREMENT** (`research_1m_micro.py`, reads
-the $22.11 micro bars in data_center `data/_micros/`, writes the
-gates JSON + txt): fidelity (coverage >= 90%, median micro-vs-parent
-print diff <= 1 parent tick, p90 <= 2 at OUR entry minutes) and
-liquidity (median entry-minute micro volume >= 2x the largest top-up
-stack). FIRST READING: ONLY MES AND MNQ PASS; MGC/SIL/MHG/QG/MYM/XW
-fail on print divergence (2-4 parent ticks -- partly STALE PRINTS in
-thin minutes, which overstates the tradable spread; the strict
-verdict stands until IB order-book data can prove better), XW also on
-coverage and liquidity. Unsourced fee rows (MJY, MZW, MZC, MNG, 1OZ)
-are excluded outright. A failed gate means FULL CONTRACTS ONLY, never
-a worse assumption. The micro pages open with "The micro trade-offs"
--- the DISADVANTAGES first, by instruction: the gates table with
-every FAIL named, the cost-multiple table (micro exposure runs 2-4x
-the parent's fees per dollar), the tick grids, and the operational
-caveats. Net effect at first reading: +5 trades at $100k (ES/NQ
-released), roughly cost-neutral elsewhere -- the big refusals (GC,
-SI) stay locked behind failed gates, not behind missing code. The
-arsenal tables on ALL capital pages carry a Tick column since the
-same day.
+**THE DRIFT IS PRICED, NOT GATED, SINCE 2026-09-02 LATE** (Lode: "We
+could still take the trade and report the drift as a cost ... with
+negative drift it's an advantage. This cost can then be incalculated
+in the equity curve"). `research_1m_micro.py` (reads the $22.11 micro
+bars in data_center `data/_micros/`) measures every sourced candidate
+at OUR entry minutes and emits a PER-ENTRY record -- the SIGNED basis
+(micro close minus parent close, price units) and the micro's minute
+volume -- beside the old PASS/FAIL table, which stays as the drift
+PROFILE (first measurement: only MES/MNQ under 1 tick median;
+metal/grain micros drift 2-4 parent ticks, partly STALE PRINTS in
+thin minutes, so pricing errs expensive -- the right direction). ALL
+EIGHT sourced markets route (GC->MGC, SI->SIL, HG->MHG, NG->QG,
+ES->MES, NQ->MNQ, YM->MYM, ZW->XW); at replay each trade books
+side_sign x basis x point_value x contracts into the curve AT ENTRY
+(a long pays a micro printing above the parent, a short is paid by
+it), shown per trade as the blotter's Drift column and per section as
+the "Micro drift, net" tile. PER-TRADE LIQUIDITY replaces the market
+gate: no micro bar at the entry minute = no micro leg for that trade,
+and a top-up never exceeds PARTICIPATION_CAP (0.5) of the minute's
+printed volume. Unsourced fee rows (MJY, MZW, MZC, MNG, 1OZ) stay
+excluded, so 6J/LE/PA/PL remain full-only. MEASURED EFFECT (window to
+2026-08-31): $250k AND ABOVE MISS NOTHING on either variant; $100k
+misses only 8 (v2) / 10 (v5) -- all in the no-micro markets. Drift is
+tiny in the money (v2 $250k: 43 micro-legged trades, net $73.50 cost,
+worst $87.50, best -$40.00) against ~$2,700 of commissions; DD stays
+<= 6.2%. The micro pages open with "The micro trade-offs" -- the
+DISADVANTAGES first, by instruction: the drift profile table, the
+cost-multiple table (micro exposure runs 2-4x the parent's fees per
+dollar), the tick grids, the operational caveats. The arsenal tables
+on ALL capital pages carry a Tick column since the same day.
 
 **THE CAPITAL LADDER IS `build_1m_capital_report.py` -> ONE PAGE PER
 PUBLISHED CONFIGURATION** (Lode, 2026-09-01; split per variant

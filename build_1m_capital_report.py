@@ -411,16 +411,23 @@ def tradeoffs_html(gates, payload):
         'price of the underlying and every verified micro quotes in the '
         'parent&rsquo;s exact price space, so the levels themselves '
         'need no scaling &mdash; but four real costs remain. '
-        '<b>(1) Fidelity is measured, not assumed</b>: the table below '
-        'compares the micro&rsquo;s print with the parent&rsquo;s at '
-        'our actual entry minutes, in parent ticks. A market FAILS the '
-        'gate and stays full-contracts-only unless coverage, median and '
-        'p90 all pass. Part of a thin micro&rsquo;s measured gap is a '
-        'STALE PRINT (its last trade in the minute is older than the '
-        'parent&rsquo;s), which overstates the tradable spread &mdash; '
-        'the strict verdict stands anyway until IB order-book data can '
-        'prove better, because real money does not trade on a '
-        'benefit-of-the-doubt. <b>(2) Micro exposure costs a multiple</b>: '
+        '<b>(1) The drift is measured and PRICED, trade by trade</b> '
+        '(Lode, 2026-09-02: take the trade and put the drift in the '
+        'curve): the table below profiles the micro&rsquo;s print '
+        'against the parent&rsquo;s at our actual entry minutes, in '
+        'parent ticks &mdash; and instead of gating the market, each '
+        'trade&rsquo;s own SIGNED basis is booked into the equity '
+        'curve at entry (a cost when the micro sat on the wrong side '
+        'of the parent for our direction, a credit when it sat on the '
+        'right one &mdash; the blotter&rsquo;s Drift column). Part of '
+        'a thin micro&rsquo;s measured gap is a STALE PRINT (its last '
+        'trade in the minute is older than the parent&rsquo;s), which '
+        'overstates the tradable spread; pricing it therefore errs '
+        'expensive, which is the right direction to err. Per-trade '
+        'liquidity rules replace the old market gate: a trade with no '
+        'micro bar at its entry minute gets NO micro leg, and a top-up '
+        'never exceeds half the minute&rsquo;s printed volume. '
+        '<b>(2) Micro exposure costs a multiple</b>: '
         'commissions and fees per dollar of exposure run 2-4x the full '
         'contract (table below) &mdash; a stack of ten micros is the '
         'expensive way to hold one contract. <b>(3) Coarser tick grids '
@@ -534,10 +541,19 @@ def hardness_html(all_trades, payload):
 GATES_JSON = OUT_DIR / "quickfix1m1dc_micro_gates.json"
 
 
+# A micro top-up never takes more than this share of the entry
+# minute's printed volume -- drift pricing answers fidelity, this
+# answers liquidity, trade by trade.
+PARTICIPATION_CAP = 0.5
+
+
 def micro_route():
-    """market -> routed micro leg spec, from the measured gates
-    (research_1m_micro.py). Only markets whose candidate PASSED both
-    fidelity and liquidity route; everything else stays full-only."""
+    """market -> routed micro leg spec plus the per-entry drift map,
+    from the measured study (research_1m_micro.py). Since the
+    drift-pricing revision (Lode, 2026-09-02) every sourced candidate
+    routes; the measured drift is PRICED per trade instead of gating
+    the market, and a trade with no per-entry record gets no micro
+    leg."""
     gates = json.loads(GATES_JSON.read_text(encoding="utf-8"))
     route = {}
     for key, root in gates["routing"].items():
@@ -569,7 +585,7 @@ def rounded_micro_stop(entry, stop, tick):
     return _m.floor(steps + eps) * tick
 
 
-def replay_micro(trades, risk_pct, start, route, specs):
+def replay_micro(trades, risk_pct, start, route, specs, per_entry):
     """The mixed-stack replay: full contracts first, then the routed
     micro tops the remainder up toward the budget. Refused only when
     even one micro does not fit (or the market has no routed micro and
@@ -581,7 +597,19 @@ def replay_micro(trades, risk_pct, start, route, specs):
     base), any other exit books the identical per-unit price move the
     parent leg made (net_r x parent rpu x micro point value). Costs
     are charged per leg per side from the sourced table and reported
-    split."""
+    split.
+
+    THE DRIFT IS PRICED, NOT GATED (Lode, 2026-09-02): the measured
+    signed basis of the micro's print against the parent's at THIS
+    trade's entry minute is booked into the curve at entry --
+    side_sign x basis x point value x contracts, a COST when the micro
+    sat on the wrong side of the parent for our direction and a CREDIT
+    when it sat on the right one. Per-trade liquidity rules: no micro
+    bar at the entry minute means no micro leg for that trade, and the
+    top-up never exceeds PARTICIPATION_CAP of the minute's printed
+    volume. Exits at settlement are treated as aligned (exchange
+    micro settlements track the parent's); stop exits book the micro
+    leg at its own grid-rounded stop distance."""
     events = []
     for i, t in enumerate(trades):
         events.append((pd.Timestamp(t["entry_ts"]), 1, i))
@@ -599,9 +627,12 @@ def replay_micro(trades, risk_pct, start, route, specs):
             budget = equity * risk_pct / 100.0
             n = int(budget // full_risk)
             r = route.get(t["market"])
-            k, rpu_m, pv_m, root = 0, None, None, None
-            if r is not None:
+            rec = per_entry.get(
+                f"{t['market']}|{t['contract']}|{t['entry_ts']}")
+            k, rpu_m, pv_m, root, basis = 0, None, None, None, 0.0
+            if r is not None and rec is not None and rec["volume"] > 0:
                 root = r["root"]
+                basis = rec["basis"]
                 # The SAME risk anchor as the parent's R: level to
                 # stop (entry_first), never the slipped fill -- the
                 # two legs must denominate one distance, the micro's
@@ -612,7 +643,9 @@ def replay_micro(trades, risk_pct, start, route, specs):
                 rpu_m = abs(anchor - stop_m)
                 pv_m = pv_full * r["fraction"]
                 micro_risk = rpu_m * pv_m
-                k = int((budget - n * full_risk) // micro_risk)
+                k = min(int((budget - n * full_risk) // micro_risk),
+                        int(rec["volume"] * PARTICIPATION_CAP))
+                k = max(k, 0)
             if n == 0 and k == 0:
                 refused[i] = dict(per_unit=full_risk, equity=equity,
                                   budget=budget)
@@ -621,12 +654,19 @@ def replay_micro(trades, risk_pct, start, route, specs):
                 t["market"], n, eurusd=sizing.EURUSD) if n else 0.0
             side_m = execution_costs.cost_per_side(
                 root, k, eurusd=sizing.EURUSD) if k else 0.0
-            equity -= side + side_m
+            # the measured entry drift, signed against our side: a
+            # long pays a micro printing above the parent, a short is
+            # paid by it
+            side_sign = 1.0 if t["side"] == "long" else -1.0
+            drift = (side_sign * basis * pv_m * k) if k else 0.0
+            equity -= side + side_m + drift
             risk_usd = n * full_risk + (k * rpu_m * pv_m if k else 0.0)
             m = dict(n=n, k=k, root=root, rpu_m=rpu_m, pv_m=pv_m,
                      full_risk=full_risk, risk_usd=risk_usd,
-                     risk_pct=risk_usd / (equity + side + side_m) * 100.0,
-                     cost_full_rt=2.0 * side, cost_micro_rt=2.0 * side_m)
+                     risk_pct=risk_usd
+                     / (equity + side + side_m + drift) * 100.0,
+                     cost_full_rt=2.0 * side, cost_micro_rt=2.0 * side_m,
+                     drift_usd=drift)
             open_pos[i] = m
         else:
             m = open_pos.pop(i, None)
@@ -651,7 +691,8 @@ def replay_micro(trades, risk_pct, start, route, specs):
             max_dd = max(max_dd, (peak - equity) / peak * 100.0)
             money_of[i] = dict(
                 m, pnl_usd=pnl_full + pnl_micro
-                - m["cost_full_rt"] - m["cost_micro_rt"],
+                - m["cost_full_rt"] - m["cost_micro_rt"]
+                - m["drift_usd"],
                 balance=equity)
             worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
                         (peak - equity) / peak * 100.0)
@@ -661,7 +702,7 @@ def replay_micro(trades, risk_pct, start, route, specs):
 
 # ------------------------------------------------------------- the sections
 
-def run_ladder(all_trades, route=None, specs=None):
+def run_ladder(all_trades, route=None, specs=None, per_entry=None):
     """One refusal-policy replay per capital; with `route`, the
     mixed-stack micro replay instead."""
     out = []
@@ -671,7 +712,8 @@ def run_ladder(all_trades, route=None, specs=None):
                 all_trades, RISK_PCT, float(cap))
         else:
             money_of, eod, final, max_dd, refused = replay_micro(
-                all_trades, RISK_PCT, float(cap), route, specs)
+                all_trades, RISK_PCT, float(cap), route, specs,
+                per_entry or {})
         _, _, ideal_final, ideal_dd = replay(all_trades, RISK_PCT,
                                              float(cap))
         out.append(dict(cap=cap, money_of=money_of, eod=eod, final=final,
@@ -827,6 +869,7 @@ def blotter_section_html(all_trades, money_of_full, links_full,
             tip = (f'micro stop rounded to {m["root"]}\'s grid: risk '
                    f'{m["rpu_m"]:g}/unit vs parent {t["rpu"]:g}'
                    if m["k"] else "no micro leg")
+            drift = m.get("drift_usd", 0.0)
             rows.append(
                 common_a
                 + f'<td class="l mono" data-s="{m["n"] * 1000 + m["k"]}"'
@@ -838,6 +881,11 @@ def blotter_section_html(all_trades, money_of_full, links_full,
                   f'{money(m["cost_full_rt"])}</td>'
                 + f'<td class="mono neg" data-s="{m["cost_micro_rt"]:.2f}">'
                   f'{money(m["cost_micro_rt"])}</td>'
+                + f'<td class="mono {cls(-drift)}" data-s="{drift:.2f}"'
+                  f' title="measured micro-vs-parent print at the entry'
+                  f' minute, signed against the side: positive = paid,'
+                  f' negative = received">'
+                  f'{signed_money(-drift) if drift else "&mdash;"}</td>'
                 + common_c)
         else:
             rows.append(
@@ -851,13 +899,14 @@ def blotter_section_html(all_trades, money_of_full, links_full,
                   f'{money(m["cost_rt"])}</td>'
                 + common_c)
     if micro:
-        cols = [("Market", "l", 8.5), ("Side", "l", 4.5),
-                ("In (UTC)", "l", 11), ("Held", "", 5),
-                ("Stack", "l", 11), ("Risk $", "", 7.5),
-                ("Risk %", "", 6), ("R", "", 5),
+        cols = [("Market", "l", 8), ("Side", "l", 4.5),
+                ("In (UTC)", "l", 10.5), ("Held", "", 4.5),
+                ("Stack", "l", 10.5), ("Risk $", "", 7),
+                ("Risk %", "", 5.5), ("R", "", 4.5),
                 ("Full cost $", "", 6.5), ("Micro cost $", "", 6.5),
-                ("P&amp;L $", "", 8.5), ("Balance", "", 8.5),
-                ("Reason", "l gapl", 11)]
+                ("Drift $", "", 6.5),
+                ("P&amp;L $", "", 8), ("Balance", "", 8),
+                ("Reason", "l gapl", 9.5)]
         note = (
             '<p class="chartnote">Every trade this capital took, in '
             'entry order. <b>Stack</b> is the open position&rsquo;s '
@@ -867,8 +916,13 @@ def blotter_section_html(all_trades, money_of_full, links_full,
             'what the whole stack ACTUALLY risked of equity at entry; '
             '<b>Full cost $</b> and <b>Micro cost $</b> are each '
             'leg&rsquo;s round turn of commission + exchange + NFA '
-            '(sourced in execution_costs.py; taxes excluded), both '
-            'already inside P&amp;L and Balance.</p>')
+            '(sourced in execution_costs.py; taxes excluded). '
+            '<b>Drift $</b> is the MEASURED micro-vs-parent print at '
+            'this trade&rsquo;s entry minute, signed against the side '
+            '&mdash; red is a cost paid for the micro sitting on the '
+            'wrong side of the parent, green a credit for the right '
+            'one. All three are already inside P&amp;L and '
+            'Balance.</p>')
     else:
         cols = [("Market", "l", 9.5), ("Side", "l", 5),
                 ("In (UTC)", "l", 12), ("Held", "", 5.5), ("Ctr", "", 5),
@@ -949,6 +1003,14 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None,
               f" ${sum(m.get('cost_micro_rt', 0.0)
                        for m in r['money_of'].values()):,.2f} of the"
               f" costs")
+         if micro else ""),
+        (tile("Micro drift, net",
+              signed_money(-sum(m.get("drift_usd", 0.0)
+                                for m in r["money_of"].values())),
+              "measured entry prints, signed against the side;"
+              " in the curve",
+              cls(-sum(m.get("drift_usd", 0.0)
+                       for m in r["money_of"].values())))
          if micro else ""),
         tile("Execution costs", money(costs),
              "both sides, in the curve", "neg"),
@@ -1175,7 +1237,8 @@ def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
               sum(1 for o in open_positions
                   if o["market"] in sizing.LIVE_UNIVERSE))
 
-    ladder = run_ladder(all_trades, route if micro else None, specs)
+    ladder = run_ladder(all_trades, route if micro else None, specs,
+                        gates.get("per_entry") if micro else None)
     sections, series = [], []
     for idx, r in enumerate(ladder):
         html, days, eq, ddc, openpos = section_html(
@@ -1188,14 +1251,18 @@ def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
     is_base = variant == run_1m_matrix.BASELINE_NAME
     micro_lede = (
         " <b>THE MICRO LADDER</b>: every position is topped up toward "
-        "the full 1% with contracts of the routed micro -- but ONLY on "
-        "markets whose micro passed the measured fidelity and "
-        "liquidity gates (see The micro trade-offs below; currently "
+        "the full 1% with contracts of the routed micro ("
         + esc(", ".join(f"{k}->{r['root']}"
                         for k, r in sorted(route.items()))
               or "none")
-        + "), and only micros with sourced execution costs. A refused "
-        "entry here means even ONE MICRO did not fit the budget."
+        + "; sourced execution costs only). The measured "
+        "micro-vs-parent DRIFT at each trade's own entry minute is "
+        "PRICED into the curve, signed against the side -- a cost or "
+        "a credit, never a gate (see The micro trade-offs); a trade "
+        "with no micro bar at its entry minute gets no micro leg, and "
+        "a top-up never exceeds half the minute's printed volume. A "
+        "refused entry here means even ONE MICRO did not fit the "
+        "budget."
         if micro else "")
     lede = (
         f"<b>{esc(variant)}</b>"

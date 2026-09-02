@@ -68,10 +68,9 @@ RISK_PCT = 1.0
 VARIANTS = [run_1m_matrix.BASELINE_NAME, "variant 5"]
 
 
-def out_path(variant, micro=False):
-    stem = ("quickfix1m1dc_capitals_micro_" if micro
-            else "quickfix1m1dc_capitals_")
-    return OUT_DIR / f"{stem}{run_1m_matrix.variant_slug(variant)}.html"
+def out_path(variant):
+    return OUT_DIR / (f"quickfix1m1dc_capitals_"
+                      f"{run_1m_matrix.variant_slug(variant)}.html")
 
 
 def load_variant(variant):
@@ -722,7 +721,7 @@ def run_ladder(all_trades, route=None, specs=None, per_entry=None):
     return out
 
 
-def trend_html(ladder, n_all, all_trades):
+def trend_html(ladder, n_all, all_trades, ladder_full=None):
     # The top rung's verdict is COMPUTED, never asserted: variant 2's
     # $2M still misses one trade (GC 2026-02-02 by $28 after January's
     # dip) while variant 5's misses none, and a hardcoded sentence
@@ -747,18 +746,25 @@ def trend_html(ladder, n_all, all_trades):
             f'budget at its moment. The gate reads live equity, not '
             f'starting capital, exactly as it would at the broker. ')
     rows = []
-    for r in ladder:
+    for idx, r in enumerate(ladder):
         taken = len(r["money_of"])
         missed = len(r["refused"])
         costs = sum(row_cost(m) for m in r["money_of"].values())
+        rf = ladder_full[idx] if ladder_full else None
+        full_missed = (
+            f'<td class="mono'
+            f'{" neg" if rf and rf["refused"] else ""}">'
+            f'{len(rf["refused"]) if rf else "&mdash;"}</td>')
         rows.append(
             f'<tr><td class="l mono">{cap_label(r["cap"])}</td>'
             f'<td class="mono">{taken}</td>'
             f'<td class="mono {"neg" if missed else "pos"}">{missed}</td>'
-            f'<td class="mono">{100 * missed / n_all:.0f}%</td>'
+            + full_missed +
             f'<td class="mono">{money(r["final"])}</td>'
             f'<td class="mono {cls(r["final"] / r["cap"] - 1)}">'
             f'{signed(100 * (r["final"] / r["cap"] - 1), 1)}%</td>'
+            f'<td class="mono">'
+            f'{money(rf["final"]) if rf else "&mdash;"}</td>'
             f'<td class="mono">{r["max_dd"]:.2f}%</td>'
             f'<td class="mono">{money(costs)}</td>'
             f'<td class="mono">'
@@ -773,27 +779,31 @@ def trend_html(ladder, n_all, all_trades):
         'contract risked more than 1% of equity <b>at that moment</b> '
         '&mdash; never forced &mdash; and the refusals thin out as '
         'capital grows. ' + top_note +
+        'The <b>full-only</b> columns show the same ladder without the '
+        'micro top-ups: the micros are what close the gap. '
         '<b>vs ideal</b> is the distance to the frictionless fractional '
         'replay at the same capital (quantization + refusals + '
         'execution costs together).</p>'
         '<div class="tradecard"><table class="trades"><thead><tr>'
-        '<th class="l" style="width:11%">Start capital</th>'
-        '<th style="width:10%">Taken</th>'
-        '<th style="width:10%">Missed</th>'
-        '<th style="width:10%">Missed %</th>'
-        '<th style="width:14%">Final</th>'
-        '<th style="width:11%">Return</th>'
-        '<th style="width:11%">Max DD</th>'
-        '<th style="width:12%">Exec costs</th>'
-        '<th style="width:11%">vs ideal</th>'
+        '<th class="l" style="width:10%">Start capital</th>'
+        '<th style="width:8%">Taken</th>'
+        '<th style="width:8%">Missed</th>'
+        '<th style="width:11%">Missed, full-only</th>'
+        '<th style="width:13%">Final</th>'
+        '<th style="width:10%">Return</th>'
+        '<th style="width:13%">Final, full-only</th>'
+        '<th style="width:9%">Max DD</th>'
+        '<th style="width:10%">Exec costs</th>'
+        '<th style="width:8%">vs ideal</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
 
 
 def refused_section_html(all_trades, refused, links_full):
     if not refused:
-        return ('<p class="chartnote"><b>No trade missed at this '
-                'capital.</b> Every blotter entry fit at least one '
-                'contract inside the 1% budget.</p>')
+        return ('<p class="chartnote"><b>No trades were missed at this '
+                'starting capital due to sizing:</b> every blotter '
+                'entry fit at least one contract (full or micro) while '
+                'keeping the total equity risk below 1% per trade.</p>')
     rows = []
     for i in sorted(refused, key=lambda i: all_trades[i]["entry_ts"]):
         t, r = all_trades[i], refused[i]
@@ -960,12 +970,21 @@ def tile(k, v, s, tone=""):
 
 
 def section_html(idx, r, all_trades, calendar, links_full, n_open=None,
-                 micro=False):
+                 micro=False, r_full=None):
     cap = r["cap"]
     taken_idx = sorted(r["money_of"])
     taken = [all_trades[i] for i in taken_idx]
     days, eq, dd, ddc, openpos = daily_series(
         taken, r["eod"], calendar, float(cap))
+    # The FULL-ONLY comparison replay of the same section (Lode,
+    # 2026-09-02: one report, both curves): its equity and drawdown
+    # draw beside the combined lines, its refusal count sits in a tile.
+    if r_full is not None:
+        taken_f = [all_trades[i] for i in sorted(r_full["money_of"])]
+        days_f, eq_f, _, ddc_f, _ = daily_series(
+            taken_f, r_full["eod"], calendar, float(cap))
+    else:
+        days_f = eq_f = ddc_f = None
     costs = sum(row_cost(m) for m in r["money_of"].values())
 
     # The variant reports' full metric set, per section (Lode,
@@ -1020,6 +1039,11 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None,
          if micro else ""),
         tile("Execution costs", money(costs),
              "both sides, in the curve", "neg"),
+        (tile("Full contracts only", money(r_full["final"]),
+              f"{r_full['max_dd']:.2f}% DD,"
+              f" {len(r_full['money_of'])} taken /"
+              f" {len(r_full['refused'])} missed -- the gray curve")
+         if r_full is not None else ""),
         tile("vs frictionless ideal",
              f"{100 * (r['final'] / r['ideal_final'] - 1):+.2f}%",
              f"ideal {money(r['ideal_final'])} at"
@@ -1072,16 +1096,22 @@ def section_html(idx, r, all_trades, calendar, links_full, n_open=None,
         f'{days[-1]}, integer contracts at the 1% budget, refusal '
         f'policy, execution costs in the curve. Step lines on market '
         f'days, like every curve in this project.</div></div>'
-        f'<div class="panelbl">Equity</div><div id="eq{idx}" class="pane-eq"></div>'
-        f'<div class="panelbl">Drawdown &middot; on daily closes</div>'
+        f'<div class="panelbl">Equity &middot; '
+        f'<span style="color:var(--accent-line)">combined full + '
+        f'micro</span> against <span style="color:var(--ink3)">full '
+        f'contracts only</span></div>'
+        f'<div id="eq{idx}" class="pane-eq"></div>'
+        f'<div class="panelbl">Drawdown &middot; on daily closes, both '
+        f'sizings</div>'
         f'<div id="ddc{idx}" class="pane-ddc"></div>'
-        f'<div class="panelbl">Open positions</div>'
+        f'<div class="panelbl">Open positions &middot; combined</div>'
         f'<div id="op{idx}" class="pane-op"></div>'
         f'</div>'
         + refused_section_html(all_trades, r["refused"], links_full)
         + blotter_section_html(all_trades, r["money_of"], links_full,
                                micro)
-    ), days, eq, ddc, openpos
+    ), dict(days=days, eq=eq, ddc=ddc, op=openpos,
+            days_f=days_f, eq_f=eq_f, ddc_f=ddc_f)
 
 
 PAGE_JS = r"""<script>
@@ -1106,32 +1136,49 @@ PAGE_JS = r"""<script>
   var allCharts = [];
   SECTIONS.forEach(function (sec, si) {
     var panes = [];
-    function mk(id, data, add) {
+    function pts(d) {
+      return d.map(function (p) { return { time: p[0], value: p[1] }; });
+    }
+    function mk(id, fill) {
       var el = document.getElementById(id + si);
       var c = LightweightCharts.createChart(el, Object.assign(
         { width: el.clientWidth, height: el.clientHeight - 18 }, opts()));
-      var s = add(c);
-      s.setData(data.map(function (p) {
-        return { time: p[0], value: p[1] };
-      }));
+      fill(c);
       panes.push({ el: el, chart: c });
       allCharts.push({ el: el, chart: c });
     }
-    mk('eq', sec.eq, function (c) {
-      return c.addLineSeries({ color: cssv('--accent-line'),
-        lineWidth: 2, lineType: STEP });
+    // Both sizings in one pane (Lode, 2026-09-02): the combined
+    // full+micro account in the accent colour, full-contracts-only as
+    // the thin gray reference behind it.
+    mk('eq', function (c) {
+      if (sec.eqf) {
+        c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
+          lineType: STEP, priceLineVisible: false,
+          lastValueVisible: false }).setData(pts(sec.eqf));
+      }
+      c.addLineSeries({ color: cssv('--accent-line'),
+        lineWidth: 2, lineType: STEP }).setData(pts(sec.eq));
     });
-    mk('ddc', sec.ddc, function (c) {
-      return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
+    mk('ddc', function (c) {
+      if (sec.ddf) {
+        c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
+          lineType: STEP, priceLineVisible: false,
+          lastValueVisible: false,
+          priceFormat: { type: 'custom', formatter: pct } })
+          .setData(pts(sec.ddf));
+      }
+      c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
         lineType: STEP,
-        priceFormat: { type: 'custom', formatter: pct } });
+        priceFormat: { type: 'custom', formatter: pct } })
+        .setData(pts(sec.ddc));
     });
-    mk('op', sec.op, function (c) {
+    mk('op', function (c) {
       // Positions are counted, in or out: the scale steps in INTEGERS
       // (minMove 1), so the thin gray gridlines land on whole numbers
       // and never on a 2.50 nobody can hold (Lode, 2026-09-02).
-      return c.addHistogramSeries({ color: cssv('--bars'),
-        priceFormat: { type: 'price', precision: 0, minMove: 1 } });
+      c.addHistogramSeries({ color: cssv('--bars'),
+        priceFormat: { type: 'price', precision: 0, minMove: 1 } })
+        .setData(pts(sec.op));
     });
     // One label column per SECTION so its three time axes align.
     var w = 0;
@@ -1215,13 +1262,22 @@ __JS__
 </body></html>"""
 
 
-def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
+def build(variant=run_1m_matrix.BASELINE_NAME):
+    """ONE combined page per variant (Lode, 2026-09-02: four reports
+    reduced to two): every capital section replays BOTH sizings --
+    full contracts only (the gray reference curve) and the combined
+    full+micro stack (the accent curve, the page's headline figures).
+    Without the gates JSON the page falls back to full-only."""
     trades_in, calendar, open_positions, source = load_variant(variant)
     payload = json.loads(SPECS_JSON.read_text(encoding="utf-8"))
+    micro = GATES_JSON.exists()
     route, gates, specs = {}, None, None
     if micro:
         route, gates = micro_route()
         specs, _ = sizing.load_specs()
+    else:
+        print("NOTE: no micro gates JSON -- building full-only "
+              "(run research_1m_micro.py for the combined page)")
     # THE LIVE UNIVERSE ONLY (Lode, 2026-09-01): the blotter's ETF and
     # non-updated markets are not traded, so their trades leave before
     # any replay -- exact, the engine runs markets independently.
@@ -1247,21 +1303,34 @@ def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
               sum(1 for o in open_positions
                   if o["market"] in sizing.LIVE_UNIVERSE))
 
-    ladder = run_ladder(all_trades, route if micro else None, specs,
-                        gates.get("per_entry") if micro else None)
+    ladder_full = run_ladder(all_trades)
+    ladder = (run_ladder(all_trades, route, specs, gates["per_entry"])
+              if micro else ladder_full)
+    comparison = ladder_full if micro else [None] * len(ladder)
     sections, series = [], []
     for idx, r in enumerate(ladder):
-        html, days, eq, ddc, openpos = section_html(
-            idx, r, all_trades, calendar, links_full, n_open, micro)
+        html, ser = section_html(
+            idx, r, all_trades, calendar, links_full, n_open, micro,
+            comparison[idx])
         sections.append(html)
-        series.append(dict(eq=[[d, v] for d, v in zip(days, eq)],
-                           ddc=[[d, v] for d, v in zip(days, ddc)],
-                           op=[[d, v] for d, v in zip(days, openpos)]))
+        entry = dict(
+            eq=[[d, v] for d, v in zip(ser["days"], ser["eq"])],
+            ddc=[[d, v] for d, v in zip(ser["days"], ser["ddc"])],
+            op=[[d, v] for d, v in zip(ser["days"], ser["op"])])
+        if ser["eq_f"] is not None:
+            entry["eqf"] = [[d, v]
+                            for d, v in zip(ser["days_f"], ser["eq_f"])]
+            entry["ddf"] = [[d, v]
+                            for d, v in zip(ser["days_f"], ser["ddc_f"])]
+        series.append(entry)
 
     is_base = variant == run_1m_matrix.BASELINE_NAME
     micro_lede = (
-        " <b>THE MICRO LADDER</b>: every position is topped up toward "
-        "the full 1% with contracts of the routed micro ("
+        " <b>Every section shows BOTH sizings</b>: the gray reference "
+        "curve trades full contracts only; the accent curve -- and "
+        "every headline figure, table and blotter row -- is the "
+        "combined stack, each position topped up toward the full 1% "
+        "with contracts of the routed micro ("
         + esc(", ".join(f"{k}->{r['root']}"
                         for k, r in sorted(route.items()))
               or "none")
@@ -1300,18 +1369,18 @@ def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
         f"(sourced 2026-09-01). All times UTC. Rebuilt by refresh step "
         f"capitals1m.")
 
-    out_html = out_path(variant, micro)
+    out_html = out_path(variant)
     html = (PAGE
-            .replace("__VNAME__", esc(variant)
-                     + (" &middot; micro stacks" if micro else ""))
+            .replace("__VNAME__", esc(variant))
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__ARSENAL__", arsenal_html(payload)
                      + (tradeoffs_html(gates, payload) if micro else "")
                      + costs_html(payload)
                      + hardness_html(all_trades, payload))
-            .replace("__TREND__", trend_html(ladder, len(all_trades),
-                                             all_trades))
+            .replace("__TREND__", trend_html(
+                ladder, len(all_trades), all_trades,
+                ladder_full if micro else None))
             .replace("__SECTIONS__", "".join(sections))
             .replace("__FOOTER__", footer)
             .replace("__LIB__", LIB_PATH.read_text(encoding="utf-8"))
@@ -1319,30 +1388,27 @@ def build(variant=run_1m_matrix.BASELINE_NAME, micro=False):
                 "__SECTIONS__",
                 json.dumps(series, separators=(",", ":")))))
     out_html.write_text(html, encoding="utf-8")
-    print(f"{variant}{' [micro]' if micro else ''}:")
-    for r in ladder:
+    print(f"{variant} (combined{' + full-only' if micro else ' only'}):")
+    for idx, r in enumerate(ladder):
+        f_note = (f", full-only {len(comparison[idx]['refused'])} missed"
+                  if comparison[idx] is not None else "")
         print(f"  {cap_label(r['cap']):>6}: {len(r['money_of'])} taken, "
-              f"{len(r['refused'])} missed, final ${r['final']:,.0f}, "
-              f"DD {r['max_dd']:.2f}%")
+              f"{len(r['refused'])} missed{f_note}, "
+              f"final ${r['final']:,.0f}, DD {r['max_dd']:.2f}%")
     print(f"capital ladder -> {out_html.name} "
           f"({out_html.stat().st_size / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":
-    # One page per published configuration; the old single-variant
-    # filename is retired (renamed to _variant_02, Lode 2026-09-02).
-    stale = OUT_DIR / "quickfix1m1dc_capitals.html"
-    if stale.exists():
-        stale.unlink()
-        print(f"removed stale {stale.name} (renamed to "
-              f"{out_path(run_1m_matrix.BASELINE_NAME).name})")
+    # ONE COMBINED PAGE PER VARIANT (Lode, 2026-09-02: four reports
+    # reduced to two). The retired filenames are deleted rather than
+    # left to rot beside their replacements.
+    for stale in [OUT_DIR / "quickfix1m1dc_capitals.html",
+                  OUT_DIR / "quickfix1m1dc_capitals_micro_variant_02.html",
+                  OUT_DIR / "quickfix1m1dc_capitals_micro_variant_05.html"]:
+        if stale.exists():
+            stale.unlink()
+            print(f"removed stale {stale.name} (merged into the"
+                  f" combined per-variant pages)")
     for v in VARIANTS:
         build(v)
-    # The micro ladders need the measured gates; without them the
-    # micro pages are SKIPPED with a note, never built on assumptions.
-    if GATES_JSON.exists():
-        for v in VARIANTS:
-            build(v, micro=True)
-    else:
-        print("micro ladders skipped: no "
-              f"{GATES_JSON.name} (run research_1m_micro.py)")

@@ -372,11 +372,23 @@ out of scope. Reading at $250k/1% on the live universe: baseline
 pays $2,720 total (median $24.70/round turn); variant 5 $1,798. At
 x1000 account the residual vs the ideal IS the cost drag,
 quantization and refusals having vanished.
-**THE MICRO LADDERS EXIST SINCE 2026-09-02 EVENING** (Lode approved
-the $22.11 bars purchase; `quickfix1m1dc_capitals_micro_variant_02` /
-`_05.html`, built by the same script whenever
-`output/quickfix1m1dc_micro_gates.json` exists, else skipped with a
-note). THE STRUCTURAL FOUNDATION: a reversal level is a price of the
+**THE FOUR LADDER PAGES MERGED INTO TWO COMBINED PAGES, 2026-09-02
+NIGHT** (Lode: "4 reports should reduce to 2 ... for each initial
+capital section show the curve when only full contracts are traded
+and the equity curve when combined with mini and micro contracts").
+`quickfix1m1dc_capitals_variant_02/05.html` now carry BOTH sizings
+per section: the combined full+micro replay is the accent curve and
+every headline figure, table and blotter row; the full-contracts-only
+replay draws as the thin gray reference in the equity and drawdown
+panes and appears as a "Full contracts only" KPI tile
+(final/DD/taken/missed) and as the trend table's "Missed, full-only"
+and "Final, full-only" columns. The refused table shows the COMBINED
+replay's misses (the $100k sections); a section with none states
+"No trades were missed at this starting capital due to sizing" in so
+many words. The `_micro_` filenames are retired and deleted on build;
+without the gates JSON the page falls back to full-only with a note.
+`capitals1m` builds the two pages (cheaper than the four).
+THE MICRO MACHINERY (approved $22.11 bars purchase, same day): THE STRUCTURAL FOUNDATION: a reversal level is a price of the
 underlying and every verified micro quotes in the parent's exact
 price space, so THE LEVELS NEED NO SCALING -- the critical piece is
 the STOP, and the rule is: the micro leg's stop is the parent-space

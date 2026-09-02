@@ -433,6 +433,21 @@ DISADVANTAGES first, by instruction: the drift profile table, the
 cost-multiple table (micro exposure runs 2-4x the parent's fees per
 dollar), the tick grids, the operational caveats. The arsenal tables
 on ALL capital pages carry a Tick column since the same day.
+**THE ALL-IN FRICTION TABLE** (Lode, 2026-09-02 late: XW's tick is
+HALF of ZW's -- "it could possibly be cheaper to trade the micro").
+Calculated on the pages from the engine's own slip constants, the
+validated tick values and the sourced fees: fees + slippage per
+full-contract-equivalent round turn, assuming the micro slips the
+same count of ITS OWN ticks. Point value cancels, so the verdict
+hangs on TICK SIZES alone: same-tick micros lose by their fee
+multiple (+$8-22/RT), coarser ones lose twice over (QG +$126/RT), and
+ONLY the finer-tick minis win -- XW is CHEAPER than ZW by $5.69
+(scheduled exit) / $11.94 (stop) per round turn. The counterweight
+today: XW's measured median entry drift is $18.75 per full-equiv per
+side (thin prints, partly stale-print artifact), which wipes the
+saving on current data -- IB book data is the retest, and the replay
+deliberately keeps parent-tick slippage for both legs until the
+finer-tick fill is proven live.
 
 **THE CAPITAL LADDER IS `build_1m_capital_report.py` -> ONE PAGE PER
 PUBLISHED CONFIGURATION** (Lode, 2026-09-01; split per variant

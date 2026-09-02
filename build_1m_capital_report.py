@@ -42,6 +42,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import engine_1m
 import execution_costs
 import run_1m
 import run_1m_matrix
@@ -445,7 +446,99 @@ def tradeoffs_html(gates, payload):
         'per side, per full-contract-equivalent, against the parent; '
         'and the tick grids.</p>'
         f'<div class="tradecard"><table class="trades"><thead>{chead}'
-        f'</thead><tbody>{"".join(c_rows)}</tbody></table></div>')
+        f'</thead><tbody>{"".join(c_rows)}</tbody></table></div>'
+        + friction_html(gates, payload))
+
+
+def friction_html(gates, payload):
+    """ALL-IN friction per full-contract-equivalent round turn (Lode,
+    2026-09-02: XW's tick is HALF of ZW's, and slippage is charged in
+    ticks -- could the mini actually be CHEAPER? Calculated): fees plus
+    slippage, where the slippage term assumes the micro slips the SAME
+    NUMBER of ITS OWN ticks as the full contract does of its own.
+    Because point value per full-equivalent cancels, the whole
+    comparison reduces to the TICK SIZES: a same-tick micro can only
+    lose by its fee multiple, a coarser one loses twice over, and only
+    a FINER tick (XW, XC) can win. The measured median entry drift per
+    full-equivalent sits beside the verdict -- it is the counterweight
+    today, and a stale-print artifact IB book data can retest."""
+    markets = payload["markets"]
+    e, sc, st = (engine_1m.ENTRY_SLIP_TICKS,
+                 engine_1m.SLIP_SCHEDULED_TICKS,
+                 engine_1m.SLIP_STOP_TICKS)
+    from statistics import median as _med
+    rows = []
+    for key in sorted(gates["candidates"]):
+        s = markets[key]
+        pv_f = sizing.usd_point_value(s)
+        tvf = s["tick"] * pv_f
+        fee_f = 2 * execution_costs.cost_per_side(
+            key, 1, eurusd=sizing.EURUSD)
+        for c in gates["candidates"][key]:
+            root, frac = c["root"], c["fraction"]
+            try:
+                fee_m = 2 * execution_costs.cost_per_side(root, 1) / frac
+            except (KeyError, ValueError):
+                continue
+            tvm_eq = c["tick"] * pv_f  # micro tick value per full-equiv
+            sched_f = (e + sc) * tvf + fee_f
+            sched_m = (e + sc) * tvm_eq + fee_m
+            stop_f = (e + st) * tvf + fee_f
+            stop_m = (e + st) * tvm_eq + fee_m
+            pe = [abs(v["basis"]) for k2, v in
+                  gates.get("per_entry", {}).items()
+                  if k2.startswith(key + "|") and v["root"] == root]
+            drift = _med(pe) * pv_f if pe else None
+            d_sched, d_stop = sched_m - sched_f, stop_m - stop_f
+            if d_sched < 0:
+                verdict = (f"micro CHEAPER: {money(-d_sched)} (sched)"
+                           f" / {money(-d_stop)} (stop) per round turn"
+                           f" -- finer tick beats the fee multiple")
+                tone = "pos"
+            else:
+                verdict = (f"full cheaper by {money(d_sched)} (sched)"
+                           f" / {money(d_stop)} (stop)")
+                tone = "neg"
+            rows.append(
+                f'<tr><td class="l">{esc(key)}</td>'
+                f'<td class="l mono">{esc(root)}</td>'
+                f'<td class="mono">{fee_f:,.2f}</td>'
+                f'<td class="mono">{fee_m:,.2f}</td>'
+                f'<td class="mono">{sched_f:,.2f}</td>'
+                f'<td class="mono">{sched_m:,.2f}</td>'
+                f'<td class="mono">{stop_f:,.2f}</td>'
+                f'<td class="mono">{stop_m:,.2f}</td>'
+                f'<td class="mono">'
+                f'{f"{drift:,.2f}" if drift is not None else "&mdash;"}'
+                f'</td>'
+                f'<td class="l gapl {tone}">{verdict}</td></tr>')
+    head = ('<tr><th class="l" style="width:5%">Mkt</th>'
+            '<th class="l" style="width:6%">Root</th>'
+            '<th style="width:8%">Fees RT, full</th>'
+            '<th style="width:8%">Fees RT, micro-eq</th>'
+            '<th style="width:9%">All-in sched, full</th>'
+            '<th style="width:9%">All-in sched, micro-eq</th>'
+            '<th style="width:9%">All-in stop, full</th>'
+            '<th style="width:9%">All-in stop, micro-eq</th>'
+            '<th style="width:9%">Med entry drift</th>'
+            '<th class="l gapl" style="width:28%">Verdict</th></tr>')
+    return (
+        '<p class="chartnote"><b>All-in friction per '
+        'full-contract-equivalent round turn</b> &mdash; fees PLUS '
+        f'slippage ({e} ticks entry + {sc} scheduled exit or {st} '
+        'stop, at each instrument&rsquo;s OWN tick value), assuming '
+        'the micro slips the same count of its own ticks as the full '
+        'contract does. The point value cancels, so the verdict hangs '
+        'on the TICK SIZES alone: only a FINER micro tick (XW, XC) can '
+        'beat its fee multiple. <b>Med entry drift</b> is the measured '
+        'micro-vs-parent print per full-equivalent, ONE side &mdash; '
+        'today&rsquo;s counterweight on thin roots, partly stale-print '
+        'artifact, retestable with IB book data. The replay pages '
+        'deliberately keep parent-tick slippage for both legs until '
+        'the finer-tick fill is proven live.</p>'
+        f'<div class="tradecard"><div class="tradescroll">'
+        f'<table class="trades"><thead>{head}</thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div></div>')
 
 
 def hardness_html(all_trades, payload):

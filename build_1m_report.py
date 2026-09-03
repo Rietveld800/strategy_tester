@@ -886,8 +886,7 @@ def study_title(link, i):
         return "no row in the 1m study for this entry (the stopped list " \
                "never took it); opens the market"
     return f"trade {n} in the 1m study" + (
-        " (the stopped trade sharing this entry minute)"
-        if link[3] else "")
+        " (numbered through the list charter holds)" if link[3] else "")
 
 
 def study_links(all_trades, vslug, numbering=None):
@@ -935,20 +934,40 @@ def study_links(all_trades, vslug, numbering=None):
     return out
 
 
-def blotter_html(trades, money_of, links, contracts=False, micro=False):
+def mf_cell(market):
+    """The MF column: did the market pass the human market filter."""
+    if market in run_1m.HUMAN_APPROVED:
+        return '<td class="l pos" data-s="passed">passed</td>'
+    return '<td class="l neg" data-s="no pass">no pass</td>'
+
+
+def blotter_html(trades, money_of, links, contracts=False, micro=False,
+                 mf=False):
     """`contracts` adds the position-size column; `micro` (the combined
     full+micro stack) renders it as the STACK with the risk the position
     actually took and its costs, the columns Lode asked the contracts
-    pages to carry (2026-09-03)."""
-    if contracts and micro:
+    pages to carry (2026-09-03). `mf` adds the MARKET FILTER column
+    (same evening): `passed` for a market of the human filter's
+    universe, `no pass` for one trading only because the filter is
+    lifted on that page."""
+    if contracts and micro and mf:
+        # Sixteen columns; the timestamps keep their width (they are the
+        # widest strings), the rest give up a little; sums to 100.
+        cols = [("Market", "l", 7), ("Side", "l", 4.5),
+                ("In (UTC)", "l", 10.5), ("Out (UTC)", "l", 10.5),
+                ("Held", "", 4), ("In", "", 6), ("Out", "", 6),
+                ("Stop", "", 6), ("R/24h", "", 4.5), ("Stack", "l", 7),
+                ("Risk %", "", 5), ("R", "", 4.5), ("Costs $", "", 5),
+                ("P&amp;L $", "", 5.5), ("Reason", "l", 8), ("MF", "l", 5.5)]
+    elif contracts and micro:
         # Stack, actual risk % and costs are the subject of the page, so
         # the price columns each give up a little width; sums to 100.
         cols = [("Market", "l", 8), ("Side", "l", 4.5),
                 ("In (UTC)", "l", 10.5), ("Out (UTC)", "l", 10.5),
-                ("Held", "", 5), ("In", "", 6.5), ("Out", "", 6.5),
-                ("Stop", "", 6.5), ("R/24h", "", 5), ("Stack", "l", 8.5),
+                ("Held", "", 4.5), ("In", "", 6.5), ("Out", "", 6.5),
+                ("Stop", "", 6.5), ("R/24h", "", 5), ("Stack", "l", 8),
                 ("Risk %", "", 5), ("R", "", 5), ("Costs $", "", 5.5),
-                ("P&amp;L $", "", 6), ("Reason", "l", 7)]
+                ("P&amp;L $", "", 6), ("Reason", "l", 8)]
     elif contracts:
         # The extra column is the whole point of a contracts page, so the
         # others each give up a little width; still sums to 100.
@@ -967,6 +986,15 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False):
         f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
         f'<span class="ar"></span></th>'
         for i, (lab, c, w) in enumerate(cols))
+    # THE DENSE CONTRACTS BLOTTER WRAPS ITS TEXT CELLS (Lode, 2026-09-03
+    # evening: "view in the browser whether the spacing works out"): at
+    # fifteen or sixteen fixed-layout columns a timestamp no longer fits
+    # its column on one line and ran into its neighbour, and "Day-2
+    # settlement" ran into the MF cell. The stylesheet's cells default
+    # to nowrap and OVERFLOW rather than wrap; `wrap` opts a cell back
+    # in, so the date sits over its time and the reason takes two lines
+    # where it must. The fractional blotter (twelve columns) fits as is.
+    wrap = " wrap" if contracts else ""
     rows = []
     for t in sorted(range(len(trades)), key=lambda k: trades[k]["entry_ts"]):
         tr = trades[t]
@@ -1037,9 +1065,9 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False):
             f'<tr>'
             f'<td class="l" data-s="{name}">{cell}</td>'
             f'<td class="l" data-s="{tr["side"]}">{tr["side"]}</td>'
-            f'<td class="l mono" data-s="{tr["entry_ts"]}">'
+            f'<td class="l mono{wrap}" data-s="{tr["entry_ts"]}">'
             f'{stamp(tr["entry_ts"])}</td>'
-            f'<td class="l mono" data-s="{tr["exit_ts"]}">'
+            f'<td class="l mono{wrap}" data-s="{tr["exit_ts"]}">'
             f'{stamp(tr["exit_ts"])}</td>'
             f'<td class="mono" data-s="{mins:.0f}">{held(mins)}</td>'
             f'<td class="mono" data-s="{tr["entry"]}">{price(tr["entry"])}</td>'
@@ -1053,9 +1081,10 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False):
             f'{cost_cell}'
             f'<td class="mono {cls(m["pnl_usd"])}" data-s="{m["pnl_usd"]:.2f}">'
             f'{signed_money(m["pnl_usd"])}</td>'
-            f'<td class="l" data-s="{tr["reason"]}">'
+            f'<td class="l{wrap}" data-s="{tr["reason"]}">'
             f'{REASON_TEXT.get(tr["reason"], tr["reason"])}</td>'
-            f'</tr>')
+            + (mf_cell(tr["market"]) if mf else "")
+            + f'</tr>')
     return (f'<div class="tradecard"><div class="tradescroll">'
             f'<table class="trades" data-sort="2" data-dir="1">'
             f'<thead><tr>{head}</tr></thead>'
@@ -1749,12 +1778,16 @@ def companion_payload(name, tag, check_against=None):
              "no-mf no-stop": "without market filter, no stop order"}[tag]
     return dict(
         strategy=f"quickfix1m1dc [{name}, {label}]",
-        # the CELL's slug: charter holds that list, and a companion's rows
-        # link through the cell's trade sharing their entry minute
-        slug=v.get("slug") or run_1m_matrix.variant_slug(name),
-        # the cell's own trade list, which numbers charter's study
-        study_numbering=sorted(m["trades"][name],
-                               key=lambda t: t["entry_ts"]),
+        # THE COMPANION'S OWN SLUG (2026-09-03 evening, Lode: the rows
+        # must link to the 1-minute chart): charter's study ships every
+        # companion list beside the cells, keyed by this slug, so a row
+        # here opens ITS OWN trade - including on the markets the cells
+        # never traded. (Until then a companion's rows went through the
+        # cell's trade sharing the entry minute, which had nothing to
+        # point at on those markets.)
+        slug=block.get("slug") or (run_1m_matrix.variant_slug(name)
+                                   + "_" + tag.replace("-", "_")
+                                   .replace(" ", "_")),
         filter_lifted="no-mf" in tag,
         params=dict(m["params"], activation_utc="07:35",
                     stop="see stop_mode", **block["dials"]),
@@ -1817,9 +1850,6 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
     published = data["portfolio"]
     vslug = data.get("slug")
     filter_lifted = bool(data.get("filter_lifted"))
-    # The list that numbers charter's study: a companion payload names
-    # the cell's own list, every other page is that list itself.
-    study_numbering = data.get("study_numbering")
     calendar = data.get("calendar")
     if not calendar:
         calendar = run_1m.calendar_fallback(data["trades"])
@@ -1884,6 +1914,11 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                       for t in pl["trades"])
     stopped_keys = entry_keys(data["trades"])
     nostop_keys = entry_keys(nostop["trades"]) if nostop else set()
+
+    # The MF column rides on the lifted-filter contracts pages, where a
+    # row can be either; on the published pages every row would read
+    # `passed`, so the column stays off there.
+    mf_col = contracts and micro and filter_lifted
 
     def account(payload, stopped, sfx, links_full):
         """Everything one trade list's shared account renders: the
@@ -2160,10 +2195,13 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
             f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of "
             "slippage; P&amp;L is this trade's share of the shared account."
             + ("" if stopped else
-               " The study holds the STOPPED list, so a row here opens the "
-               "stopped trade that shares its entry minute (the same entry, "
-               "drawn with the stop it does not have here); an entry the "
-               "stopped run never took opens the market alone.")
+               " The study holds this account&rsquo;s own list, so a row "
+               "opens this trade as it was booked here, without a stop.")
+            + (" <b>MF</b> says whether the market passed the human market "
+               "filter (audit s.16): <b>passed</b> markets are the "
+               "published universe, <b>no pass</b> markets trade on this "
+               "page only because the filter is lifted."
+               if mf_col else "")
             + (" <b>Stack</b> is the open position&rsquo;s composition, full "
                "contracts of the parent plus the routed micro&rsquo;s "
                "top-up (hover it for the dollar risk and the micro "
@@ -2266,7 +2304,8 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                                                stopped))
                 .replace("__BLOTNOTE__", blotnote)
                 .replace("__BLOTTER__", blotter_html(trades, money_of, links,
-                                                     contracts, micro))
+                                                     contracts, micro,
+                                                     mf_col))
                 .replace("__MKTNOTE__", mktnote)
                 # The "Not tested" list is the arsenal's job on a
                 # contracts page (Lode, 2026-09-03: confusing beside the
@@ -2307,15 +2346,17 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
 
     # The stopped account (the published list) numbers charter's study;
     # the no-stop rows link through the stopped trade sharing their entry.
-    numbering = (sizing.live_trades(study_numbering) if contracts
-                 else study_numbering) if study_numbering else None
-    links_stopped = study_links(data["trades"], vslug, numbering=numbering)
+    # Every account links through ITS OWN list and slug: charter's study
+    # holds the cells and every companion (2026-09-03 evening), so a
+    # no-stop row opens the no-stop trade, drawn without the stop it does
+    # not have, and a lifted-filter row opens its trade on a market the
+    # cells never entered.
+    links_stopped = study_links(data["trades"], vslug)
     html_s, series_s, s_info = account(data, True, "", links_stopped)
     blocks, sections = [html_s], [series_s]
     n_info = None
     if nostop:
-        links_ns = study_links(nostop["trades"], vslug,
-                               numbering=numbering or data["trades"])
+        links_ns = study_links(nostop["trades"], nostop.get("slug") or vslug)
         html_n, series_n, n_info = account(nostop, False, "ns", links_ns)
         # The no-stop account FIRST (Lode: "above the equity curve we
         # currently see"), the stopped one under it.

@@ -426,6 +426,22 @@ no list for the six extra markets, so those rows link to the market
 alone). cache_version 5 (one full rebuild); four extra engine passes
 per recomputed market. The published pages keep the filter; these
 measure what it costs or saves.
+**EVERY ACCOUNT LINKS TO ITS OWN LIST IN CHARTER'S STUDY, AND THE
+LIFTED PAGES CARRY AN `MF` COLUMN** (Lode, 2026-09-03 evening: "we need
+the trades to be linked to the 1-minute chart. That's not always the
+case in our new reports"). Each companion block carries a `slug`
+(`variant_01_no_stop`, `variant_01_no_mf`, `variant_01_no_mf_no_stop`,
+same for 04) and charter's `chart_trades_1m.load_variants` ships the
+companions beside the cells (one reader, `companion=True`), so a
+no-stop row opens the no-stop trade and a lifted-filter row opens its
+trade on corn, sugar, the bund -- markets the cells never entered. The
+proxy-through-the-stopped-trade numbering of the same morning is gone.
+`MF` (`passed` / `no pass`, off `run_1m.HUMAN_APPROVED`) rides on the
+lifted-filter contracts blotters only; on the published pages every
+row would read passed. THE DENSE CONTRACTS BLOTTER WRAPS ITS TEXT
+CELLS (`wrap` on In/Out/Reason): at 15-16 fixed-layout columns the
+timestamps overflowed into each other and the reason into MF; checked
+in Chrome, the date now sits over its time.
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

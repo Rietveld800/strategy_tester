@@ -1076,6 +1076,10 @@ def main():
         wins = sum(1 for t in trades if t["net_r"] > 0)
         block = dict(
             name=name, tag=tag, dials=dials, props=props,
+            # charter's study keys trade lists by slug; a companion's is
+            # the cell's slug plus its tag, so `variant_01_no_mf`.
+            slug=variant_slug(shadow) + "_"
+                 + re.sub(r"[^a-z0-9]+", "_", tag.lower()).strip("_"),
             markets=sorted(markets) if markets is not None else None,
             markets_run=len(results[name]["rows"]),
             trades_n=len(trades),

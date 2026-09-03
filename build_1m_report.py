@@ -2046,17 +2046,13 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
             risks_pct = sorted(m["risk_pct"] for m in money_of.values())
             med_risk = risks_pct[len(risks_pct) // 2] if risks_pct else 0.0
             delta = 100 * (final / ideal_final - 1)
-            # THE BRIDGE FROM R TO MONEY (Lode, 2026-09-03 evening: "102.6R
-            # won against 95.7R lost ... but the final capital is not
-            # representing that at all"). Net R counts every trade at a
-            # flat 1R; the account sized each trade in whole contracts, so
-            # a cheap contract fills the budget exactly while an expensive
-            # one is floored below it. Sum net_r x realized risk% is what
-            # the R actually earned in percent of equity before compounding
-            # and fees - when won R and lost R are nearly balanced, that
-            # sizing asymmetry alone can flip the sign.
-            r_realized = sum(t["net_r"] * money_of[i]["risk_pct"]
-                             for i, t in enumerate(trades))
+            # No "R at a flat 1%" tile here (Lode, 2026-09-03 evening: the
+            # contracts pages are about scaling the position in contracts
+            # and should never refer to a flat 1%; the blotter's Risk %
+            # column is where each trade's realized size is read). The
+            # reconciliation is in the commit history: with won and lost
+            # R nearly balanced, cheap contracts filling the budget and
+            # expensive ones floored below it can flip the money's sign.
             if micro:
                 fees = sum(m["cost_full_rt"] + m["cost_micro_rt"]
                            for m in money_of.values())
@@ -2071,11 +2067,6 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                     signed(delta, 2) + "%",
                     f"ideal {money(ideal_final)} at {ideal_dd:.2f}% DD, same"
                     f" account, all {len(all_trades)} trades", cls(delta)),
-                kpi("Net R at realized size", f"{r_realized:+.2f}%",
-                    f"of equity, sum of R x each trade's realized risk,"
-                    f" before compounding and fees; {signed(net_r, 2)}R"
-                    f" at a flat 1% would be {signed(net_r, 2)}%",
-                    cls(r_realized)),
                 kpi("Realized risk (median)", f"{med_risk:.2f}%",
                     f"of the {risk:g}% budget; what the stack actually"
                     f" risked of equity at entry, never above it"

@@ -960,6 +960,183 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False):
             f'<tbody>{"".join(rows)}</tbody></table></div></div>')
 
 
+# The MIC codes the definitions carry, in the venue-family form Lode
+# asked the arsenal to show (2026-09-02). CME's four exchanges all
+# trade on Globex, hence one family. Shared with the capital ladder.
+EXCHANGE_LABEL = {"XCME": "CME/GLBX", "XCEC": "COMEX/GLBX",
+                  "XNYM": "NYMEX/GLBX", "XCBT": "CBOT/GLBX",
+                  "IFUS": "ICE/IFUS", "XEUR": "Eurex",
+                  "ARCA/NYSE": "NYSE Arca"}
+
+
+def open_cost(key):
+    """USD cost of OPENING one contract (one side), from the sourced
+    execution-cost table; None where the row has no source."""
+    try:
+        return execution_costs.cost_per_side(key, 1, eurusd=sizing.EURUSD)
+    except (KeyError, ValueError):
+        return None
+
+
+def tick_cell(v):
+    # plain decimals, never scientific: MJY's 0.000001 must not print
+    # as 1e-06
+    if v is None:
+        return "&mdash;"
+    return f"{v:.7f}".rstrip("0").rstrip(".") if v < 0.001 else f"{v:g}"
+
+
+def arsenal_status_html(taken_by_market, refused_by_market, tested,
+                        route):
+    """THE CONTRACT ARSENAL ON THE CONTRACTS PAGES (Lode, 2026-09-03):
+    all 25 Socrates markets in subscription order, each with its front
+    contract and a STATUS -- traded on this page, in the arsenal but no
+    trade in the window, not backtested (and why), not tradable (and
+    why) -- plus which micro the page routes to and why not where it
+    does not. It replaces the "Not tested" list under By market, which
+    only confused once the universe had two definitions: the engine's
+    human filter and the live universe the account trades. Every
+    reason is DERIVED from the lists in code (run_1m.HUMAN_APPROVED,
+    run_1m.ELIGIBLE_FUTURES, research_1m_sizing.LIVE_UNIVERSE, the
+    spec table, the fee table), never typed per market."""
+    payload = json.loads(
+        (HERE / ".." / "data_center" / "metadata" / "contract_specs.json")
+        .read_text(encoding="utf-8"))
+    specs = payload["markets"]
+    fronts = {r["key"]: r for r in payload["sizing"]}
+    micros_of = {}
+    for m in payload["micros"]:
+        micros_of.setdefault(m["parent"], []).append(m)
+
+    def whole(v):
+        return f"{v:,.0f}" if v else "&mdash;"
+
+    def cost_cell(v):
+        return f"{v:,.2f}" if v is not None else "&mdash;"
+
+    def micro_cell(key):
+        r = (route or {}).get(key)
+        if r:
+            return (f'<b>{esc(r["root"])}</b> (1/{round(1 / r["fraction"])})',
+                    "")
+        verified = [m for m in micros_of.get(key, [])
+                    if m.get("listed") == "VERIFIED"]
+        if not verified:
+            yields = [m for m in micros_of.get(key, [])
+                      if m.get("listed") == "YES"]
+            if yields:
+                return ("&mdash;", "yield-quoted micro only, a different "
+                        "product (not comparable)")
+            return ("&mdash;", "no micro exists")
+        sourced = [m for m in verified
+                   if open_cost(m["symbol"]) is not None]
+        if sourced:
+            return ("&mdash;", f'{esc(", ".join(m["symbol"] for m in sourced))}'
+                    f' verified and priced, not routed: no entry minute'
+                    f' measured in the micro study')
+        return ("&mdash;", f'{esc(", ".join(m["symbol"] for m in verified))}'
+                f' verified but its fee row has no source; refused to'
+                f' price')
+
+    rows, n_traded, n_arsenal = [], 0, 0
+    for m in run_1m.MAPPING["markets"]:
+        key = m.get("key") or "JGB"
+        s = specs.get(key, {})
+        f = fronts.get(key)
+        name = s.get("market") or m.get("socrates_name", key)
+        exch = EXCHANGE_LABEL.get(s.get("exchange"), s.get("exchange"))
+        size = (f'{s["unit_qty"]:,.0f} {s["unit"]}'
+                if s.get("unit_qty") else "&mdash;")
+        micro, micro_why = micro_cell(key)
+        n_taken = taken_by_market.get(key, 0)
+        n_ref = refused_by_market.get(key, 0)
+        if key not in sizing.LIVE_UNIVERSE:
+            live = False
+            if s.get("type") == "etf":
+                status, why = ("Not tradable",
+                               "ETF: a share position pays full notional "
+                               "with no leverage, so risking 1% locks the "
+                               "account (over 100% on 5 of 12 historical "
+                               "ETF trades, at any account size)")
+            else:
+                status, why = ("Not tradable",
+                               "outside our data: no Databento OSE coverage "
+                               "(the known gap; IBKR backfill later)")
+            micro, micro_why = "&mdash;", ""
+        else:
+            live = True
+            n_arsenal += 1
+            if key in tested:
+                if n_taken:
+                    n_traded += 1
+                    status = f"<b>Traded</b>, {n_taken} trade" + (
+                        "s" if n_taken != 1 else "")
+                    why = ("" if not n_ref else
+                           f"{n_ref} more refused at placement")
+                else:
+                    status = "In arsenal, no trade"
+                    why = ("no setup qualified in the window" if not n_ref
+                           else f"{n_ref} refused at placement, none "
+                                f"taken")
+            elif key not in run_1m.ELIGIBLE_FUTURES:
+                status, why = ("Not backtested",
+                               "no 1-minute bars in data_center yet")
+            elif key not in run_1m.HUMAN_APPROVED:
+                status, why = ("Not backtested",
+                               "failed the human market filter (audit "
+                               "s.16); lifting it is a strategy-level "
+                               "decision")
+            else:
+                status, why = "Not backtested", "not in this run"
+        tone = ("pos" if n_taken else "" if live else "neg")
+        rows.append(
+            f'<tr class="{"arsenal-out" if not live else ""}">'
+            f'<td class="l"><b>{esc(key)}</b></td>'
+            f'<td class="l wrap">{esc(name)}</td>'
+            f'<td class="l">{esc(exch) if exch else "&mdash;"}</td>'
+            f'<td class="l mono wrap">{esc(f["front"]) if f else "&mdash;"}'
+            f'</td>'
+            f'<td class="l">{size}</td>'
+            f'<td class="mono">{tick_cell(s.get("tick"))}</td>'
+            f'<td class="mono">{cost_cell(open_cost(key)) if live else "&mdash;"}'
+            f'</td>'
+            f'<td class="l" title="{micro_why}">{micro}</td>'
+            f'<td class="l {tone}">{status}</td>'
+            f'<td class="l wrap">{why or micro_why}</td>'
+            f'</tr>')
+    head = ('<tr><th class="l" style="width:4.5%">Key</th>'
+            '<th class="l" style="width:19%">Market</th>'
+            '<th class="l" style="width:8.5%">Exchange</th>'
+            '<th class="l" style="width:7%">Contract</th>'
+            '<th class="l" style="width:9.5%">Size</th>'
+            '<th style="width:5.5%">Tick</th>'
+            '<th style="width:6.5%">Open 1 ctr $</th>'
+            '<th class="l" style="width:8%">Micro</th>'
+            '<th class="l" style="width:10.5%">Status</th>'
+            '<th class="l" style="width:21%">Why</th></tr>')
+    routed = ", ".join(f"{k}&rarr;{r['root']}"
+                       for k, r in sorted((route or {}).items()))
+    return (
+        '<div class="section-h">The contract arsenal</div>'
+        f'<p class="chartnote">All <b>{len(rows)} Socrates markets</b> we '
+        f'subscribe to, in subscription order. <b>{n_arsenal}</b> are the '
+        f'arsenal, the live universe the account trades; <b class="pos">'
+        f'{n_traded} traded on this page</b> (green status), the rest of '
+        f'the arsenal either had no qualifying setup in the window or was '
+        f'never backtested, and the greyed rows cannot be traded with '
+        f'this strategy at all. <b>Micro</b> is the contract this page '
+        f'tops positions up with'
+        + (f' ({routed})' if routed else '')
+        + '; a dash carries its reason in the Why column or on hover. '
+        '<b>Open 1 ctr $</b> is one side&rsquo;s commission + exchange + '
+        'NFA from execution_costs.py. Every status is derived from the '
+        'lists in code (the human market filter, the engine&rsquo;s bar '
+        'coverage, the live universe, the spec and fee tables), never '
+        'typed per market.</p>'
+        f'<div class="tradecard"><table class="trades"><thead>{head}'
+        f'</thead><tbody>{"".join(rows)}</tbody></table></div>')
+
+
 def markets_html(rows, excluded, links):
     cols = [("Market", "l", 26), ("Trades", "", 9), ("Win %", "", 9),
             ("Net R", "", 10), ("Stops", "", 9), ("Aborts", "", 9),
@@ -1269,6 +1446,10 @@ table.trades td a:hover{text-decoration:underline}
    stylesheet's narrow-screen 2-column rule stays in force below
    641px. */
 @media(min-width:641px){.stats4{grid-template-columns:repeat(4,1fr)}}
+/* the contract arsenal: markets outside the trading universe are
+   greyed so the traded rows stand out (Lode, 2026-09-03) */
+tr.arsenal-out td{color:var(--ink3)}
+table.trades td.pos b{color:var(--pos)}
 @media print{#eq{height:300px}#ddc,#op{height:120px}}
 </style></head><body>
 <div class="wrap">
@@ -1278,6 +1459,7 @@ table.trades td a:hover{text-decoration:underline}
   <p class="lede">__LEDE__</p>
 </header>
 __RULES__
+__ARSENAL__
 <div class="kpis">__KPIS__</div>
 <div class="stats4">__STATS__</div>
 <div class="card">
@@ -1352,10 +1534,10 @@ def build_baseline_contracts():
     drawdown on top of it would conflate two questions."""
     data = json.loads(IN_JSON.read_text(encoding="utf-8"))
     data["universe_note"] = (
-        " <b>This baseline trades the human market filter</b>: the "
-        "markets that passed the chart-structure inspection (audit "
-        "s.16); the rejected ones are under Not tested with that "
-        "reason.")
+        " <b>The engine behind this page ran the human market "
+        "filter</b>: the markets that passed the chart-structure "
+        "inspection (audit s.16); the contract arsenal below names the "
+        "live-universe markets that filter left out.")
     build(data=data, contracts=True)
 
 
@@ -1745,9 +1927,29 @@ def build(data=None, out=None, variant=None, contracts=False):
             f"micro stack.")
     else:
         sizing_lede = ""
+    if contracts:
+        taken_by_market, refused_by_market = {}, {}
+        for t in trades:
+            taken_by_market[t["market"]] = \
+                taken_by_market.get(t["market"], 0) + 1
+        for i in refused_map:
+            k = all_trades[i]["market"]
+            refused_by_market[k] = refused_by_market.get(k, 0) + 1
+        tested = {r["market"] for r in data["markets"]}
+        arsenal = arsenal_status_html(taken_by_market, refused_by_market,
+                                      tested, route)
+        universe_lede = (
+            f"on the {len(sizing.LIVE_UNIVERSE)}-market live universe, "
+            f"{len(taken_by_market)} of which traded on this page (the "
+            f"contract arsenal below says which, and why the others did "
+            f"not), ")
+    else:
+        arsenal = ""
+        universe_lede = (f"across {len(data['markets'])} tested markets, "
+                         f"{traded} of which traded, ")
     lede = (
-        f"One shared account of {money(start)} across "
-        f"{len(data['markets'])} tested markets, {traded} of which traded, "
+        f"One shared account of {money(start)} "
+        + universe_lede +
         f"{days[0]} to {days[-1]}, at "
         f"{risk}% risk per trade. Rules 1 and 2 are the daily project's, "
         f"evaluated minute by minute; the trade is entered with a market "
@@ -1816,7 +2018,10 @@ def build(data=None, out=None, variant=None, contracts=False):
         + f", on a fresh {money(START_CAPITAL)} rather than the shared "
         "account, so the returns do not add up to the headline. "
         "<b>Aborts</b> are the no-confirmation exits, <b>settlement</b> "
-        "the day-2 rule exits.")
+        "the day-2 rule exits."
+        + (" Only the arsenal markets the engine ran are listed; the "
+           "contract arsenal above accounts for every other Socrates "
+           "market." if contracts else ""))
     last_exit = max(t["exit_ts"] for t in trades)[:10]
     chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
                 + (f"a {risk:g}% risk budget in integer contracts, the "
@@ -1866,6 +2071,7 @@ def build(data=None, out=None, variant=None, contracts=False):
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(p))
+            .replace("__ARSENAL__", arsenal)
             .replace("__KPIS__", kpis)
             .replace("__CHARTSUB__", chartsub)
             .replace("__NOTE__", note)
@@ -1880,9 +2086,11 @@ def build(data=None, out=None, variant=None, contracts=False):
             .replace("__BLOTTER__", blotter_html(trades, money_of, links,
                                                  contracts, micro))
             .replace("__MKTNOTE__", mktnote)
-            .replace("__MARKETS__", markets_html(data["markets"],
-                                                 data.get("excluded", []),
-                                                 links))
+            # The "Not tested" list is the arsenal's job on a contracts
+            # page (Lode, 2026-09-03: confusing beside the arsenal).
+            .replace("__MARKETS__", markets_html(
+                data["markets"],
+                [] if contracts else data.get("excluded", []), links))
             .replace("__CALENDAR__", calendar_html(days, eq, dd, openpos,
                                                    trades, money_of))
             .replace("__FOOTER__", footer)

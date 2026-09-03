@@ -320,6 +320,28 @@ window get no micro leg until `research_1m_micro.py` is re-run on
 newer micro bars -- the same limit the ladder pages have. Without the
 gates JSON the page falls back to full-only and says so in the lede.
 Pinned by `tests/test_micro_stack.py`.
+**THE CONTRACTS PAGES OPEN WITH THE CONTRACT ARSENAL** (Lode,
+2026-09-03: "15 tested markets, 13 of which traded. Why are we not
+testing 22 markets?"). The answer is two universes: the engine's
+published run trades `run_1m.HUMAN_APPROVED` (the eye inspection of
+2026-08-11, which passed CC, KC and five ETFs and FAILED ZC, ZN, ZB,
+SB, FGBL and BTC), while the account trades
+`research_1m_sizing.LIVE_UNIVERSE` (22 updated futures, SR3 included
+though it has NO 1m bars yet). Their intersection is 15, of which 13
+traded in the window. `build_1m_report.arsenal_status_html` renders
+all 25 subscribed Socrates markets (mapping order) with front
+contract, size, tick, one side's cost, the micro this page routes to
+(or why none: no micro exists / verified but unsourced fee row /
+priced but no entry measured in the micro study / yield-quoted, not
+comparable) and a STATUS with its reason -- Traded (green, count), In
+arsenal no trade, Not backtested (failed the human filter / no bars),
+Not tradable (ETF lock / JGB data gap; rows greyed). EVERY REASON IS
+DERIVED from the lists in code, never typed per market. The "Not
+tested" list under By market is dropped on the contracts pages (it
+only confused beside the arsenal); the fractional pages keep it.
+Lifting the filter for the six rejected markets and buying SR3 bars
+is the open strategy-level decision that would take the pages to 22
+tested.
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

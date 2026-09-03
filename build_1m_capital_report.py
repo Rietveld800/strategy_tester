@@ -51,9 +51,9 @@ import research_1m_feasibility as feas
 import research_1m_sizing as sizing
 from build_equity_html import CSS
 from build_1m_report import (
-    GATES_JSON, LIB_PATH, STUDY_BASE, REASON_TEXT, cls, daily_series, esc,
-    held, micro_route, money, price, replay, replay_contracts, replay_micro,
-    signed, signed_money, stamp, streaks)
+    EXCHANGE_LABEL, GATES_JSON, LIB_PATH, STUDY_BASE, REASON_TEXT, cls,
+    daily_series, esc, held, micro_route, money, open_cost, price, replay,
+    replay_contracts, replay_micro, signed, signed_money, stamp, streaks)
 
 HERE = Path(__file__).resolve().parent
 OUT_DIR = HERE / "output"
@@ -98,23 +98,6 @@ def load_variant(variant):
 
 def cap_label(c):
     return f"${c / 1000:,.0f}k" if c < 1_000_000 else f"${c / 1e6:g}M"
-
-
-# The MIC codes the definitions carry, in the venue-family form Lode
-# asked the arsenal to show (2026-09-02). CME's four exchanges all
-# trade on Globex, hence one family.
-EXCHANGE_LABEL = {"XCME": "CME/GLBX", "XCEC": "COMEX/GLBX",
-                  "XNYM": "NYMEX/GLBX", "XCBT": "CBOT/GLBX",
-                  "IFUS": "ICE/IFUS", "XEUR": "Eurex"}
-
-
-def open_cost(key):
-    """USD cost of OPENING one contract (one side), from the sourced
-    execution-cost table; None where the row has no source."""
-    try:
-        return execution_costs.cost_per_side(key, 1, eurusd=sizing.EURUSD)
-    except (KeyError, ValueError):
-        return None
 
 
 # ------------------------------------------------------------- the arsenal

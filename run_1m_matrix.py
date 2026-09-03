@@ -66,6 +66,14 @@ solved per cell by bisection, because at one bet size the tallest curve
 is partly just the deepest hole that cell was allowed to dig. Output:
 output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 
+SINCE 2026-09-03 THE TWO REPORT CELLS EACH CARRY A NO-STOP COMPANION
+(Lode): the same dials with the engine's `stop_live` off - identical
+entries and sizing, no stop order resting, every position carried to
+the next settlement. They ride in this pass (cached and spliced like
+the cells, two extra engine passes per recomputed market) and land in
+the JSON under `nostop`, keyed by the cell they shadow. They are NOT
+cells: no number, no row on the page, no charter slug. See COMPANIONS.
+
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
 `--no-reuse` ignores the per-market cache and recomputes everything (see
 the cache block below VARIANTS: an unchanged market is reused whole from
@@ -287,6 +295,48 @@ VARIANTS = build_grid()
 BASELINE_NAME = "variant 1"
 COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 
+# --- THE NO-STOP COMPANIONS (Lode, 2026-09-03) ------------------------------
+#
+# "The same strategy result WITHOUT stoploss ... the exit will always be
+# at the same moment in time; settlement." The two report cells - the
+# published baseline and the hybrid report - each get a COMPANION pass
+# with the engine's `stop_live` dial off: identical entries, identical
+# sizing (the stop price still denominates R and feeds the band), no stop
+# order resting, every position carried to the next settlement. The
+# contracts pages draw it ABOVE the stopped curve as its equal.
+#
+# THEY ARE NOT CELLS. The grid stays the factorial and nothing else (Lode,
+# 2026-08-18): a companion has no number, no row on the matrix page, no
+# checkbox, no `?v=` slug in charter, and it lives in the JSON under its
+# own key (`nostop`, keyed by the cell it shadows) rather than in
+# `variants`. It rides in THIS pass and not in a runner of its own for the
+# reason every cell does: this is the pass holding every market's bars,
+# and the per-market cache and tail splice cover it for free - two more
+# engine passes on a market that recomputes, zero on one that is reused.
+# Named `<cell> no-stop`, which is what the cache stores it under.
+NOSTOP_OF = ["variant 1", "variant 4"]
+
+
+def companion_name(name):
+    return f"{name} no-stop"
+
+
+def build_companions():
+    by_name = {name: (dials, markets, props)
+               for name, dials, markets, props in VARIANTS}
+    out = []
+    for name in NOSTOP_OF:
+        dials, markets, props = by_name[name]
+        out.append((companion_name(name), dict(dials, stop_live=False),
+                    markets, dict(props, stop_live=False, shadows=name)))
+    return out
+
+
+COMPANIONS = build_companions()
+# What the market loop, the cache and the splice iterate: every numbered
+# cell AND the companions. The report, the page and charter read VARIANTS.
+CELLS = VARIANTS + COMPANIONS
+
 # --- the per-market cache (2026-08-21; tail splice added the same day) ------
 #
 # A refresh reruns every market from scratch, but a market whose input files
@@ -327,7 +377,7 @@ def grid_sig():
     payload = dict(
         variants=[[name, dials,
                    sorted(markets) if markets is not None else None]
-                  for name, dials, markets, _props in VARIANTS],
+                  for name, dials, markets, _props in CELLS],
         engine=dict(risk_pct=e.RISK_PCT, start_capital=e.STARTING_CAPITAL,
                     entry_slip=e.ENTRY_SLIP_TICKS,
                     stop_slip=e.SLIP_STOP_TICKS,
@@ -341,7 +391,9 @@ def grid_sig():
         # 3 (2026-08-30): live markets build days with window_end_entries
         # and cells carry open_position - entries under 2 lack both and
         # miss window-end trades, so they may not answer.
-        cache_version=3)
+        # 4 (2026-09-03): the no-stop companions join the cache; an
+        # entry without them cannot answer for a market.
+        cache_version=4)
     return hashlib.sha256(json.dumps(
         payload, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
@@ -384,7 +436,7 @@ def market_manifest(key):
 
 def cell_names_for(key):
     """The cells this market belongs to under the current grid."""
-    return {name for name, _d, markets, _p in VARIANTS
+    return {name for name, _d, markets, _p in CELLS
             if markets is None or key in markets}
 
 
@@ -702,7 +754,7 @@ def main():
     keys = [a for a in sys.argv[1:] if not a.startswith("--")] or (
         run_1m.ELIGIBLE_FUTURES + run_1m.ETFS + list(run_1m.BINANCE))
     results = {name: {"trades": [], "rows": [], "open": []}
-               for name, _, _, _ in VARIANTS}
+               for name, _, _, _ in CELLS}
     skipped, sessions = [], []
     sig = grid_sig()
     # Old cache entries ride along with whatever this run recomputes: an
@@ -735,7 +787,7 @@ def main():
             sessions.append([date.fromisoformat(x) for x in ent["calendar"]])
             ran = 0
             base_line = "-"
-            for name, _dials, markets, _props in VARIANTS:
+            for name, _dials, markets, _props in CELLS:
                 if markets is not None and key not in markets:
                     continue
                 cell = ent["cells"][name]
@@ -805,7 +857,7 @@ def main():
             else:
                 w0 = len(cached_cal)
                 cells = {}
-                for name, dials, markets, _props in VARIANTS:
+                for name, dials, markets, _props in CELLS:
                     if markets is not None and key not in markets:
                         continue
                     c = old["cells"][name]
@@ -831,7 +883,7 @@ def main():
                   f"{splice_refusal(old['manifest'], manifest)}"
                   f" - full rebuild", flush=True)
         if not did_splice:
-            for name, dials, markets, _props in VARIANTS:
+            for name, dials, markets, _props in CELLS:
                 if markets is not None and key not in markets:
                     continue
                 trades, summary = run_1m.engine_1m.run_market(
@@ -858,7 +910,7 @@ def main():
         # Rows and results are DERIVED from the cells the same way whether
         # they were computed, spliced or (below) cached - see the canonical
         # derivation layer.
-        for name, _dials, markets, _props in VARIANTS:
+        for name, _dials, markets, _props in CELLS:
             if markets is not None and key not in markets:
                 continue
             cell = ent_cells[name]
@@ -981,6 +1033,37 @@ def main():
               f"-> at 6% DD: {report[name]['risk_6pct']}% risk, "
               f"${report[name]['final_6pct']:,.0f}", flush=True)
 
+    # The companions' block: keyed by the cell each one shadows, carrying
+    # the same shape a cell's slice of this file has (rows, trades, open
+    # positions) plus its own headline figures, so build_1m_report.py can
+    # render it beside the cell with no second derivation.
+    nostop = {}
+    for name, dials, _markets, props in COMPANIONS:
+        shadow = props["shadows"]
+        trades = sorted(results[name]["trades"],
+                        key=lambda t: t["entry_ts"])
+        final, max_dd, curve = run_1m.portfolio_replay(trades)
+        wins = sum(1 for t in trades if t["net_r"] > 0)
+        nostop[shadow] = dict(
+            name=name, dials=dials, props=props,
+            trades_n=len(trades),
+            win_rate=round(100 * wins / len(trades), 1) if trades else None,
+            net_r=round(sum(t["net_r"] for t in trades), 2),
+            final_cash=round(final, 2), max_dd_pct=round(max_dd, 2),
+            max_dd_close_pct=close_dd_pct(curve),
+            per_market=results[name]["rows"],
+            open_positions=sorted(results[name]["open"],
+                                  key=lambda o: o["entry_ts"]),
+            trades=trades)
+        stopped = report[shadow]
+        print(f"\n{name} [{shadow} with no stop order]: "
+              f"{len(trades)} trades, wr {nostop[shadow]['win_rate']}%, "
+              f"net {nostop[shadow]['net_r']}R, max DD {max_dd:.2f}%, "
+              f"${final:,.0f}  |  {shadow} stopped: "
+              f"{stopped['trades']} trades, wr {stopped['win_rate']}%, "
+              f"net {stopped['net_r']}R, max DD {stopped['max_dd_pct']}%, "
+              f"${stopped['final_cash']:,.0f}", flush=True)
+
     OUT_JSON.parent.mkdir(exist_ok=True)
     OUT_JSON.write_text(json.dumps(dict(
         strategy="quickfix1m1dc v2 (audit decisions 2026-08-06)",
@@ -1006,6 +1089,9 @@ def main():
         open_positions={n: sorted(results[n]["open"],
                                   key=lambda o: o["entry_ts"])
                         for n, _, _, _ in VARIANTS},
+        # The no-stop companions of the report cells (2026-09-03), keyed
+        # by the cell each shadows. Not cells: no number, no row, no slug.
+        nostop=nostop,
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
     write_page(report, calendar)

@@ -102,6 +102,19 @@ Lode's audit decisions (2026-08-06, docs/quickfix1m1dc_audit.md):
     entry happened - so a later minute may trigger instead. The trade
     list therefore SHIFTS rather than shrinks, which is exactly why this
     is an engine dial and not a post-filter over the blotter.
+- THE STOP ORDER IS A DIAL (`stop_live`, Lode 2026-09-03: "the same
+  strategy result WITHOUT stoploss ... the exit will always be at the
+  same moment in time; settlement"). Off, the stop PRICE is still
+  computed exactly as before - it sizes the position, denominates R and
+  feeds the geometry band, so every entry decision is untouched - but no
+  stop order rests in the market: the position is carried to the next
+  day's settlement whatever the path did, and `stop` never appears as an
+  exit reason. A loss is then unbounded in R (a stop caps it near -1R,
+  a settlement does not). It is an ENGINE dial and not a post-filter
+  over the stopped blotter for the same reason the band is: a trade
+  that is no longer stopped is still OPEN the next session, so an entry
+  the stopped run could take there is blocked by one position per
+  market, and the trade list shifts rather than being re-priced.
 
 Rules recap (short side; long is the mirror):
 - Every minute, rules 1 and 3 evaluate fresh against the ACTIVE levels
@@ -590,8 +603,15 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
                max_entries_per_session=1, min_rpu_range_ratio=None,
                max_rpu_range_ratio=None, range_mode="trading_day",
                min_reversals=MIN_REVERSALS, geom_by_day=False,
-               carry_open=False):
+               carry_open=False, stop_live=True):
     """Run quickfix1m1dc v2 over consecutive Days. Returns (trades, summary).
+
+    `stop_live` (Lode, 2026-09-03): False runs the SAME entries with NO
+    stop order resting - every position is carried to the next day's
+    settlement (or the data end). The stop price is still computed and
+    recorded, because it is what sizes the position, denominates R and
+    feeds the band; only the exit it would have caused is gone. See the
+    module docstring.
 
     `files` must be sorted by activation_ts. Bars must be chronological.
     `tighten`, `allow_pre_activation`, `confirm`, `stop_mode`, the two
@@ -779,7 +799,9 @@ def run_market(days, files, tick, risk_pct=RISK_PCT,
             run_low = l if run_low is None else min(run_low, l)
 
             # --- manage an open position ---------------------------------
-            if pos is not None:
+            # With stop_live off nothing rests in the market: the stop
+            # price sized the position and that is all it does.
+            if pos is not None and stop_live:
                 if pos.side == "short" and h >= pos.stop and bts > pos.entry_ts:
                     book(pos, bts, pos.stop, "stop")
                     pos = None

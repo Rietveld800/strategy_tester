@@ -38,7 +38,7 @@ def truncated(days, n_keep):
 def run_cells(key, days, files, tick):
     """Every cell of the grid on the given window, as the cache stores it."""
     cells = {}
-    for name, dials, markets, _props in mx.VARIANTS:
+    for name, dials, markets, _props in mx.CELLS:
         if markets is not None and key not in markets:
             continue
         trades, summary = run_1m.engine_1m.run_market(
@@ -69,7 +69,7 @@ def check_market(key):
     for name in full:
         out = mx.splice_cell(key, cached[name]["trades"],
                              cached[name]["geom_days"], days, files, tick,
-                             dict(next(d for n, d, _m, _p in mx.VARIANTS
+                             dict(next(d for n, d, _m, _p in mx.CELLS
                                        if n == name)),
                              cal, w0)
         if out is None:

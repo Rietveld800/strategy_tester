@@ -51,6 +51,23 @@ ladder pages; without the gates JSON the page falls back to full-only
 and says so. The blotter shows each position's STACK (n full + k
 micro), the risk it ACTUALLY took as a percentage of equity at entry,
 and its execution cost split per leg.
+
+THE CONTRACTS PAGES CARRY TWO ACCOUNTS SINCE 2026-09-03 (Lode: "another
+equity curve, above the equity curve we currently see ... the same
+strategy result WITHOUT stoploss. So the exit will always be at the same
+moment in time; settlement ... the curve without stop is as important
+as the curve with stop"). The page renders the SAME account section
+twice - KPI row, statistics, the three panes, the exit classes, the
+refused orders, the open positions, the blotter, the per-market table
+and the daily calendar - first for the NO-STOP run and then for the
+stopped run, at the same account, the same sizing, the same costs and
+the same universe. The no-stop trade list is the engine's own pass
+with `stop_live` off (run_1m_matrix.py's companion of the cell, read
+from the matrix JSON's `nostop` block), never the stopped blotter
+re-priced: a position that is no longer stopped is still open the next
+session, so the two lists differ in entries as well as exits. Its
+blotter rows link into charter's study through the STOPPED trade that
+shares the entry minute, since that is the list charter holds.
 """
 
 import json
@@ -454,8 +471,14 @@ def solve_risk_pct(trades, target_dd):
     return round((lo + hi) / 2, 3)
 
 
-def daily_series(trades, eod, calendar, start=START_CAPITAL):
+def daily_series(trades, eod, calendar, start=START_CAPITAL,
+                 first_entry=None):
     """The three panes' data, one point per MARKET DAY (see run_1m).
+
+    `first_entry` pins the grid's start when two accounts share one page
+    (the no-stop and the stopped account, 2026-09-03): both must be
+    drawn on the same days, so the earlier first entry of the two is
+    passed to both.
 
     The grid runs from a market day before the first entry to the LAST
     MARKET DAY in the calendar, not to the last exit: the account is as
@@ -470,7 +493,8 @@ def daily_series(trades, eod, calendar, start=START_CAPITAL):
     """
     spans = [(pd.Timestamp(t["entry_ts"]).date(),
               pd.Timestamp(t["exit_ts"]).date()) for t in trades]
-    grid = run_1m.market_day_grid(calendar, min(a for a, _ in spans))
+    grid = run_1m.market_day_grid(
+        calendar, first_entry or min(a for a, _ in spans))
     on_grid = {}
     for d in sorted(eod):
         i = run_1m.place(d, grid)
@@ -758,7 +782,7 @@ def refused_html(all_trades, refused_map, links_full, route=None):
         link = links_full.get(t["market"])
         name = esc(t["market"])
         if link:
-            name = (f'<a href="{link[0]}&amp;t={link[1][i]}" '
+            name = (f'<a href="{link[0]}{study_t(link, i)}" '
                     f'target="_blank">{name}</a>')
         micro_cell = ""
         if route is not None:
@@ -782,7 +806,7 @@ def refused_html(all_trades, refused_map, links_full, route=None):
             f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
-def open_html(open_positions):
+def open_html(open_positions, stopped=True):
     """The positions entered but not yet closed (Lode, 2026-08-29): a
     window-end entry waiting for the settlement of its market's next
     trading day, carried by run_1m.py as `open_positions` beside the
@@ -806,7 +830,10 @@ def open_html(open_positions):
         'settlement in the data and nothing is booked &mdash; every '
         'figure above counts closed trades only. A market whose data '
         'stopped entirely never parks here: a position stranded by a '
-        'data stop is force-closed in the blotter as <b>Data end</b>.</p>')
+        'data stop is force-closed in the blotter as <b>Data end</b>.'
+        + ('' if stopped else ' <b>Stop</b> here is the sizing anchor '
+           'only: no stop order rests in this account.')
+        + '</p>')
     cols = [("Market", "l", 12), ("Side", "l", 7), ("In (UTC)", "l", 15),
             ("In", "", 11), ("Stop", "", 11), ("R/24h", "", 9),
             ("R so far", "", 11), ("Marked at (UTC)", "l", 24)]
@@ -831,6 +858,70 @@ def open_html(open_positions):
     return (f'{head}{note}<div class="tradecard"><table class="trades">'
             f'<thead><tr>{heads}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table></div>')
+
+
+def study_t(link, i):
+    """The `&t=` part of a study link for trade i, or nothing when the
+    study holds no row for it (a no-stop trade whose entry the stopped
+    list never took): the link then opens the market's study on its
+    first trade rather than a wrong one."""
+    n = link[1].get(i)
+    return f"&amp;t={n}" if n else ""
+
+
+def study_title(link, i):
+    n = link[1].get(i)
+    if n is None:
+        return "no row in the 1m study for this entry (the stopped list " \
+               "never took it); opens the market"
+    return f"trade {n} in the 1m study" + (
+        " (the stopped trade sharing this entry minute)"
+        if link[3] else "")
+
+
+def study_links(all_trades, vslug, numbering=None):
+    """key -> (study url, {trade index: n in the study}, market folder,
+    by_proxy). charter sorts each market's trades by entry and numbers
+    them 1-based, so the link lands on the row.
+
+    THE URL MUST NAME THIS PAGE'S VARIANT (2026-08-13, Lode found it).
+    charter's study holds one trade list per matrix cell now, and `?v=`
+    picks which. Without it the study fell back to the PUBLISHED blotter
+    and indexed THAT: a variant page's row drew the baseline's ladder
+    stop, and wherever the two trade lists diverge the link opened a
+    different trade entirely (31 of variant 5's 66 rows). The index is
+    only meaningful inside the list it was counted in.
+
+    `numbering` is the list charter actually holds when it is not
+    `all_trades` itself: the NO-STOP account's rows (2026-09-03) are
+    numbered through the STOPPED trade sharing their (market, entry
+    minute), because that is the list in the study; an entry the stopped
+    run never took gets no number and links to the market alone.
+    """
+    numbering = all_trades if numbering is None else numbering
+    by_proxy = numbering is not all_trades
+    by_market_num = {}
+    for i, t in enumerate(numbering):
+        by_market_num.setdefault(t["market"], []).append(i)
+    n_of = {}
+    for key, idxs in by_market_num.items():
+        order = sorted(idxs, key=lambda i: numbering[i]["entry_ts"])
+        for n, i in enumerate(order):
+            n_of[(key, numbering[i]["entry_ts"])] = n + 1
+    out = {}
+    for key in sorted({t["market"] for t in all_trades}):
+        try:
+            folder = run_1m.market_info(key)["array_dir"]
+        except (KeyError, StopIteration):
+            continue
+        url = f"{STUDY_BASE}?m={folder}"
+        if vslug:
+            url += f"&amp;v={vslug}"      # the url goes straight into an href
+        nums = {i: n_of[(key, t["entry_ts"])]
+                for i, t in enumerate(all_trades)
+                if t["market"] == key and (key, t["entry_ts"]) in n_of}
+        out[key] = (url, nums, folder, by_proxy)
+    return out
 
 
 def blotter_html(trades, money_of, links, contracts=False, micro=False):
@@ -877,8 +968,8 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False):
         # window was too short to judge has none and sorts below the rest.
         ratio = tr.get("rpu_range_ratio")
         ratio_txt = f"{ratio:.2f}" if ratio is not None else "&mdash;"
-        cell = (f'<a href="{link[0]}&amp;t={link[1][t]}" target="_blank" '
-                f'title="{esc(link[2])}, trade {link[1][t]} in the 1m study">'
+        cell = (f'<a href="{link[0]}{study_t(link, t)}" target="_blank" '
+                f'title="{esc(link[2])}, {study_title(link, t)}">'
                 f'{name}</a>') if link else name
         if contracts and micro:
             # The STACK (n full + k micro), the risk the whole stack
@@ -987,7 +1078,7 @@ def tick_cell(v):
 
 
 def arsenal_status_html(taken_by_market, refused_by_market, tested,
-                        route):
+                        route, count_note=""):
     """THE CONTRACT ARSENAL ON THE CONTRACTS PAGES (Lode, 2026-09-03):
     all 25 Socrates markets in subscription order, each with its front
     contract and a STATUS -- traded on this page, in the arsenal but no
@@ -1132,7 +1223,7 @@ def arsenal_status_html(taken_by_market, refused_by_market, tested,
         'NFA from execution_costs.py. Every status is derived from the '
         'lists in code (the human market filter, the engine&rsquo;s bar '
         'coverage, the live universe, the spec and fee tables), never '
-        'typed per market.</p>'
+        'typed per market.' + count_note + '</p>'
         f'<div class="tradecard"><table class="trades"><thead>{head}'
         f'</thead><tbody>{"".join(rows)}</tbody></table></div>')
 
@@ -1279,36 +1370,42 @@ PAGE_JS = r"""<script>
   // sloped line between two exits eleven days apart draws eleven days of
   // gain that nothing booked.
   var STEP = LightweightCharts.LineType.WithSteps;
-  // The contracts pages carry a second sizing (full contracts only)
+  // One entry per ACCOUNT on the page (the contracts pages carry two
+  // since 2026-09-03: no-stop above, stopped below; every other page
+  // one). All panes of all accounts share one time axis and one
+  // crosshair, since they are drawn on the same market days. The
+  // contracts pages also carry a second sizing (full contracts only)
   // as a thin gray reference behind the combined stack, like the
-  // capital ladder; the series are empty on every other page.
-  var EQF = __EQF__, DDF = __DDF__;
-  mk('eq', __EQ__, function (c) {
-    if (EQF.length) {
-      c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
-        lineType: STEP, priceLineVisible: false,
-        lastValueVisible: false }).setData(EQF);
-    }
-    return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2,
-      lineType: STEP });
-  });
-  mk('ddc', __DDC__, function (c) {
-    if (DDF.length) {
-      c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
-        lineType: STEP, priceLineVisible: false,
-        lastValueVisible: false,
-        priceFormat: { type: 'custom', formatter: pct } }).setData(DDF);
-    }
-    return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
-      lineType: STEP,
-      priceFormat: { type: 'custom', formatter: pct } });
-  });
-  mk('op', __OP__, function (c) {
-    // Positions are counted, in or out: the scale steps in INTEGERS
-    // (minMove 1), so the thin gray gridlines land on whole numbers
-    // and never on a 2.50 nobody can hold (Lode, 2026-09-02).
-    return c.addHistogramSeries({ color: cssv('--bars'),
-      priceFormat: { type: 'price', precision: 0, minMove: 1 } });
+  // capital ladder; those series are empty on every other page.
+  var SECTIONS = __SECTIONS__;
+  SECTIONS.forEach(function (s) {
+    mk('eq' + s.sfx, s.eq, function (c) {
+      if (s.eqf.length) {
+        c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
+          lineType: STEP, priceLineVisible: false,
+          lastValueVisible: false }).setData(s.eqf);
+      }
+      return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2,
+        lineType: STEP });
+    });
+    mk('ddc' + s.sfx, s.ddc, function (c) {
+      if (s.ddf.length) {
+        c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
+          lineType: STEP, priceLineVisible: false,
+          lastValueVisible: false,
+          priceFormat: { type: 'custom', formatter: pct } }).setData(s.ddf);
+      }
+      return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
+        lineType: STEP,
+        priceFormat: { type: 'custom', formatter: pct } });
+    });
+    mk('op' + s.sfx, s.op, function (c) {
+      // Positions are counted, in or out: the scale steps in INTEGERS
+      // (minMove 1), so the thin gray gridlines land on whole numbers
+      // and never on a 2.50 nobody can hold (Lode, 2026-09-02).
+      return c.addHistogramSeries({ color: cssv('--bars'),
+        priceFormat: { type: 'price', precision: 0, minMove: 1 } });
+    });
   });
   // One label column for all panes: force every price scale to the widest
   // one, so the time axes, and with them the month ticks, sit exactly
@@ -1338,7 +1435,7 @@ PAGE_JS = r"""<script>
     });
     p.chart.timeScale().fitContent();
   });
-  // One cursor over all three panes: moving it in any pane places the
+  // One cursor over all panes: moving it in any pane places the
   // crosshair on the same day in the others, each labelling its own
   // value on its own axis. Programmatic placement does not re-fire
   // crosshairMove, so this cannot loop.
@@ -1418,57 +1515,21 @@ PAGE_JS = r"""<script>
 </script>"""
 
 
-PAGE = r"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>__NAME__ &mdash; 1-minute report</title>
-__CSS__
-<style>
-/* the three panes; the daily reports draw their own SVG, this page uses
-   lightweight-charts, so the containers need explicit heights */
-#eq{height:330px}#ddc{height:150px}#op{height:130px}
-#eq,#ddc,#op{margin-bottom:4px}
-.panelbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--ink3);font-weight:600;margin:10px 2px 4px}
-table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
-table.trades td a:hover{text-decoration:underline}
-/* The shared stylesheet caps .chartnote at 78ch, which reads as cut
-   off beside full-width tables (Lode, 2026-09-02): on these pages the
-   notes run the full column like the lede does. */
-.chartnote{max-width:none}
-/* The shared .kpis is an auto-fit GRID, which leaves gray cells
-   whenever the tile count does not fill the last row. Flex with
-   stretching tiles fills every row whatever the count (same Lode
-   note: no empty gray fields). */
-.kpis{display:flex;flex-wrap:wrap}
-.kpis .kpi{flex:1 1 150px}
-/* Twelve stat tiles as 3 rows x 4 columns (Lode, 2026-09-02), the
-   winner/loser and best/worst pairs sharing one row; the shared
-   stylesheet's narrow-screen 2-column rule stays in force below
-   641px. */
-@media(min-width:641px){.stats4{grid-template-columns:repeat(4,1fr)}}
-/* the contract arsenal: markets outside the trading universe are
-   greyed so the traded rows stand out (Lode, 2026-09-03) */
-tr.arsenal-out td{color:var(--ink3)}
-table.trades td.pos b{color:var(--pos)}
-@media print{#eq{height:300px}#ddc,#op{height:120px}}
-</style></head><body>
-<div class="wrap">
-<header>
-  <div class="eyebrow">1-minute workstream</div>
-  <h1>__NAME__</h1>
-  <p class="lede">__LEDE__</p>
-</header>
-__RULES__
-__ARSENAL__
+# One ACCOUNT block: everything a trade list's shared account renders.
+# The fractional pages render it once; the contracts pages render it
+# twice (no-stop first, then stopped), which is why the pane ids carry
+# a suffix and the heading is optional.
+ACCOUNT = r"""<div class="acct" id="acct__SFX__">
+__HEAD__
 <div class="kpis">__KPIS__</div>
 <div class="stats4">__STATS__</div>
 <div class="card">
-  <div class="charthead"><div class="t">One shared account</div>
+  <div class="charthead"><div class="t">__CARDT__</div>
   <div class="s">__CHARTSUB__</div></div>
-  <div class="panelbl">__PANE_EQ__</div><div id="eq"></div>
+  <div class="panelbl">__PANE_EQ__</div><div id="eq__SFX__" class="pane-eq"></div>
   <div class="panelbl">__PANE_DD__</div>
-  <div id="ddc"></div>
-  <div class="panelbl">Open positions</div><div id="op"></div>
+  <div id="ddc__SFX__" class="pane-dd"></div>
+  <div class="panelbl">Open positions</div><div id="op__SFX__" class="pane-op"></div>
 </div>
 <div class="note">__NOTE__</div>
 <div class="section-h">Where the trades end</div>
@@ -1496,6 +1557,59 @@ account at the end of that day; drawdown is the worst it reached at any
 trade close during it, which is why a day can close higher than it
 dug.</p>
 __CALENDAR__
+</div>"""
+
+
+PAGE = r"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__NAME__ &mdash; 1-minute report</title>
+__CSS__
+<style>
+/* the three panes; the daily reports draw their own SVG, this page uses
+   lightweight-charts, so the containers need explicit heights */
+.pane-eq{height:330px}.pane-dd{height:150px}.pane-op{height:130px}
+.pane-eq,.pane-dd,.pane-op{margin-bottom:4px}
+/* Two accounts on one page (2026-09-03): each opens with a ruled
+   heading so the reader always knows which one a table belongs to. */
+.acct-h{font-size:19px;margin:40px 2px 6px;padding-top:22px;
+  border-top:3px solid var(--border)}
+.acct-h .tag{font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin-left:10px;vertical-align:middle}
+.panelbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink3);font-weight:600;margin:10px 2px 4px}
+table.trades td a{color:var(--accent);text-decoration:none;font-weight:600}
+table.trades td a:hover{text-decoration:underline}
+/* The shared stylesheet caps .chartnote at 78ch, which reads as cut
+   off beside full-width tables (Lode, 2026-09-02): on these pages the
+   notes run the full column like the lede does. */
+.chartnote{max-width:none}
+/* The shared .kpis is an auto-fit GRID, which leaves gray cells
+   whenever the tile count does not fill the last row. Flex with
+   stretching tiles fills every row whatever the count (same Lode
+   note: no empty gray fields). */
+.kpis{display:flex;flex-wrap:wrap}
+.kpis .kpi{flex:1 1 150px}
+/* Twelve stat tiles as 3 rows x 4 columns (Lode, 2026-09-02), the
+   winner/loser and best/worst pairs sharing one row; the shared
+   stylesheet's narrow-screen 2-column rule stays in force below
+   641px. */
+@media(min-width:641px){.stats4{grid-template-columns:repeat(4,1fr)}}
+/* the contract arsenal: markets outside the trading universe are
+   greyed so the traded rows stand out (Lode, 2026-09-03) */
+tr.arsenal-out td{color:var(--ink3)}
+table.trades td.pos b{color:var(--pos)}
+@media print{.pane-eq{height:300px}.pane-dd,.pane-op{height:120px}
+  .acct-h{break-before:page}}
+</style></head><body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">1-minute workstream</div>
+  <h1>__NAME__</h1>
+  <p class="lede">__LEDE__</p>
+</header>
+__RULES__
+__ARSENAL__
+__ACCOUNTS__
 <footer>__FOOTER__</footer>
 </div>
 <script>__LIB__</script>
@@ -1531,14 +1645,19 @@ def build_baseline_contracts():
     """The published baseline's trade list in integer contracts. The raw
     blotter at the 1% budget, NOT the fractional page's solved 6%
     sizing: the contracts layer defines its own money and solving a
-    drawdown on top of it would conflate two questions."""
+    drawdown on top of it would conflate two questions. Its no-stop
+    account is the matrix's companion of the baseline cell, crosschecked
+    against this blotter so the two accounts cannot come from different
+    data windows."""
     data = json.loads(IN_JSON.read_text(encoding="utf-8"))
     data["universe_note"] = (
         " <b>The engine behind this page ran the human market "
         "filter</b>: the markets that passed the chart-structure "
         "inspection (audit s.16); the contract arsenal below names the "
         "live-universe markets that filter left out.")
-    build(data=data, contracts=True)
+    build(data=data, contracts=True,
+          nostop=nostop_payload(run_1m_matrix.BASELINE_NAME,
+                                check_against=data["trades"]))
 
 
 def variant_payload(name):
@@ -1578,13 +1697,71 @@ def variant_payload(name):
         trades=trades)
 
 
-def build(data=None, out=None, variant=None, contracts=False):
+def nostop_payload(name, check_against=None):
+    """The NO-STOP companion of a cell, blotter-shaped, from the matrix
+    JSON's `nostop` block (run_1m_matrix.COMPANIONS, 2026-09-03): the
+    same dials with the engine's `stop_live` off, run in the matrix pass
+    beside the cell. None - with a printed NOTE, never a silent empty
+    section - when the matrix JSON predates the companions.
+
+    `check_against` is the STOPPED trade list this page renders (the
+    published blotter on the baseline page); it is crosschecked against
+    the matrix's own cell trade for trade, so the two accounts on one
+    page can never quietly come from different data windows or dials.
+    """
+    m = json.loads(MATRIX_JSON.read_text(encoding="utf-8"))
+    block = m.get("nostop", {}).get(name)
+    if block is None:
+        print(f"NOTE: {MATRIX_JSON.name} carries no no-stop companion for "
+              f"{name} -- rebuild the matrix (run_1m_matrix.py) for the "
+              f"no-stop account")
+        return None
+    if check_against is not None:
+        mine = [run_1m_matrix.comparable(t) for t in
+                sorted(check_against, key=lambda t: t["entry_ts"])]
+        theirs = [run_1m_matrix.comparable(t) for t in
+                  sorted(m["trades"][name], key=lambda t: t["entry_ts"])]
+        if mine == theirs:
+            print(f"crosscheck: the blotter == matrix {name}, "
+                  f"{len(mine)} trades")
+        else:
+            print(f"WARNING: the blotter and matrix {name} disagree "
+                  f"({len(mine)} vs {len(theirs)} trades) -- the no-stop "
+                  f"account may come from a different data window; rerun "
+                  f"run_1m.py and run_1m_matrix.py together")
+    v = m["variants"][name]
+    return dict(
+        strategy=f"quickfix1m1dc [{name}, no stop order]",
+        # the STOPPED cell's slug: charter holds that list, and the
+        # no-stop rows link through the stopped trade sharing their entry
+        slug=v.get("slug") or run_1m_matrix.variant_slug(name),
+        params=dict(m["params"], activation_utc="07:35",
+                    stop="see stop_mode", **block["dials"]),
+        portfolio=dict(final=block["final_cash"],
+                       max_dd_pct=block["max_dd_pct"],
+                       trades=block["trades_n"], win_rate=block["win_rate"],
+                       net_r=block["net_r"]),
+        markets=block["per_market"], excluded=m.get("excluded", []),
+        calendar=m.get("calendar"),
+        open_positions=block.get("open_positions"),
+        trades=sorted(block["trades"], key=lambda t: t["entry_ts"]))
+
+
+def entry_keys(trades):
+    return {(t["market"], t["entry_ts"]) for t in trades}
+
+
+def build(data=None, out=None, variant=None, contracts=False, nostop=None):
     """The published baseline by default; one matrix cell when `variant`
     names one, written beside it under its own filename. `contracts`
     swaps the money layer for integer sizing at the test account and the
-    page lands under the contracts stem instead."""
+    page lands under the contracts stem instead - and carries the
+    NO-STOP account above the stopped one (`nostop`, a payload from
+    nostop_payload; looked up for a variant when not given)."""
     if variant:
         data = variant_payload(variant)
+        if contracts and nostop is None:
+            nostop = nostop_payload(variant)
         # The matrix names its own cells, so it owns the filename form too
         # ("variant 5" -> quickfix1m1dc_report_variant_05.html). A page
         # built here can then never land under a name the matrix does not
@@ -1601,35 +1778,19 @@ def build(data=None, out=None, variant=None, contracts=False):
             f"{CONTRACTS_STEM}_"
             f"{run_1m_matrix.variant_slug(run_1m_matrix.BASELINE_NAME)}.html")
     out = out or OUT_HTML
-    trades = data["trades"]
+    if not contracts:
+        nostop = None
     p = data["params"]
     published = data["portfolio"]
+    vslug = data.get("slug")
+    calendar = data.get("calendar")
+    if not calendar:
+        calendar = run_1m.calendar_fallback(data["trades"])
+        print("WARNING: this JSON predates the market-day calendar. The "
+              "panes are drawn on calendar days and stop at the last exit; "
+              "re-run the runner that wrote it for the real grid.")
 
-    all_trades = trades
-    refused_map = {}
     if contracts:
-        # THE LIVE UNIVERSE ONLY (Lode, 2026-09-01: "we only trade the
-        # 22 markets"). ETF and non-updated markets' trades are dropped
-        # before the replay -- exact, since the engine runs markets
-        # independently. Their rows also leave the per-market table,
-        # moving to the excluded list with the reason.
-        dropped = sorted({t["market"] for t in trades
-                          if t["market"] not in sizing.LIVE_UNIVERSE})
-        all_trades = trades = sizing.live_trades(trades)
-        data = dict(data,
-                    markets=[r for r in data["markets"]
-                             if r["market"] in sizing.LIVE_UNIVERSE],
-                    excluded=list(data.get("excluded", [])) + [
-                        dict(market=m,
-                             reason="outside the live trading universe"
-                                    " (ETF or not currently updated);"
-                                    " not traded, dropped before the"
-                                    " replay")
-                        for m in dropped],
-                    open_positions=(
-                        None if data.get("open_positions") is None else
-                        [o for o in data["open_positions"]
-                         if o["market"] in sizing.LIVE_UNIVERSE]))
         start = SIZING_ACCOUNT
         risk = RISK_PCT  # the budget; what each trade REALIZES is below it
         # THE MICRO STACK (Lode, 2026-09-03): full contracts first, the
@@ -1642,244 +1803,488 @@ def build(data=None, out=None, variant=None, contracts=False):
         if micro:
             route, gates = micro_route()
             specs, _ = sizing.load_specs()
-            money_of, eod, final, max_dd, refused_map = replay_micro(
-                trades, risk, start, route, specs, gates["per_entry"])
-            r_full = replay_contracts(trades, risk, start)
         else:
             print("NOTE: no micro gates JSON -- building full-contracts-"
                   "only (run research_1m_micro.py for the micro stack)")
-            route = None
-            money_of, eod, final, max_dd, refused_map = replay_contracts(
-                trades, risk, start)
-            r_full = None
-        # The fractional replay at the SAME account is this page's
-        # yardstick: the published figures live on the fractional pages
-        # and are a different bet size, so comparing to them would only
-        # measure the account, not the quantization and the refusals.
-        _, _, ideal_final, ideal_dd = replay(trades, risk, start)
-        # Every statistic, pane and table below counts the TAKEN trades
-        # only -- a refused order is not a trade. The refused entries
-        # get their own table, with charter links numbered against the
-        # FULL blotter (which is the list charter's study holds).
-        orig_idx = [i for i in range(len(all_trades))
-                    if i not in refused_map]
-        if not orig_idx:
-            raise SystemExit(
-                f"every trade was refused at ${start:,.0f} / {risk:g}%"
-                f" -- no page to build at this account")
-        trades = [all_trades[i] for i in orig_idx]
-        money_of = {n: money_of[o] for n, o in enumerate(orig_idx)}
+            route = gates = specs = None
     else:
         start = PAGE_START
         risk = data.get("risk_pct", RISK_PCT)
-        money_of, eod, final, max_dd = replay(trades, risk, start)
-        ideal_final = ideal_dd = None
-        orig_idx = list(range(len(trades)))
-        micro, route, r_full = False, None, None
-    calendar = data.get("calendar")
-    if not calendar:
-        calendar = run_1m.calendar_fallback(trades)
-        print("WARNING: this JSON predates the market-day calendar. The "
-              "panes are drawn on calendar days and stop at the last exit; "
-              "re-run the runner that wrote it for the real grid.")
-    days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar, start)
-    # The full-contracts-only reference curves (equity and drawdown on
-    # closes), drawn thin gray behind the combined stack like the ladder
-    # pages do; empty when there is nothing to compare against.
-    eq_f, ddc_f = [], []
-    if r_full is not None:
-        taken_f = [all_trades[i] for i in sorted(r_full[0])]
-        days_f, eq_f, _, ddc_f, _ = daily_series(taken_f, r_full[1],
-                                                 calendar, start)
-        assert days_f == days
-    if not contracts:
-        # The self-check replays at the ENGINE BASE, because that is
-        # the start run_1m published its figures at; the page itself
-        # renders at PAGE_START, and fractional drawdown percentages
-        # are start-invariant so max_dd checks directly.
-        _, _, check_final, _ = replay(trades, risk, START_CAPITAL)
-        if abs(check_final - published["final"]) > 0.01:
-            print(f"WARNING: replay final ${check_final:,.2f} at the "
-                  f"${START_CAPITAL:,.0f} base against run_1m's "
-                  f"${published['final']:,.2f}")
-        if abs(max_dd - published["max_dd_pct"]) > 0.01:
-            print(f"WARNING: replay drawdown {max_dd:.2f}% against "
-                  f"run_1m's {published['max_dd_pct']:.2f}%")
-    # The headline and the calendar's drawdown column are two renderings of
-    # one curve, so the deepest point of the series has to BE the headline.
-    # It was not, for as long as it carried closing balances only.
-    if abs(max(dd) - max_dd) > 0.01:
-        print(f"WARNING: daily worst series bottoms at {max(dd):.2f}% against "
-              f"the headline {max_dd:.2f}%")
+        micro, route, gates, specs = False, None, None, None
 
-    wins = [t for t in trades if t["net_r"] > 0]
-    losses = [t for t in trades if t["net_r"] <= 0]
-    net_r = sum(t["net_r"] for t in trades)
-    wr = 100 * len(wins) / len(trades)
-    avg_w = sum(t["net_r"] for t in wins) / len(wins) if wins else 0.0
-    avg_l = sum(t["net_r"] for t in losses) / len(losses) if losses else 0.0
-    gross_win = sum(t["net_r"] for t in wins)
-    gross_loss = -sum(t["net_r"] for t in losses)
-    pf = gross_win / gross_loss if gross_loss else None
-    best = max(t["net_r"] for t in trades)
-    worst = min(t["net_r"] for t in trades)
-    run_w, run_l = streaks(trades)
-    holds = [(pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])
-              ).total_seconds() / 60.0 for t in trades]
-    avg_hold = sum(holds) / len(holds)
-    max_open = max(openpos)
-    in_market = 100 * sum(1 for o in openpos if o) / len(openpos)
-    classes = exit_classes(trades)
+    def live(payload):
+        """THE LIVE UNIVERSE ONLY (Lode, 2026-09-01: "we only trade the
+        22 markets"). ETF and non-updated markets' trades are dropped
+        before the replay -- exact, since the engine runs markets
+        independently. Their rows also leave the per-market table,
+        moving to the excluded list with the reason."""
+        if not contracts:
+            return payload
+        dropped = sorted({t["market"] for t in payload["trades"]
+                          if t["market"] not in sizing.LIVE_UNIVERSE})
+        return dict(
+            payload,
+            trades=sizing.live_trades(payload["trades"]),
+            markets=[r for r in payload["markets"]
+                     if r["market"] in sizing.LIVE_UNIVERSE],
+            excluded=list(payload.get("excluded", [])) + [
+                dict(market=m,
+                     reason="outside the live trading universe (ETF or "
+                            "not currently updated); not traded, dropped "
+                            "before the replay")
+                for m in dropped],
+            open_positions=(
+                None if payload.get("open_positions") is None else
+                [o for o in payload["open_positions"]
+                 if o["market"] in sizing.LIVE_UNIVERSE]))
 
-    # key -> (study url, {trade index in this build: n in the study},
-    #         market folder). charter sorts each market's trades by entry,
-    #         and its counter is 1-based, so the link lands on the row.
-    #
-    # THE URL MUST NAME THIS PAGE'S VARIANT (2026-08-13, Lode found it).
-    # charter's study holds one trade list per matrix cell now, and `?v=`
-    # picks which. Without it the study fell back to the PUBLISHED blotter
-    # and indexed THAT: a variant page's row drew the baseline's ladder
-    # stop, and wherever the two trade lists diverge the link opened a
-    # different trade entirely (31 of variant 5's 66 rows). The index is
-    # only meaningful inside the list it was counted in.
-    vslug = data.get("slug")
-    # Numbered against the FULL blotter, never the taken subset: charter's
-    # study holds every trade of the list, so on a contracts page a
-    # taken-only numbering would open the wrong trade wherever a refusal
-    # precedes it in that market.
-    by_market_full = {}
-    for i, t in enumerate(all_trades):
-        by_market_full.setdefault(t["market"], []).append(i)
-    links_full = {}
-    for key, idxs in by_market_full.items():
-        try:
-            folder = run_1m.market_info(key)["array_dir"]
-        except (KeyError, StopIteration):
-            continue
-        order = sorted(idxs, key=lambda i: all_trades[i]["entry_ts"])
-        url = f"{STUDY_BASE}?m={folder}"
-        if vslug:
-            url += f"&amp;v={vslug}"      # the url goes straight into an href
-        links_full[key] = (url, {i: n + 1 for n, i in enumerate(order)},
-                           folder)
-    links = {key: (url, {n: nums[o] for n, o in enumerate(orig_idx)
-                         if o in nums}, folder)
-             for key, (url, nums, folder) in links_full.items()}
+    data = live(data)
+    nostop = live(nostop) if nostop else None
+    # Both accounts draw on ONE grid: from the earlier first entry of the
+    # two (they normally share it - nothing can block a first trade).
+    first_entry = min(pd.Timestamp(t["entry_ts"]).date()
+                      for pl in (data, nostop) if pl
+                      for t in pl["trades"])
+    stopped_keys = entry_keys(data["trades"])
+    nostop_keys = entry_keys(nostop["trades"]) if nostop else set()
 
-    traded = sum(1 for r in data["markets"] if r["trades"])
-    kpis = "".join([
-        kpi("Closed trades", f"{len(trades)}",
-            (f"taken of {len(all_trades)} in the blotter;"
-             f" {len(refused_map)} refused by sizing" if contracts else
-             f"{traded} markets traded of {len(data['markets'])} tested")),
-        kpi("Win rate", f"{wr:.1f}%", f"{len(wins)} won, {len(losses)} lost"),
-        kpi("Net R", signed(net_r, 2), "after slippage"),
-        kpi("Final capital", money(final),
-            f"from {money(start)}", cls(final - start)),
-        kpi("Return", signed(100 * (final / start - 1), 2) + "%",
-            ("1% risk budget, integer contracts" if contracts
-             else f"at {risk}% risk per trade"),
-            cls(final - start)),
-        # "At any trade close", not "intraday" (Lode, 2026-09-03):
-        # equity books only when a trade closes, so this can exceed the
-        # closes figure only on multi-exit days; open positions are NOT
-        # marked to market between entry and exit.
-        kpi("Max drawdown", f"{max_dd:.2f}%",
-            "worst reached at any trade close; open positions are not"
-            " marked to market"),
-        kpi("Max drawdown on closes", f"{max(ddc):.2f}%",
-            "daily closing balances"),
-    ])
-    if contracts:
-        risks_pct = sorted(m["risk_pct"] for m in money_of.values())
-        med_risk = risks_pct[len(risks_pct) // 2] if risks_pct else 0.0
-        delta = 100 * (final / ideal_final - 1)
-        if micro:
-            fees = sum(m["cost_full_rt"] + m["cost_micro_rt"]
-                       for m in money_of.values())
-            drift = sum(m.get("drift_usd", 0.0) for m in money_of.values())
-            k_total = sum(m["k"] for m in money_of.values())
-            k_trades = sum(1 for m in money_of.values() if m["k"])
+    def account(payload, stopped, sfx, links_full):
+        """Everything one trade list's shared account renders: the
+        replay, the panes' series, and the ACCOUNT block's html. Returns
+        (html, series, info) - `info` carries the figures the lede, the
+        arsenal and the footer quote."""
+        all_trades = trades = payload["trades"]
+        refused_map = {}
+        if contracts:
+            if micro:
+                money_of, eod, final, max_dd, refused_map = replay_micro(
+                    trades, risk, start, route, specs, gates["per_entry"])
+                r_full = replay_contracts(trades, risk, start)
+            else:
+                money_of, eod, final, max_dd, refused_map = \
+                    replay_contracts(trades, risk, start)
+                r_full = None
+            # The fractional replay at the SAME account is this page's
+            # yardstick: the published figures live on the fractional
+            # pages and are a different bet size, so comparing to them
+            # would only measure the account, not the quantization and
+            # the refusals.
+            _, _, ideal_final, ideal_dd = replay(trades, risk, start)
+            # Every statistic, pane and table below counts the TAKEN
+            # trades only -- a refused order is not a trade. The refused
+            # entries get their own table, with charter links numbered
+            # against the FULL blotter (which is the list charter holds).
+            orig_idx = [i for i in range(len(all_trades))
+                        if i not in refused_map]
+            if not orig_idx:
+                raise SystemExit(
+                    f"every trade was refused at ${start:,.0f} / {risk:g}%"
+                    f" -- no page to build at this account")
+            trades = [all_trades[i] for i in orig_idx]
+            money_of = {n: money_of[o] for n, o in enumerate(orig_idx)}
         else:
-            fees = sum(m["cost_rt"] for m in money_of.values())
-            drift = k_total = k_trades = 0
-        kpis += "".join([
-            kpi("Against the fractional ideal",
-                signed(delta, 2) + "%",
-                f"ideal {money(ideal_final)} at {ideal_dd:.2f}% DD, same"
-                f" account, all {len(all_trades)} trades", cls(delta)),
-            kpi("Realized risk (median)", f"{med_risk:.2f}%",
-                f"of the {risk:g}% budget; what the stack actually"
-                f" risked of equity at entry, never above it"
-                if micro else
-                f"of the {risk:g}% budget; floor sizing never exceeds"
-                f" it"),
-            kpi("Refused at placement", f"{len(refused_map)}",
-                "one full contract risked more than the budget and no"
-                " micro could stand in; never forced, released as"
-                " capital grows" if micro else
-                "one contract risked more than the budget; never"
-                " forced, released as capital grows",
-                "neg" if refused_map else ""),
-            (kpi("Micro top-ups", f"{k_total:,} ctr",
-                 f"on {k_trades} of {len(trades)} taken trades; routed"
-                 f" {', '.join(f'{k}->{r['root']}' for k, r in sorted(route.items()))}")
-             if micro else ""),
-            kpi("Execution costs", money(fees),
-                "commission + exchange + NFA, both legs, both sides, in"
-                " the curve (sourced in execution_costs.py; taxes"
-                " excluded)" if micro else
-                "commission + exchange + NFA, both sides, in the curve"
-                " (sourced in execution_costs.py; taxes excluded)",
-                "neg"),
-            (kpi("Micro drift, net", signed_money(-drift),
-                 "measured micro-vs-parent entry prints, signed against"
-                 " the side; in the curve", cls(-drift))
-             if micro else ""),
-            (kpi("Full contracts only", money(r_full[2]),
-                 f"{r_full[3]:.2f}% DD, {len(r_full[0])} taken /"
-                 f" {len(r_full[4])} refused -- the gray curve",
-                 cls(r_full[2] - start))
-             if micro else ""),
+            money_of, eod, final, max_dd = replay(trades, risk, start)
+            ideal_final = ideal_dd = None
+            orig_idx = list(range(len(trades)))
+            r_full = None
+        days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar,
+                                                  start, first_entry)
+        # The full-contracts-only reference curves (equity and drawdown
+        # on closes), drawn thin gray behind the combined stack like the
+        # ladder pages do; empty when there is nothing to compare against.
+        eq_f, ddc_f = [], []
+        if r_full is not None:
+            taken_f = [all_trades[i] for i in sorted(r_full[0])]
+            days_f, eq_f, _, ddc_f, _ = daily_series(
+                taken_f, r_full[1], calendar, start, first_entry)
+            assert days_f == days
+        if not contracts:
+            # The self-check replays at the ENGINE BASE, because that is
+            # the start run_1m published its figures at; the page itself
+            # renders at PAGE_START, and fractional drawdown percentages
+            # are start-invariant so max_dd checks directly.
+            _, _, check_final, _ = replay(trades, risk, START_CAPITAL)
+            if abs(check_final - published["final"]) > 0.01:
+                print(f"WARNING: replay final ${check_final:,.2f} at the "
+                      f"${START_CAPITAL:,.0f} base against run_1m's "
+                      f"${published['final']:,.2f}")
+            if abs(max_dd - published["max_dd_pct"]) > 0.01:
+                print(f"WARNING: replay drawdown {max_dd:.2f}% against "
+                      f"run_1m's {published['max_dd_pct']:.2f}%")
+        # The headline and the calendar's drawdown column are two
+        # renderings of one curve, so the deepest point of the series has
+        # to BE the headline. It was not, for as long as it carried
+        # closing balances only.
+        if abs(max(dd) - max_dd) > 0.01:
+            print(f"WARNING: daily worst series bottoms at {max(dd):.2f}% "
+                  f"against the headline {max_dd:.2f}%")
+
+        wins = [t for t in trades if t["net_r"] > 0]
+        losses = [t for t in trades if t["net_r"] <= 0]
+        net_r = sum(t["net_r"] for t in trades)
+        wr = 100 * len(wins) / len(trades)
+        avg_w = (sum(t["net_r"] for t in wins) / len(wins)) if wins else 0.0
+        avg_l = (sum(t["net_r"] for t in losses) / len(losses)
+                 if losses else 0.0)
+        gross_win = sum(t["net_r"] for t in wins)
+        gross_loss = -sum(t["net_r"] for t in losses)
+        pf = gross_win / gross_loss if gross_loss else None
+        best = max(t["net_r"] for t in trades)
+        worst = min(t["net_r"] for t in trades)
+        run_w, run_l = streaks(trades)
+        holds = [(pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])
+                  ).total_seconds() / 60.0 for t in trades]
+        avg_hold = sum(holds) / len(holds)
+        max_open = max(openpos)
+        in_market = 100 * sum(1 for o in openpos if o) / len(openpos)
+        classes = exit_classes(trades)
+        links = {key: (url, {n: nums[o] for n, o in enumerate(orig_idx)
+                             if o in nums}, folder, proxy)
+                 for key, (url, nums, folder, proxy) in links_full.items()}
+
+        traded = sum(1 for r in payload["markets"] if r["trades"])
+        kpis = "".join([
+            kpi("Closed trades", f"{len(trades)}",
+                (f"taken of {len(all_trades)} in the "
+                 f"{'blotter' if stopped else 'no-stop list'};"
+                 f" {len(refused_map)} refused by sizing" if contracts else
+                 f"{traded} markets traded of {len(payload['markets'])} "
+                 f"tested")),
+            kpi("Win rate", f"{wr:.1f}%",
+                f"{len(wins)} won, {len(losses)} lost"),
+            kpi("Net R", signed(net_r, 2), "after slippage"),
+            kpi("Final capital", money(final),
+                f"from {money(start)}", cls(final - start)),
+            kpi("Return", signed(100 * (final / start - 1), 2) + "%",
+                ("1% risk budget, integer contracts" if contracts
+                 else f"at {risk}% risk per trade"),
+                cls(final - start)),
+            # "At any trade close", not "intraday" (Lode, 2026-09-03):
+            # equity books only when a trade closes, so this can exceed
+            # the closes figure only on multi-exit days; open positions
+            # are NOT marked to market.
+            kpi("Max drawdown", f"{max_dd:.2f}%",
+                "worst reached at any trade close; open positions are not"
+                " marked to market"),
+            kpi("Max drawdown on closes", f"{max(ddc):.2f}%",
+                "daily closing balances"),
+        ])
+        fees = drift = k_total = k_trades = 0
+        if contracts:
+            risks_pct = sorted(m["risk_pct"] for m in money_of.values())
+            med_risk = risks_pct[len(risks_pct) // 2] if risks_pct else 0.0
+            delta = 100 * (final / ideal_final - 1)
+            if micro:
+                fees = sum(m["cost_full_rt"] + m["cost_micro_rt"]
+                           for m in money_of.values())
+                drift = sum(m.get("drift_usd", 0.0)
+                            for m in money_of.values())
+                k_total = sum(m["k"] for m in money_of.values())
+                k_trades = sum(1 for m in money_of.values() if m["k"])
+            else:
+                fees = sum(m["cost_rt"] for m in money_of.values())
+            kpis += "".join([
+                kpi("Against the fractional ideal",
+                    signed(delta, 2) + "%",
+                    f"ideal {money(ideal_final)} at {ideal_dd:.2f}% DD, same"
+                    f" account, all {len(all_trades)} trades", cls(delta)),
+                kpi("Realized risk (median)", f"{med_risk:.2f}%",
+                    f"of the {risk:g}% budget; what the stack actually"
+                    f" risked of equity at entry, never above it"
+                    if micro else
+                    f"of the {risk:g}% budget; floor sizing never exceeds"
+                    f" it"),
+                kpi("Refused at placement", f"{len(refused_map)}",
+                    "one full contract risked more than the budget and no"
+                    " micro could stand in; never forced, released as"
+                    " capital grows" if micro else
+                    "one contract risked more than the budget; never"
+                    " forced, released as capital grows",
+                    "neg" if refused_map else ""),
+                (kpi("Micro top-ups", f"{k_total:,} ctr",
+                     f"on {k_trades} of {len(trades)} taken trades; routed"
+                     f" {', '.join(f'{k}->{r['root']}' for k, r in sorted(route.items()))}")
+                 if micro else ""),
+                kpi("Execution costs", money(fees),
+                    "commission + exchange + NFA, both legs, both sides, in"
+                    " the curve (sourced in execution_costs.py; taxes"
+                    " excluded)" if micro else
+                    "commission + exchange + NFA, both sides, in the curve"
+                    " (sourced in execution_costs.py; taxes excluded)",
+                    "neg"),
+                (kpi("Micro drift, net", signed_money(-drift),
+                     "measured micro-vs-parent entry prints, signed against"
+                     " the side; in the curve", cls(-drift))
+                 if micro else ""),
+                (kpi("Full contracts only", money(r_full[2]),
+                     f"{r_full[3]:.2f}% DD, {len(r_full[0])} taken /"
+                     f" {len(r_full[4])} refused -- the gray curve",
+                     cls(r_full[2] - start))
+                 if micro else ""),
+            ])
+
+        # Twelve tiles in three rows of four (Lode, 2026-09-02): the
+        # winner/loser pair and the best/worst pair share the middle row.
+        stats = "".join([
+            kpi("Expectancy", signed(net_r / len(trades)) + "R", "per trade",
+                cls(net_r)),
+            kpi("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
+                f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
+            kpi("Longest winning run", f"{run_w}",
+                "positions, in entry order"),
+            kpi("Longest losing run", f"{run_l}",
+                "positions, in entry order"),
+            kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
+                "pos"),
+            kpi("Average loser", signed(avg_l) + "R",
+                f"{len(losses)} trades", "neg"),
+            kpi("Best trade", signed(best) + "R",
+                "gross of nothing, net of all"),
+            kpi("Worst trade", signed(worst) + "R",
+                "a gapped or slipped stop can cost more than 1R" if stopped
+                else "no stop rests: a loss is the whole move to the"
+                     " settlement, in R of the sizing distance"),
+            kpi("Average hold", held(avg_hold), "entry to exit"),
+            kpi("Max concurrent", f"{max_open}", "positions open at once"),
+            # Currently-open count from the payload's open_positions --
+            # the same list the "Currently open" table renders; a JSON
+            # without the key shows a dash, never a false zero.
+            kpi("Currently open",
+                f"{len(payload['open_positions'])}"
+                if payload.get("open_positions") is not None else "&mdash;",
+                "entered, waiting for the next settlement"),
+            kpi("Time in market", f"{in_market:.0f}%",
+                "of market days with a position open"),
         ])
 
-    # Twelve tiles in three rows of four (Lode, 2026-09-02): the
-    # winner/loser pair and the best/worst pair share the middle row.
-    stats = "".join([
-        kpi("Expectancy", signed(net_r / len(trades)) + "R", "per trade",
-            cls(net_r)),
-        kpi("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
-            f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
-        kpi("Longest winning run", f"{run_w}", "positions, in entry order"),
-        kpi("Longest losing run", f"{run_l}", "positions, in entry order"),
-        kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
-            "pos"),
-        kpi("Average loser", signed(avg_l) + "R", f"{len(losses)} trades",
-            "neg"),
-        kpi("Best trade", signed(best) + "R", "gross of nothing, net of all"),
-        kpi("Worst trade", signed(worst) + "R",
-            "a gapped or slipped stop can cost more than 1R"),
-        kpi("Average hold", held(avg_hold), "entry to exit"),
-        kpi("Max concurrent", f"{max_open}", "positions open at once"),
-        # Currently-open count from the payload's open_positions -- the
-        # same list the "Currently open" table renders; a JSON without
-        # the key shows a dash, never a false zero.
-        kpi("Currently open",
-            f"{len(data['open_positions'])}"
-            if data.get("open_positions") is not None else "&mdash;",
-            "entered, waiting for the next settlement"),
-        kpi("Time in market", f"{in_market:.0f}%",
-            "of market days with a position open"),
-    ])
+        survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
+        if stopped:
+            note = (
+                "<b>Read the execution assumptions before reading the "
+                "result.</b> Entries are market orders charged "
+                f"{engine_1m.ENTRY_SLIP_TICKS} ticks and stops another two, "
+                "and moving those two ticks was worth about 12R across the "
+                "sample, so professional execution is a first-order part of "
+                "this edge rather than a detail. The win rate lives in one "
+                "place: a trade that survives to the day-2 settlement wins "
+                f"{100 * survivors['wins'] / survivors['n']:.0f}% of the "
+                f"time at {signed(survivors['avg'])}R average, while the "
+                "stop class bleeds. See docs/quickfix1m1dc_audit.md, "
+                "sections 8 and 9.")
+        else:
+            blocked = len(stopped_keys - nostop_keys)
+            freed = len(nostop_keys - stopped_keys)
+            note = (
+                "<b>No stop order rests in this account.</b> Every position "
+                "is entered exactly as in the stopped account below - the "
+                "same minute, the same size, because the stop PRICE still "
+                "denominates 1R and feeds the geometry band - and is then "
+                "carried to the settlement of the day after entry whatever "
+                "the path did. A loss is the whole settlement-to-settlement "
+                "move and is not capped near -1R; a trade the stop would "
+                "have taken out on a spike that reversed is a winner here. "
+                "This is the engine's own run with the stop off, not the "
+                "stopped blotter re-priced: a position no longer stopped is "
+                "still open the next session, so an entry the stopped run "
+                "took there is blocked by one position per market "
+                f"(<b>{blocked}</b> such entr{'y' if blocked == 1 else 'ies'}"
+                " on this window), and a market the stopped run still held "
+                "can be free here "
+                f"(<b>{freed}</b> entr{'y' if freed == 1 else 'ies'} only "
+                "this account took). Entries are market orders charged "
+                f"{engine_1m.ENTRY_SLIP_TICKS} ticks; the settlement exit "
+                f"{engine_1m.SLIP_SCHEDULED_TICKS}. The stopped account is "
+                "the published model; this one is its equal on the page, "
+                "not a variant of it.")
+        if contracts:
+            etf_rows = [m for m in money_of.values() if m.get("etf")]
+            note += (
+                " <b>And the sizing assumptions</b> (2026-08-21, refusal "
+                "policy, execution costs and the live universe "
+                "2026-09-01): margin is out of scope, an order whose "
+                "single contract risks more than the budget is refused at "
+                "placement rather than forced, <b>every side of every "
+                "position pays commission + exchange + NFA fees</b> into "
+                "the equity curve (per-market rates, sources and "
+                "confidence flags in <b>execution_costs.py</b>; where two "
+                "sources disagreed the higher figure was adopted; taxes "
+                "excluded at all times, slippage separately charged in R "
+                "by the engine). ETFs are not traded at all: an ETF "
+                "position would pay its full notional with no leverage, "
+                "and the measured lock (over 100% of the account on 5 of "
+                "12 historical ETF trades, at any account size) is part "
+                "of why the universe is futures-only."
+                + ("" if not etf_rows else " (ETF rows unexpectedly"
+                   " present -- check the universe filter.)"))
+        blotnote = (
+            "Sorted by entry, newest sort on any column. <b>The market name "
+            "is a link</b>: it opens charter's 1-minute trade study centred "
+            "on that trade, which needs charter's <b>serve.py</b> running "
+            f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of "
+            "slippage; P&amp;L is this trade's share of the shared account."
+            + ("" if stopped else
+               " The study holds the STOPPED list, so a row here opens the "
+               "stopped trade that shares its entry minute (the same entry, "
+               "drawn with the stop it does not have here); an entry the "
+               "stopped run never took opens the market alone.")
+            + (" <b>Stack</b> is the open position&rsquo;s composition, full "
+               "contracts of the parent plus the routed micro&rsquo;s "
+               "top-up (hover it for the dollar risk and the micro "
+               "leg&rsquo;s rounded stop distance); <b>Risk %</b> is what "
+               "the whole stack ACTUALLY risked of equity at entry, never "
+               "above the 1% budget; <b>Costs $</b> is both legs&rsquo; "
+               "round turn of commission + exchange + NFA plus the measured "
+               "entry drift (hover for the split), already inside "
+               "P&amp;L. Entries the sizing policy refused are not rows "
+               "here -- see <b>Refused at order placement</b> above."
+               if contracts and micro else
+               " <b>Ctr</b> is the position in whole contracts; hover it "
+               "for the dollar risk it realized. Entries the sizing policy "
+               "refused are not rows here -- see <b>Refused at order "
+               "placement</b> above."
+               if contracts else ""))
+        mktnote = (
+            "Each market's own figures at "
+            + ("the engine's fractional 1% risk, not this page's contract "
+               "sizing" if contracts else
+               "the same 1% risk" if risk == RISK_PCT else
+               "the engine's 1% risk, not this page's solved risk")
+            + f", on a fresh {money(START_CAPITAL)} rather than the shared "
+            "account, so the returns do not add up to the headline. "
+            "<b>Aborts</b> are the no-confirmation exits, <b>settlement</b> "
+            "the day-2 rule exits."
+            + (" Only the arsenal markets the engine ran are listed; the "
+               "contract arsenal above accounts for every other Socrates "
+               "market." if contracts else ""))
+        last_exit = max(t["exit_ts"] for t in trades)[:10]
+        chartsub = (
+            f"{len(trades)} trades, {days[0]} to {days[-1]}, "
+            + (f"a {risk:g}% risk budget in integer contracts, the "
+               f"combined full + micro stack in the accent colour "
+               f"against full contracts only in gray"
+               if contracts and micro else
+               f"a {risk:g}% risk budget in integer contracts"
+               if contracts else f"{risk}% risk per trade")
+            + ". One point per <b>market day</b> - "
+            f"a day some market in the universe was open - and the line "
+            f"<b>steps</b>: the balance is held flat until a trade "
+            f"closes, and the whole move is the vertical there. It runs "
+            f"to the last market day in the data"
+            + (f", so the flat tail after {last_exit} is a real "
+               f"{sum(1 for d in days if d > last_exit)} days with "
+               f"nothing booked." if days[-1] > last_exit else "."))
+        pane_eq = ("Equity &middot; <span style=\"color:var(--accent-line)\">"
+                   "combined full + micro</span> against <span style=\"color:"
+                   "var(--ink3)\">full contracts only</span>"
+                   if micro else "Equity")
+        pane_dd = ("Drawdown &middot; on daily closes, both sizings"
+                   if micro else "Drawdown &middot; on daily closes")
+        if contracts and nostop is not None:
+            if stopped:
+                head = (
+                    '<h2 class="section-h acct-h">With the stop order'
+                    '<span class="tag">account 2 of 2 &middot; the '
+                    'published model</span></h2>'
+                    '<p class="chartnote">The ladder stop rests in the '
+                    'market from the entry minute: a position is closed '
+                    'at its stop or at the settlement of the day after '
+                    'entry, whichever comes first. Same account, same '
+                    'sizing, same costs and same universe as the no-stop '
+                    'account above; the two differ only in the stop '
+                    'order, and in the entries a still-open position '
+                    'blocked or freed.</p>')
+                cardt = "One shared account, ladder stop live"
+            else:
+                head = (
+                    '<h2 class="section-h acct-h">Without the stop order'
+                    '<span class="tag">account 1 of 2</span></h2>'
+                    '<p class="chartnote">The same entries with <b>no stop '
+                    'order resting</b>: every position is carried to the '
+                    'settlement of the day after entry, whatever the path '
+                    'did in between. Sized exactly as the stopped account '
+                    'below (the stop price still denominates 1R and feeds '
+                    'the geometry band), the same integer-contract stack, '
+                    'the same execution costs, the same universe. It is '
+                    'the engine&rsquo;s own pass with the stop off, '
+                    'rebuilt on every refresh beside the stopped one.</p>')
+                cardt = "One shared account, no stop order"
+        else:
+            head = ""
+            cardt = ("One shared account, ladder stop live"
+                     if contracts else "One shared account")
+        html = (ACCOUNT
+                .replace("__SFX__", sfx)
+                .replace("__HEAD__", head)
+                .replace("__KPIS__", kpis)
+                .replace("__STATS__", stats)
+                .replace("__CARDT__", cardt)
+                .replace("__CHARTSUB__", chartsub)
+                .replace("__PANE_EQ__", pane_eq)
+                .replace("__PANE_DD__", pane_dd)
+                .replace("__NOTE__", note)
+                .replace("__CLASSES__", class_rows_html(trades))
+                .replace("__REFUSED__", refused_html(all_trades, refused_map,
+                                                     links_full, route))
+                .replace("__OPEN__", open_html(payload.get("open_positions"),
+                                               stopped))
+                .replace("__BLOTNOTE__", blotnote)
+                .replace("__BLOTTER__", blotter_html(trades, money_of, links,
+                                                     contracts, micro))
+                .replace("__MKTNOTE__", mktnote)
+                # The "Not tested" list is the arsenal's job on a
+                # contracts page (Lode, 2026-09-03: confusing beside the
+                # arsenal).
+                .replace("__MARKETS__", markets_html(
+                    payload["markets"],
+                    [] if contracts else payload.get("excluded", []),
+                    links))
+                .replace("__CALENDAR__", calendar_html(
+                    days, eq, dd, openpos, trades, money_of)))
+        series = dict(sfx=sfx,
+                      eq=[{"time": d, "value": v} for d, v in zip(days, eq)],
+                      # Drawdown reads DOWNWARD from zero, like the R-cut
+                      # pages: percent below the peak, negated (Lode,
+                      # 2026-09-03: that is the correct visualisation of
+                      # a drawdown).
+                      ddc=[{"time": d, "value": -v}
+                           for d, v in zip(days, ddc)],
+                      eqf=[{"time": d, "value": v}
+                           for d, v in zip(days, eq_f)],
+                      ddf=[{"time": d, "value": -v}
+                           for d, v in zip(days, ddc_f)],
+                      op=[{"time": d, "value": v}
+                          for d, v in zip(days, openpos)])
+        taken_by_market, refused_by_market = {}, {}
+        for t in trades:
+            taken_by_market[t["market"]] = \
+                taken_by_market.get(t["market"], 0) + 1
+        for i in refused_map:
+            k = all_trades[i]["market"]
+            refused_by_market[k] = refused_by_market.get(k, 0) + 1
+        info = dict(trades=trades, all_trades=all_trades, days=days,
+                    final=final, max_dd=max_dd, refused=refused_map,
+                    r_full=r_full, traded=traded,
+                    taken_by_market=taken_by_market,
+                    refused_by_market=refused_by_market)
+        return html, series, info
 
-    class_rows = class_rows_html(trades)
+    # The stopped account (the published list) numbers charter's study;
+    # the no-stop rows link through the stopped trade sharing their entry.
+    links_stopped = study_links(data["trades"], vslug)
+    html_s, series_s, s_info = account(data, True, "", links_stopped)
+    blocks, sections = [html_s], [series_s]
+    n_info = None
+    if nostop:
+        links_ns = study_links(nostop["trades"], vslug,
+                               numbering=data["trades"])
+        html_n, series_n, n_info = account(nostop, False, "ns", links_ns)
+        # The no-stop account FIRST (Lode: "above the equity curve we
+        # currently see"), the stopped one under it.
+        blocks, sections = [html_n, html_s], [series_n, series_s]
+    days = s_info["days"]
+    trades = s_info["trades"]
+    all_trades = s_info["all_trades"]
 
-    def ser(values):
-        return json.dumps([{"time": d, "value": v}
-                           for d, v in zip(days, values)],
-                          separators=(",", ":"))
-
-    survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
     if contracts and micro:
         sizing_lede = (
             f" <b>Money on this page is the MICRO STACK in INTEGER "
@@ -1928,25 +2333,42 @@ def build(data=None, out=None, variant=None, contracts=False):
     else:
         sizing_lede = ""
     if contracts:
-        taken_by_market, refused_by_market = {}, {}
-        for t in trades:
-            taken_by_market[t["market"]] = \
-                taken_by_market.get(t["market"], 0) + 1
-        for i in refused_map:
-            k = all_trades[i]["market"]
-            refused_by_market[k] = refused_by_market.get(k, 0) + 1
+        if n_info:
+            accounts_lede = (
+                f" <b>Two accounts of the same entries, as equals</b>: "
+                f"first <b>without a stop order</b> (every position "
+                f"carried to the next settlement, {len(n_info['trades'])} "
+                f"trades taken, {money(n_info['final'])} at "
+                f"{n_info['max_dd']:.2f}% drawdown), then <b>with the "
+                f"ladder stop</b>, the published model "
+                f"({len(trades)} trades taken, {money(s_info['final'])} at "
+                f"{s_info['max_dd']:.2f}% drawdown). Same account, same "
+                f"sizing, same costs, same universe; the no-stop list is "
+                f"the engine&rsquo;s own pass with the stop off, rebuilt "
+                f"on every refresh.")
+        else:
+            accounts_lede = (
+                " <b>The no-stop account is missing from this build</b>: "
+                "the matrix JSON carries no companion for this cell yet. "
+                "Rebuild the matrix (run_1m_matrix.py) and this page.")
         tested = {r["market"] for r in data["markets"]}
-        arsenal = arsenal_status_html(taken_by_market, refused_by_market,
-                                      tested, route)
+        arsenal = arsenal_status_html(
+            s_info["taken_by_market"], s_info["refused_by_market"], tested,
+            route,
+            count_note=(" Counts are the <b>stopped</b> account&rsquo;s, "
+                        "the published model; the no-stop account takes "
+                        "the same entries less those a still-open "
+                        "position blocked." if n_info else ""))
         universe_lede = (
             f"on the {len(sizing.LIVE_UNIVERSE)}-market live universe, "
-            f"{len(taken_by_market)} of which traded on this page (the "
-            f"contract arsenal below says which, and why the others did "
-            f"not), ")
+            f"{len(s_info['taken_by_market'])} of which traded on this "
+            f"page (the contract arsenal below says which, and why the "
+            f"others did not), ")
     else:
         arsenal = ""
+        accounts_lede = ""
         universe_lede = (f"across {len(data['markets'])} tested markets, "
-                         f"{traded} of which traded, ")
+                         f"{s_info['traded']} of which traded, ")
     lede = (
         f"One shared account of {money(start)} "
         + universe_lede +
@@ -1956,88 +2378,7 @@ def build(data=None, out=None, variant=None, contracts=False):
         f"order and marked out at the settlement of the day after entry. "
         f"This page is the blotter: every one of the {len(trades)} trades is "
         f"listed, and each row opens that trade in charter's 1-minute study."
-        + sizing_lede + data.get("universe_note", ""))
-    note = (
-        "<b>Read the execution assumptions before reading the result.</b> "
-        f"Entries are market orders charged {engine_1m.ENTRY_SLIP_TICKS} ticks "
-        "and stops another two, and moving those two ticks was worth about 12R "
-        "across the sample, so professional execution is a first-order part of "
-        "this edge rather than a detail. The win rate lives in one place: a "
-        f"trade that survives to the day-2 settlement wins "
-        f"{100 * survivors['wins'] / survivors['n']:.0f}% of the time at "
-        f"{signed(survivors['avg'])}R average, while the stop class bleeds. "
-        "See docs/quickfix1m1dc_audit.md, sections 8 and 9.")
-    if contracts:
-        etf_rows = [m for m in money_of.values() if m.get("etf")]
-        note += (
-            " <b>And the sizing assumptions</b> (2026-08-21, refusal "
-            "policy, execution costs and the live universe "
-            "2026-09-01): margin is out of scope, an order whose "
-            "single contract risks more than the budget is refused at "
-            "placement rather than forced, <b>every side of every "
-            "position pays commission + exchange + NFA fees</b> into "
-            "the equity curve (per-market rates, sources and "
-            "confidence flags in <b>execution_costs.py</b>; where two "
-            "sources disagreed the higher figure was adopted; taxes "
-            "excluded at all times, slippage separately charged in R "
-            "by the engine). ETFs are not traded at all: an ETF "
-            "position would pay its full notional with no leverage, "
-            "and the measured lock (over 100% of the account on 5 of "
-            "12 historical ETF trades, at any account size) is part "
-            "of why the universe is futures-only."
-            + ("" if not etf_rows else " (ETF rows unexpectedly"
-               " present -- check the universe filter.)"))
-    blotnote = (
-        "Sorted by entry, newest sort on any column. <b>The market name is a "
-        "link</b>: it opens charter's 1-minute trade study centred on that "
-        "trade, which needs charter's <b>serve.py</b> running "
-        f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
-        "P&amp;L is this trade's share of the shared account."
-        + (" <b>Stack</b> is the open position&rsquo;s composition, full "
-           "contracts of the parent plus the routed micro&rsquo;s top-up "
-           "(hover it for the dollar risk and the micro leg&rsquo;s "
-           "rounded stop distance); <b>Risk %</b> is what the whole stack "
-           "ACTUALLY risked of equity at entry, never above the 1% "
-           "budget; <b>Costs $</b> is both legs&rsquo; round turn of "
-           "commission + exchange + NFA plus the measured entry drift "
-           "(hover for the split), already inside P&amp;L. Entries the "
-           "sizing policy refused are not rows here -- see <b>Refused at "
-           "order placement</b> above."
-           if contracts and micro else
-           " <b>Ctr</b> is the position in whole contracts; hover it for "
-           "the dollar risk it realized. Entries the sizing policy "
-           "refused are not rows here -- see <b>Refused at order "
-           "placement</b> above."
-           if contracts else ""))
-    mktnote = (
-        "Each market's own figures at "
-        + ("the engine's fractional 1% risk, not this page's contract "
-           "sizing" if contracts else
-           "the same 1% risk" if risk == RISK_PCT else
-           "the engine's 1% risk, not this page's solved risk")
-        + f", on a fresh {money(START_CAPITAL)} rather than the shared "
-        "account, so the returns do not add up to the headline. "
-        "<b>Aborts</b> are the no-confirmation exits, <b>settlement</b> "
-        "the day-2 rule exits."
-        + (" Only the arsenal markets the engine ran are listed; the "
-           "contract arsenal above accounts for every other Socrates "
-           "market." if contracts else ""))
-    last_exit = max(t["exit_ts"] for t in trades)[:10]
-    chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
-                + (f"a {risk:g}% risk budget in integer contracts, the "
-                   f"combined full + micro stack in the accent colour "
-                   f"against full contracts only in gray"
-                   if contracts and micro else
-                   f"a {risk:g}% risk budget in integer contracts"
-                   if contracts else f"{risk}% risk per trade")
-                + ". One point per <b>market day</b> - "
-                f"a day some market in the universe was open - and the line "
-                f"<b>steps</b>: the balance is held flat until a trade "
-                f"closes, and the whole move is the vertical there. It runs "
-                f"to the last market day in the data"
-                + (f", so the flat tail after {last_exit} is a real "
-                   f"{sum(1 for d in days if d > last_exit)} days with "
-                   f"nothing booked." if days[-1] > last_exit else "."))
+        + accounts_lede + sizing_lede + data.get("universe_note", ""))
     footer = (
         f"quickfix1m1dc, built from output/{IN_JSON.name} at the published "
         f"baseline (tighten "
@@ -2047,71 +2388,50 @@ def build(data=None, out=None, variant=None, contracts=False):
         f"All times UTC. This strategy is deliberately outside the daily "
         f"registry, so it has no cap dial, no risk dial and no variant grid."
         + (f" Money on this page: integer contracts at the {money(start)} "
-          f"deployment account with refusal at the {risk:g}% budget "
-          f"(Lode, 2026-09-01)"
-          + (", full contracts topped up with the routed micros (the "
-             "micro stack, Lode 2026-09-03; the same replay as the "
-             "capital ladder's $250k rung)" if micro else "")
-          + f", specs from data_center/"
-          f"metadata/contract_specs.json; the fractional pages remain the "
-          f"research currency." if contracts else ""))
+           f"deployment account with refusal at the {risk:g}% budget "
+           f"(Lode, 2026-09-01)"
+           + (", full contracts topped up with the routed micros (the "
+              "micro stack, Lode 2026-09-03; the same replay as the "
+              "capital ladder's $250k rung)" if micro else "")
+           + f", specs from data_center/"
+           f"metadata/contract_specs.json; the fractional pages remain the "
+           f"research currency." if contracts else "")
+        + (f" The no-stop account is the matrix's companion pass of "
+           f"{esc(nostop['strategy'].split('[')[1].split(',')[0])} "
+           f"(run_1m_matrix.py, the `nostop` block of "
+           f"{MATRIX_JSON.name}; engine dial stop_live off, Lode "
+           f"2026-09-03)." if n_info else ""))
 
     name = esc(data.get("strategy", "quickfix1m1dc"))
     if contracts:
         name += (" &mdash; integer contracts, full + micro stack" if micro
                  else " &mdash; integer contracts")
-    pane_eq = ("Equity &middot; <span style=\"color:var(--accent-line)\">"
-               "combined full + micro</span> against <span style=\"color:"
-               "var(--ink3)\">full contracts only</span>"
-               if micro else "Equity")
-    pane_dd = ("Drawdown &middot; on daily closes, both sizings"
-               if micro else "Drawdown &middot; on daily closes")
+        if n_info:
+            name += ", without and with the stop"
     html = (PAGE
             .replace("__NAME__", name)
             .replace("__CSS__", CSS)
             .replace("__LEDE__", lede)
             .replace("__RULES__", rules_html(p))
             .replace("__ARSENAL__", arsenal)
-            .replace("__KPIS__", kpis)
-            .replace("__CHARTSUB__", chartsub)
-            .replace("__NOTE__", note)
-            .replace("__STATS__", stats)
-            .replace("__CLASSES__", class_rows)
-            .replace("__PANE_EQ__", pane_eq)
-            .replace("__PANE_DD__", pane_dd)
-            .replace("__REFUSED__", refused_html(all_trades, refused_map,
-                                                 links_full, route))
-            .replace("__OPEN__", open_html(data.get("open_positions")))
-            .replace("__BLOTNOTE__", blotnote)
-            .replace("__BLOTTER__", blotter_html(trades, money_of, links,
-                                                 contracts, micro))
-            .replace("__MKTNOTE__", mktnote)
-            # The "Not tested" list is the arsenal's job on a contracts
-            # page (Lode, 2026-09-03: confusing beside the arsenal).
-            .replace("__MARKETS__", markets_html(
-                data["markets"],
-                [] if contracts else data.get("excluded", []), links))
-            .replace("__CALENDAR__", calendar_html(days, eq, dd, openpos,
-                                                   trades, money_of))
+            .replace("__ACCOUNTS__", "\n".join(blocks))
             .replace("__FOOTER__", footer)
             .replace("__LIB__", LIB_PATH.read_text(encoding="utf-8"))
-            .replace("__JS__", PAGE_JS
-                     .replace("__EQ__", ser(eq))
-                     # Drawdown reads DOWNWARD from zero, like the
-                     # R-cut pages: percent below the peak, negated
-                     # (Lode, 2026-09-03: that is the correct
-                     # visualisation of a drawdown).
-                     .replace("__DDC__", ser([-v for v in ddc]))
-                     .replace("__EQF__", ser(eq_f))
-                     .replace("__DDF__", ser([-v for v in ddc_f]))
-                     .replace("__OP__", ser(openpos))))
+            .replace("__JS__", PAGE_JS.replace(
+                "__SECTIONS__", json.dumps(sections,
+                                           separators=(",", ":")))))
     out.write_text(html, encoding="utf-8")
-    print(f"report: {len(trades)} trades, final ${final:,.2f}, max drawdown "
-          f"{max_dd:.2f}%, {len(days)} days -> {out.name} "
-          f"({len(html) / 1024:.0f} KB)"
-          + (f"; micro stack: {len(refused_map)} refused, full-only"
+    r_full = s_info["r_full"]
+    print(f"report: {len(trades)} trades, final ${s_info['final']:,.2f}, "
+          f"max drawdown {s_info['max_dd']:.2f}%, {len(days)} days -> "
+          f"{out.name} ({len(html) / 1024:.0f} KB)"
+          + (f"; micro stack: {len(s_info['refused'])} refused, full-only"
              f" ${r_full[2]:,.2f} / {r_full[3]:.2f}% DD /"
-             f" {len(r_full[4])} refused" if micro else ""))
+             f" {len(r_full[4])} refused" if micro else "")
+          + (f"; NO-STOP account: {len(n_info['trades'])} trades, final"
+             f" ${n_info['final']:,.2f}, max drawdown "
+             f"{n_info['max_dd']:.2f}%, {len(n_info['refused'])} refused"
+             if n_info else ""))
 
 
 if __name__ == "__main__":

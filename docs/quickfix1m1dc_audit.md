@@ -298,6 +298,76 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 21. The no-stop account beside the stopped one (Lode, 2026-09-03)
+
+Lode: *"what we also want to see in the report is another equity curve
+(above the equity curve we currently see in the report) also with the
+drawdown and open positions pane but this new curve has to show the same
+strategy result WITHOUT stoploss. So the exit will always be at the same
+moment in time; settlement ... the curve without stop is as important as
+the curve with stop. And data is updating at each update run."*
+
+**What "without stoploss" means here, decided before code.** The stop
+PRICE stays: it is what sizes the position (1% on level-to-stop),
+denominates R and feeds the geometry band, so every entry decision is
+identical to the stopped model's. What goes is the stop ORDER: no exit
+before the next settlement, whatever the path did, and a loss is the whole
+settlement-to-settlement move rather than ~-1R. This is `engine_1m.run_market
+(stop_live=False)`; the default is on and bit-identical (pinned).
+
+**Why it is an engine pass and not the stopped blotter re-priced.** The
+same reason the band needed its own runs (s.15): a position that is no
+longer stopped is still OPEN the next session, so an entry the stopped run
+took there is blocked by one position per market - and a market the
+stopped run still held can be free for an entry the no-stop run alone
+takes. The lists differ in entries, in both directions, and the page
+prints both counts.
+
+**Where it runs.** `run_1m_matrix.py` runs a NO-STOP COMPANION of each
+report cell (`variant 1`, `variant 4`) beside the grid - the pass already
+holds every market's bars, and the per-market cache and tail splice cover
+the companions for free (two more engine passes on a recomputed market,
+none on a cached one; `cache_version` 4, one full rebuild). They are NOT
+cells - no number, no row on the matrix page, no charter slug - and the
+JSON carries them under `nostop`, keyed by the cell each shadows; the grid
+stays the factorial and nothing else (s.18, 2026-08-18).
+
+**Where it shows.** The contracts pages (`quickfix1m1dc_contracts_variant_01
+/_04.html`) render ONE account block twice - KPI row, statistics, the three
+panes, exit classes, refused orders, open positions, blotter, per-market
+table, daily calendar - the no-stop account first, the stopped one under
+it, at the same $250k, the same micro stack, the same execution costs, the
+same live universe, on one shared time axis. The baseline page crosschecks
+the matrix's `variant 1` trades against the published blotter before using
+the companion. No-stop blotter rows link into charter's study through the
+stopped trade sharing their entry minute, because that is the list the
+study holds.
+
+**First reading (window to 2026-09-02).** The engine at 1% fractional
+risk on the human-filter universe ($100k base, the matrix's own figures):
+
+| | trades | wr | net R | max DD | final @1% |
+|---|---|---|---|---|---|
+| variant 1, stopped (published) | 108 | 40.7% | +72.80 | 6.17% | $197,784 |
+| variant 1, NO stop | 92 | 59.8% | +51.11 | **26.46%** | $153,675 |
+| variant 4, stopped | 101 | 46.5% | +68.87 | 6.43% | $192,247 |
+| variant 4, NO stop | 90 | 58.9% | +43.50 | **23.72%** | $144,007 |
+
+On the contracts pages ($250k, live universe, micro stack, costs in):
+baseline no-stop 76 taken / $371,334 / 21.00% DD against the stopped
+90 / $417,110 / 6.03%; hybrid no-stop 73 / $354,246 / 20.43% against 83
+/ $407,011 / 5.60%. Shape, not verdict: dropping the stop lifts the WIN
+RATE by ~15-20 points (the spikes that took a stop and reversed are
+winners now) and still LOSES net R, because the losers that were capped
+near -1R run to -2R, -3R and once -17.8R (variant 1's worst no-stop
+trade), and the drawdown quadruples. The list also SHIFTS: 17 stopped
+entries are blocked in the no-stop run by a position still open, and 3
+entries only the no-stop run took (the page prints both counts). Read
+against s.8: the stop class was the win-rate problem, and here is what it
+buys - a quarter of the drawdown for a third of the win rate. Levered to
+equal drawdown the gap would be wider still. Not a decision; the page
+exists so the question is measured on every refresh rather than argued.
+
 ## 20. The R-cut grid reports BOTH universes (Lode, 2026-08-20)
 
 Lode: *"the results don't match and it's not because of the difference in max

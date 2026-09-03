@@ -987,3 +987,98 @@ def test_carry_open_changes_nothing_when_every_position_closes():
                                   carry_open=True)
     assert plain == carried
     assert summary["open_position"] is None
+
+
+# --- stop_live: the same entries with no stop order resting ----------------
+# (Lode, 2026-09-03: "the same strategy result WITHOUT stoploss ... the exit
+# will always be at the same moment in time; settlement".) The stop price
+# is still computed - it sizes the position, denominates R and feeds the
+# band - so every entry decision is untouched; only the exit it would have
+# caused is gone.
+
+def test_stop_live_off_carries_a_stopped_trade_to_the_settlement():
+    deep_room = base_file(bear=[70.0])
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6", bars=reentry_day_bars(),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    stopped, _ = run_market(days, [deep_room], TICK)
+    held, summary = run_market(days, [deep_room], TICK, stop_live=False)
+    assert stopped[0]["reason"] == "stop"
+    assert len(held) == 1
+    t = held[0]
+    assert t["reason"] == "close1" and t["exit"] == 98.0
+    assert t["exit_ts"].startswith("2026-06-11 17:30")
+    # the same entry, the same stop PRICE, the same R denominator
+    assert t["entry_ts"] == stopped[0]["entry_ts"]
+    assert abs(t["stop"] - stopped[0]["stop"]) < 1e-9
+    assert abs(t["rpu"] - stopped[0]["rpu"]) < 1e-9
+    # the bar that took the stop is just a bar now: the trade wins
+    assert abs(t["gross_r"] - (99.8 - 98.0) / 2.6) < 1e-3
+    assert summary["reasons"]["stop"] == 0
+
+
+def test_stop_live_off_loss_is_not_capped_near_one_r():
+    """A settlement far beyond the stop books the whole move: without
+    the stop nothing bounds a loss at -1R."""
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6",
+            bars=short_entry_day()
+                 + [bar(ts(10, "04:00"), 99.8, 105.0, 99.8, 105.0)]
+                 + flat_bars(10, "05:00", 2, 105.0),
+            settle_ts=ts(10, "17:30"), settle_price=105.0),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 106.0),
+            settle_ts=ts(11, "17:30"), settle_price=106.0),
+    ]
+    # confirm=False as the published model runs (the entry day settles
+    # against the short, and the clause would abort it there instead)
+    stopped, _ = run_market(days, [base_file()], TICK, confirm=False)
+    held, _ = run_market(days, [base_file()], TICK, confirm=False,
+                         stop_live=False)
+    assert stopped[0]["reason"] == "stop"
+    assert held[0]["reason"] == "close1"
+    assert abs(held[0]["gross_r"] - (99.8 - 106.0) / 2.6) < 1e-3
+    assert held[0]["gross_r"] < stopped[0]["gross_r"] < -1.0
+
+
+def test_stop_live_off_blocks_the_next_session_entry_the_stop_freed():
+    """Why this is an engine dial and not a re-pricing of the stopped
+    blotter: stopped on day 1, the stopped run takes day 2's fresh
+    signal (the lockout expired). Held instead, the position is still
+    open at that minute - one position per market - and the day-2 entry
+    never happens. The trade lists differ, not just the exits."""
+    deep_room = base_file(bear=[70.0])
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6", bars=reentry_day_bars(),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=short_entry_day(day=11) + flat_bars(11, "06:00", 2, 99.7),
+            settle_ts=ts(11, "17:30"), settle_price=99.0),
+        Day(date=date(2026, 6, 12), contract="GCQ6",
+            bars=flat_bars(12, "01:00", 3, 98.0),
+            settle_ts=ts(12, "17:30"), settle_price=98.0),
+    ]
+    stopped, _ = run_market(days, [deep_room], TICK)
+    held, _ = run_market(days, [deep_room], TICK, stop_live=False)
+    assert len(stopped) == 2
+    assert len(held) == 1
+    assert held[0]["entry_date"] == "2026-06-10"
+    assert held[0]["exit_ts"].startswith("2026-06-11 17:30")
+
+
+def test_stop_live_on_is_the_default():
+    deep_room = base_file(bear=[70.0])
+    days = [
+        Day(date=date(2026, 6, 10), contract="GCQ6", bars=reentry_day_bars(),
+            settle_ts=ts(10, "17:30"), settle_price=99.5),
+        Day(date=date(2026, 6, 11), contract="GCQ6",
+            bars=flat_bars(11, "01:00", 3, 98.0),
+            settle_ts=ts(11, "17:30"), settle_price=98.0),
+    ]
+    default, s1 = run_market(days, [deep_room], TICK)
+    explicit, s2 = run_market(days, [deep_room], TICK, stop_live=True)
+    assert default == explicit and s1 == s2

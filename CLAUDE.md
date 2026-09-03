@@ -342,6 +342,59 @@ only confused beside the arsenal); the fractional pages keep it.
 Lifting the filter for the six rejected markets and buying SR3 bars
 is the open strategy-level decision that would take the pages to 22
 tested.
+**THE CONTRACTS PAGES CARRY TWO ACCOUNTS SINCE 2026-09-03: NO STOP
+ABOVE, STOP BELOW** (Lode: "another equity curve (above the equity
+curve we currently see in the report) also with the drawdown and open
+positions pane but this new curve has to show the same strategy result
+WITHOUT stoploss. So the exit will always be at the same moment in
+time; settlement ... the curve without stop is as important as the
+curve with stop"). Three pieces, each where it belongs:
+- ENGINE: `engine_1m.run_market(stop_live=...)`, default True and
+  bit-identical there (pinned). Off, the stop PRICE is still computed --
+  it sizes the position, denominates R and feeds the band, so every
+  entry decision is untouched -- but no stop order rests; every position
+  is carried to the next settlement and a loss is the whole move, not
+  capped near -1R. IT IS AN ENGINE DIAL, NOT A RE-PRICING OF THE STOPPED
+  BLOTTER, for the band's reason: a position no longer stopped is still
+  open the next session, so an entry the stopped run took there is
+  blocked by one-position-per-market, and a market the stopped run still
+  held can be free -- the lists differ in ENTRIES, both ways (tests:
+  `test_stop_live_*` in `tests/test_engine_1m.py`).
+- MATRIX: `run_1m_matrix.COMPANIONS` -- `NOSTOP_OF = ["variant 1",
+  "variant 4"]`, each report cell's dials with `stop_live=False`, named
+  `<cell> no-stop`. `CELLS = VARIANTS + COMPANIONS` is what the market
+  loop, the per-market cache and the tail splice iterate (two more
+  engine passes on a recomputed market, zero on a cached one;
+  `cache_version` 3 -> 4, one full rebuild); the report, the page and
+  charter read VARIANTS only. THEY ARE NOT CELLS: no number, no row, no
+  checkbox, no `?v=` slug; the JSON carries them under `nostop`, keyed by
+  the cell each shadows, with rows, trades, open positions and headline
+  figures. The grid is still the factorial and nothing else.
+- PAGE: `build_1m_report.py` renders ONE account block (`ACCOUNT`: KPI
+  row, stats grid, the three panes, exit classes, refused orders,
+  currently open, blotter, by market, daily calendar) per trade list;
+  the fractional pages render it once, the contracts pages twice --
+  `nostop_payload(cell)` first, then the stopped list -- at the same
+  $250k, the same micro stack, the same costs, the same live universe,
+  both panes on one shared grid (`daily_series(first_entry=...)`) and
+  one time axis. The baseline page CROSSCHECKS the matrix's `variant 1`
+  trades against the published blotter before using its companion
+  (prints OK or WARNING). No-stop blotter rows link into charter's study
+  through the STOPPED trade sharing the entry minute (`study_links(...,
+  numbering=)`), since that is the list charter holds; an entry only the
+  no-stop run took links to the market alone. An old matrix JSON without
+  `nostop` builds the stopped account only and says so in the lede.
+The refactor was verified output-neutral: every page type's KPI tiles
+and table rows identical against the pre-refactor builder; the GC
+splice test reproduces a full run on all 29 cells, companions
+included. FIRST READING (audit s.21, window to 2026-09-02, contracts
+pages at $250k): baseline no-stop 76 taken / $371,334 / 21.00% DD
+against the stopped 90 / $417,110 / 6.03%; hybrid no-stop 73 /
+$354,246 / 20.43% against 83 / $407,011 / 5.60%. The win rate jumps
+~15-20 points without the stop and net R still falls, because the
+capped -1R losers run to -2R, -3R, once -17.8R: the stop buys a
+quarter of the drawdown for a third of the win rate. Shape, not
+verdict; measured on every refresh.
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

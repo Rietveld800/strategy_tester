@@ -425,17 +425,24 @@ through the CELL's own trade sharing the entry minute (the study holds
 no list for the six extra markets, so those rows link to the market
 alone). cache_version 5 (one full rebuild); four extra engine passes
 per recomputed market. The published pages keep the filter; these
-measure what it costs or saves. **SR3 IS TO JOIN THEM AS `no pass`**
-(Lode, 2026-09-03: "for completeness ... fetch the data and include
-the market but with MF at 'no pass' still"): data_center has the plan
-and the quote ($0.41 for everything, nothing bought yet -- see its
-CLAUDE.md, "SR3 INCLUSION IS PLANNED"); once its roll calendar is
-frozen and the 1-minute bars are on disk, the change HERE is one
-token, "SR3" in `run_1m.ELIGIBLE_FUTURES`: NO_FILTER picks it up, the
-human filter stays as it is, the arsenal row turns from "Not
-backtested: no 1-minute bars" into what the engine found. Expect zero
-or near-zero trades (the serial front months barely print), recorded
-rather than omitted.
+measure what it costs or saves. **SR3 JOINED THEM AS `no pass` ON 2026-09-03** (Lode: "for
+completeness ... fetch the data and include the market but with MF at
+'no pass' still"; quoted first, $0.41 for everything, then "run the
+purchase and 4 steps"). data_center did the data side ($0.15 spent:
+daily/statistics top-ups, the fingerprint re-run, `freeze_sr3.py`'s
+hand-frozen serial-month calendar from 2026-06-05 with the rounded
+2-dp era Apr 17 - Jun 4 deliberately not a segment, SR3 in
+`refresh_1m.ACTIVE_FUTURES`, 1-minute tails per segment - see its
+CLAUDE.md). HERE the change is one token, "SR3" in
+`run_1m.ELIGIBLE_FUTURES`: `market_inputs("SR3")` gives 55 sessions
+(2026-06-05..09-01, tick 0.0025), NO_FILTER picks it up (the grid
+signature moved: one full matrix rebuild), the human filter still
+rejects it, so the published pages keep "Not backtested: failed the
+human market filter" and only the `_without_mf` pages trade it, tagged
+`no pass`. The engine at the published dials finds ZERO trades on it
+(the serial months print a handful of minutes a day and the ladders
+seldom carry four levels), which is the honest row: what the engine
+found, not "no bars".
 **EVERY ACCOUNT LINKS TO ITS OWN LIST IN CHARTER'S STUDY, AND THE
 LIFTED PAGES CARRY AN `MF` COLUMN** (Lode, 2026-09-03 evening: "we need
 the trades to be linked to the 1-minute chart. That's not always the

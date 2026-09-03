@@ -89,6 +89,9 @@ ELIGIBLE_FUTURES = ["GC", "YM", "6E", "6J", "LE", "HG", "CL", "NG", "PA",
                              # on ~28% of days (levels caveat)
                     "BTC",   # QUARTERLY contract; M6 segment only —
                              # U6 era excluded for sparsity (Lode)
+                    "SR3",   # joined 2026-09-03 (Lode: "for completeness",
+                             # MF still 'no pass'): hand-frozen serial-month
+                             # calendar from 2026-06-05, almost no prints
                     "CC", "KC"]  # obsolete softs, frozen calendars,
                                  # window Jan 12-Apr 17
 ETFS = ["URA", "VIXY",

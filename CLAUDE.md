@@ -425,7 +425,17 @@ through the CELL's own trade sharing the entry minute (the study holds
 no list for the six extra markets, so those rows link to the market
 alone). cache_version 5 (one full rebuild); four extra engine passes
 per recomputed market. The published pages keep the filter; these
-measure what it costs or saves.
+measure what it costs or saves. **SR3 IS TO JOIN THEM AS `no pass`**
+(Lode, 2026-09-03: "for completeness ... fetch the data and include
+the market but with MF at 'no pass' still"): data_center has the plan
+and the quote ($0.41 for everything, nothing bought yet -- see its
+CLAUDE.md, "SR3 INCLUSION IS PLANNED"); once its roll calendar is
+frozen and the 1-minute bars are on disk, the change HERE is one
+token, "SR3" in `run_1m.ELIGIBLE_FUTURES`: NO_FILTER picks it up, the
+human filter stays as it is, the arsenal row turns from "Not
+backtested: no 1-minute bars" into what the engine found. Expect zero
+or near-zero trades (the serial front months barely print), recorded
+rather than omitted.
 **EVERY ACCOUNT LINKS TO ITS OWN LIST IN CHARTER'S STUDY, AND THE
 LIFTED PAGES CARRY AN `MF` COLUMN** (Lode, 2026-09-03 evening: "we need
 the trades to be linked to the 1-minute chart. That's not always the

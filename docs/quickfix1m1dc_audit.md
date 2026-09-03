@@ -455,6 +455,15 @@ run ($100k base), then the contracts pages at $250k on the live universe:
 | variant 4, filter lifted | 129 | 41.9% | +56.04 | **12.44%** | $168,259 | 110 | $343,784 | 12.17% |
 | variant 4, lifted, no stop | 111 | 55.0% | +17.33 | 30.33% | $109,862 | 90 | $236,636 | 27.48% |
 
+**SR3 is the one live-universe market still missing, by data, not by
+decision** (Lode, same evening: include it "for completeness", MF `no
+pass`). data_center holds the plan and the quote - $0.41 for the daily,
+statistics and definition top-ups plus the serial-month 1-minute bars,
+nothing bought yet; a roll calendar from 2026-06-05 with the rounded era
+Apr 17 - Jun 4 as an entry blackout. On this side it is one token in
+`run_1m.ELIGIBLE_FUTURES`. Expected: zero or near-zero trades; the point
+is that the row then says what the engine found rather than "no bars".
+
 The six rejected markets add ~30 trades and take ~12R off the total while
 doubling the drawdown, on both anchors - the same shape s.20 measured on
 the R-cut grid (the excluded markets "contribute -5.66R and deepen the

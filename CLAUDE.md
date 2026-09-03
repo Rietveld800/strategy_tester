@@ -394,7 +394,17 @@ $354,246 / 20.43% against 83 / $407,011 / 5.60%. The win rate jumps
 ~15-20 points without the stop and net R still falls, because the
 capped -1R losers run to -2R, -3R, once -17.8R: the stop buys a
 quarter of the drawdown for a third of the win rate. Shape, not
-verdict; measured on every refresh.
+verdict; measured on every refresh. THE STOP'S CASE, CROSS-REFERENCED
+(Lode, same day: "I thought we did a study around stoplosses"): there
+was no single study -- five dated measurements, listed in audit s.21
+and rendered as the ONE-TIME page `output/quickfix1m1dc_stop_profile.html`
+(`build_1m_stop_profile.py`, NOT in the refresh chain, rebuild by hand):
+the GC pilot stop sweep (2026-08-03), the trade review that moved the
+stop to the ladder anchor (s.1.2/s.5), the stop-anchor grid (s.10,
+"moving the stop at all is the wrong lever"), the path analysis (s.14,
+every mechanical protection loses), and the exit-timing pre-registration
+(2026-08-28: signal path vs trade path, same mean, twice the spread,
+"a held trade is variance the stop happens to cap").
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

@@ -368,6 +368,48 @@ buys - a quarter of the drawdown for a third of the win rate. Levered to
 equal drawdown the gap would be wider still. Not a decision; the page
 exists so the question is measured on every refresh rather than argued.
 
+**Where the stop's case was made before this, so the record reads as one
+argument** (Lode, 2026-09-03: "I thought we did a study around stoplosses
+and why we use it"). There was no single study; five measurements, none of
+which ran the strategy without a stop until this section:
+
+1. **The GC pilot stop sweep** (`../data_center/docs/backtest_1m_design.md`,
+   2026-08-03): v1's stop was a multiple of entry-to-running-extreme, swept
+   1.0-3.0 on gold alone; the tight end paid most (+15.6% at x1.0 vs +6.7%
+   at x3.0) and the settlement tightening improved every setting. Eight to
+   ten trades, one market: the stop's SHAPE came from here, not its
+   existence.
+2. **The trade-by-trade review** (s.1.2 and s.5, 2026-08-05/06): reading
+   GC, BTC and ZW on the study moved the stop to the ladder anchor (one tick
+   beyond the 5th reversal) - GC1 and GC7 became winners under it, GC4 was
+   killed by the tightening - and recorded that any stop change changes the
+   TRADE LIST, so stops compare as equity curves only.
+3. **The stop-anchor grid** (s.10, 2026-08-06): ladder vs hybrid vs wick,
+   with and without the confirmation clause. Wick far worse, hybrid better
+   on win rate (39.9 vs 36.6) and losing streak (6) but ~9.7R fewer on the
+   wider denominator. Verdict: "moving the stop at all is the wrong lever" -
+   removing it was not on the grid. Same section: 6 of 80 stops opened
+   through their stop, 0.52R in total, so gap risk was not the stop's job.
+4. **The path analysis** (s.14, 2026-08-09) - the closest thing to a stop
+   study: every mechanical protection lost money. Abort at -0.3..-0.8R
+   killed more winners than it saved (33 of 72 winners went >= 0.5R adverse
+   first); breakeven stops were negative in every cell; a third of the stop
+   class had been up >= +1R before dying. Lode's verdict: the win rate has
+   to come from entry selection, not from the stop.
+5. **The exit-timing pre-registration** (`docs/exit_timing_preregistration.md`
+   s.12-13, 2026-08-28; `research_1m_exit_profile.py`): every trade's path
+   profiled BOTH ways, "signal path (no stop)" and "trade path (stop as
+   booked)". At the settlement exit the two have the same mean (+0.78R vs
+   +0.79R) and the no-stop path twice the spread (sd 4.05R vs 2.76R), per-
+   trade Sharpe 0.19 vs 0.29; P3 held, ~69% of stops print inside the entry
+   session. Its closing line - a held trade is variance the stop happens to
+   cap - is the prediction this section's engine run confirms, and adds
+   what a per-trade path cannot: the shifted list and the drawdown.
+
+The one-time record of all of it, with the current figures beside the dated
+ones, is `output/quickfix1m1dc_stop_profile.html`
+(`build_1m_stop_profile.py`, not in the refresh chain).
+
 ## 20. The R-cut grid reports BOTH universes (Lode, 2026-08-20)
 
 Lode: *"the results don't match and it's not because of the difference in max

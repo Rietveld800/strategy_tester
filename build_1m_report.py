@@ -535,16 +535,21 @@ def daily_series(trades, eod, calendar, start=START_CAPITAL,
     return days, eq, dd, ddc, openpos
 
 
-def streaks(trades):
+def streaks(trades, outcome=None):
     """Longest winning and losing run, in ENTRY order and off net R.
 
     The project's rule (user, 2026-07-29): the blotter is sorted by entry,
     so a reader counting losing rows counts entry order, and keying off R
-    keeps the figure independent of the bet size.
+    keeps the figure independent of the bet size. `outcome(i)` swaps the
+    figure a trade wins or loses by (the contracts pages count in the
+    account's own dollars, 2026-09-03 evening).
     """
     best_w = best_l = cur_w = cur_l = 0
-    for t in sorted(trades, key=lambda x: x["entry_ts"]):
-        if t["net_r"] > 0:
+    order = sorted(range(len(trades)), key=lambda i: trades[i]["entry_ts"])
+    for i in order:
+        t = trades[i]
+        v = outcome(i) if outcome else t["net_r"]
+        if v > 0:
             cur_w, cur_l = cur_w + 1, 0
         else:
             cur_l, cur_w = cur_l + 1, 0
@@ -575,26 +580,82 @@ CLASS_DEFS = [
 ]
 
 
-def class_rows_html(trades):
+def class_rows_html(trades, money_of=None):
+    """`money_of` switches the two figure columns from R to the account's
+    dollars (the contracts pages, 2026-09-03 evening)."""
     rows = []
     for label, pick, note in CLASS_DEFS:
-        sel = [t for t in trades if pick(t)]
-        if not sel:
+        idx = [i for i, t in enumerate(trades) if pick(t)]
+        if not idx:
             continue
-        r = sum(t["net_r"] for t in sel)
-        avg = r / len(sel)
+        if money_of is not None:
+            r = sum(money_of[i]["pnl_usd"] for i in idx)
+            fmt = signed_money
+        else:
+            r = sum(trades[i]["net_r"] for i in idx)
+            fmt = signed
+        avg = r / len(idx)
         # The % column is this class's share of ALL trades, not a win rate
         # within the class (user, 2026-08-09), tinted by which side of the
         # ledger the class sits on.
         rows.append(
             f'<tr><td class="l">{label}</td>'
-            f'<td class="mono">{len(sel)}</td>'
+            f'<td class="mono">{len(idx)}</td>'
             f'<td class="mono {cls(r)}">'
-            f'{100 * len(sel) / len(trades):.1f}%</td>'
-            f'<td class="mono {cls(r)}">{signed(r)}</td>'
-            f'<td class="mono {cls(avg)}">{signed(avg)}</td>'
+            f'{100 * len(idx) / len(trades):.1f}%</td>'
+            f'<td class="mono {cls(r)}">{fmt(r)}</td>'
+            f'<td class="mono {cls(avg)}">{fmt(avg)}</td>'
             f'<td class="l wrap">{note}</td></tr>')
     return "".join(rows)
+
+
+def markets_money_html(trades, money_of, links):
+    """The per-market table of a CONTRACTS account, from the trades it
+    took and the money they booked (2026-09-03 evening, Lode: these
+    pages are about the position in contracts and never a flat 1%).
+    The engine's per-market rows - each market a fresh $100k at 1% -
+    stay on the fractional pages."""
+    by = {}
+    for i, t in enumerate(trades):
+        by.setdefault(t["market"], []).append(i)
+    cols = [("Market", "l", 20), ("Trades", "", 9), ("Win %", "", 9),
+            ("Net P&amp;L $", "", 14), ("Net R", "", 10), ("Stops", "", 9),
+            ("Settlement", "", 12), ("Costs $", "", 17)]
+    head = "".join(
+        f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
+        f'<span class="ar"></span></th>'
+        for i, (lab, c, w) in enumerate(cols))
+    body = []
+    for key in sorted(by):
+        idx = by[key]
+        pnl = sum(money_of[i]["pnl_usd"] for i in idx)
+        wins = sum(1 for i in idx if money_of[i]["pnl_usd"] > 0)
+        wr = 100.0 * wins / len(idx)
+        r = sum(trades[i]["net_r"] for i in idx)
+        stops = sum(1 for i in idx if trades[i]["reason"] == "stop")
+        settle = sum(1 for i in idx if trades[i]["reason"] == "close1")
+        costs = sum(money_of[i].get("cost_full_rt", money_of[i].get("cost_rt", 0.0))
+                    + money_of[i].get("cost_micro_rt", 0.0)
+                    + money_of[i].get("drift_usd", 0.0) for i in idx)
+        link = links.get(key)
+        name = (f'<a href="{link[0]}" target="_blank" '
+                f'title="{esc(link[2])} in the 1m study">{esc(key)}</a>'
+                if link else esc(key))
+        body.append(
+            f'<tr><td class="l" data-s="{esc(key)}">{name}</td>'
+            f'<td class="mono" data-s="{len(idx)}">{len(idx)}</td>'
+            f'<td class="mono" data-s="{wr:.1f}">{wr:.0f}%</td>'
+            f'<td class="mono {cls(pnl)}" data-s="{pnl:.2f}">'
+            f'{signed_money(pnl)}</td>'
+            f'<td class="mono {cls(r)}" data-s="{r:.4f}">{signed(r)}</td>'
+            f'<td class="mono" data-s="{stops}">{stops}</td>'
+            f'<td class="mono" data-s="{settle}">{settle}</td>'
+            f'<td class="mono" data-s="{costs:.2f}">{money(costs)}</td>'
+            f'</tr>')
+    return (f'<div class="tradecard"><div class="tradescroll">'
+            f'<table class="trades" data-sort="3" data-dir="-1">'
+            f'<thead><tr>{head}</tr></thead>'
+            f'<tbody>{"".join(body)}</tbody></table></div></div>')
 
 
 def exit_classes(trades):
@@ -1576,8 +1637,8 @@ __HEAD__
 <div class="tradecard"><table class="trades"><thead><tr>
   <th class="l" style="width:20%">Exit class</th>
   <th style="width:9%">Trades</th>
-  <th style="width:9%">%</th><th style="width:11%">Net R</th>
-  <th style="width:9%">Avg R</th>
+  <th style="width:9%">%</th><th style="width:11%">__CLASS_NET__</th>
+  <th style="width:9%">__CLASS_AVG__</th>
   <th class="l wrap" style="width:42%">What it means</th>
 </tr></thead><tbody>__CLASSES__</tbody></table></div>
 __REFUSED__
@@ -1991,19 +2052,40 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
             print(f"WARNING: daily worst series bottoms at {max(dd):.2f}% "
                   f"against the headline {max_dd:.2f}%")
 
-        wins = [t for t in trades if t["net_r"] > 0]
-        losses = [t for t in trades if t["net_r"] <= 0]
+        # THE OUTCOME EVERY STATISTIC COUNTS (Lode, 2026-09-03 evening:
+        # "102.6R won against 95.7R lost while the return is -5.35%"). A
+        # contracts page books each trade in whole contracts, so its win
+        # rate, expectancy, profit factor, average winner and loser, best
+        # and worst and the streaks are counted in the DOLLARS this
+        # account booked, after costs - never one flat R per trade. R
+        # stays a column of the blotter, where it belongs to the trade.
+        # The fractional pages count in R as they always have.
+        if contracts:
+            def outcome(i):
+                return money_of[i]["pnl_usd"]
+            def fmt(v):
+                return signed_money(v)
+            unit_note = "in this account's dollars, after costs"
+        else:
+            def outcome(i):
+                return trades[i]["net_r"]
+            def fmt(v):
+                return signed(v) + "R"
+            unit_note = "in R"
+        vals = [outcome(i) for i in range(len(trades))]
+        wins = [v for v in vals if v > 0]
+        losses = [v for v in vals if v <= 0]
         net_r = sum(t["net_r"] for t in trades)
+        net_out = sum(vals)
         wr = 100 * len(wins) / len(trades)
-        avg_w = (sum(t["net_r"] for t in wins) / len(wins)) if wins else 0.0
-        avg_l = (sum(t["net_r"] for t in losses) / len(losses)
-                 if losses else 0.0)
-        gross_win = sum(t["net_r"] for t in wins)
-        gross_loss = -sum(t["net_r"] for t in losses)
+        avg_w = (sum(wins) / len(wins)) if wins else 0.0
+        avg_l = (sum(losses) / len(losses)) if losses else 0.0
+        gross_win = sum(wins)
+        gross_loss = -sum(losses)
         pf = gross_win / gross_loss if gross_loss else None
-        best = max(t["net_r"] for t in trades)
-        worst = min(t["net_r"] for t in trades)
-        run_w, run_l = streaks(trades)
+        best = max(vals)
+        worst = min(vals)
+        run_w, run_l = streaks(trades, outcome)
         holds = [(pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])
                   ).total_seconds() / 60.0 for t in trades]
         avg_hold = sum(holds) / len(holds)
@@ -2023,8 +2105,11 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                  f"{traded} markets traded of {len(payload['markets'])} "
                  f"tested")),
             kpi("Win rate", f"{wr:.1f}%",
-                f"{len(wins)} won, {len(losses)} lost"),
-            kpi("Net R", signed(net_r, 2), "after slippage"),
+                f"{len(wins)} won, {len(losses)} lost, {unit_note}"),
+            (kpi("Net P&amp;L", signed_money(net_out),
+                 "booked by this account, after costs", cls(net_out))
+             if contracts else
+             kpi("Net R", signed(net_r, 2), "after slippage")),
             kpi("Final capital", money(final),
                 f"from {money(start)}", cls(final - start)),
             kpi("Return", signed(100 * (final / start - 1), 2) + "%",
@@ -2105,24 +2190,28 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
         # Twelve tiles in three rows of four (Lode, 2026-09-02): the
         # winner/loser pair and the best/worst pair share the middle row.
         stats = "".join([
-            kpi("Expectancy", signed(net_r / len(trades)) + "R", "per trade",
-                cls(net_r)),
+            kpi("Expectancy", fmt(net_out / len(trades)),
+                f"per trade, {unit_note}", cls(net_out)),
             kpi("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
-                f"{gross_win:.1f}R won against {gross_loss:.1f}R lost"),
+                f"{fmt(gross_win)[1:] if not contracts else money(gross_win)}"
+                f" won against "
+                f"{fmt(gross_loss)[1:] if not contracts else money(gross_loss)}"
+                f" lost, {unit_note}"),
             kpi("Longest winning run", f"{run_w}",
                 "positions, in entry order"),
             kpi("Longest losing run", f"{run_l}",
                 "positions, in entry order"),
-            kpi("Average winner", signed(avg_w) + "R", f"{len(wins)} trades",
+            kpi("Average winner", fmt(avg_w), f"{len(wins)} trades",
                 "pos"),
-            kpi("Average loser", signed(avg_l) + "R",
+            kpi("Average loser", fmt(avg_l),
                 f"{len(losses)} trades", "neg"),
-            kpi("Best trade", signed(best) + "R",
+            kpi("Best trade", fmt(best),
                 "gross of nothing, net of all"),
-            kpi("Worst trade", signed(worst) + "R",
-                "a gapped or slipped stop can cost more than 1R" if stopped
-                else "no stop rests: a loss is the whole move to the"
-                     " settlement, in R of the sizing distance"),
+            kpi("Worst trade", fmt(worst),
+                ("a gapped or slipped stop can cost more than 1R" if stopped
+                 else "no stop rests: a loss is the whole move to the"
+                      " settlement") + (", in this account's dollars"
+                                        if contracts else "")),
             kpi("Average hold", held(avg_hold), "entry to exit"),
             kpi("Max concurrent", f"{max_open}", "positions open at once"),
             # Currently-open count from the payload's open_positions --
@@ -2137,6 +2226,14 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
         ])
 
         survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
+        if contracts:
+            surv_idx = [i for i, t in enumerate(trades)
+                        if t["reason"] == "close1"]
+            surv_vals = [money_of[i]["pnl_usd"] for i in surv_idx]
+            survivors = dict(
+                n=len(surv_idx),
+                wins=sum(1 for v in surv_vals if v > 0),
+                avg=(sum(surv_vals) / len(surv_vals)) if surv_vals else 0.0)
         if stopped:
             note = (
                 "<b>Read the execution assumptions before reading the "
@@ -2147,7 +2244,7 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                 "this edge rather than a detail. The win rate lives in one "
                 "place: a trade that survives to the day-2 settlement wins "
                 f"{100 * survivors['wins'] / survivors['n']:.0f}% of the "
-                f"time at {signed(survivors['avg'])}R average, while the "
+                f"time at {fmt(survivors['avg'])} average, while the "
                 "stop class bleeds. See docs/quickfix1m1dc_audit.md, "
                 "sections 8 and 9.")
         else:
@@ -2225,19 +2322,24 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                "refused are not rows here -- see <b>Refused at order "
                "placement</b> above."
                if contracts else ""))
-        mktnote = (
-            "Each market's own figures at "
-            + ("the engine's fractional 1% risk, not this page's contract "
-               "sizing" if contracts else
-               "the same 1% risk" if risk == RISK_PCT else
-               "the engine's 1% risk, not this page's solved risk")
-            + f", on a fresh {money(START_CAPITAL)} rather than the shared "
-            "account, so the returns do not add up to the headline. "
-            "<b>Aborts</b> are the no-confirmation exits, <b>settlement</b> "
-            "the day-2 rule exits."
-            + (" Only the arsenal markets the engine ran are listed; the "
-               "contract arsenal above accounts for every other Socrates "
-               "market." if contracts else ""))
+        if contracts:
+            mktnote = (
+                "Each market's share of THIS account: the trades it took "
+                "here, the dollars they booked after costs (they add up to "
+                "the headline), their net R, and the exits. Win % counts "
+                "the dollar outcome. <b>Costs $</b> is the market's "
+                "commission + exchange + NFA plus micro drift. Only the "
+                "markets that traded on this page are listed; the contract "
+                "arsenal above accounts for every other Socrates market.")
+        else:
+            mktnote = (
+                "Each market's own figures at "
+                + ("the same 1% risk" if risk == RISK_PCT else
+                   "the engine's 1% risk, not this page's solved risk")
+                + f", on a fresh {money(START_CAPITAL)} rather than the "
+                "shared account, so the returns do not add up to the "
+                "headline. <b>Aborts</b> are the no-confirmation exits, "
+                "<b>settlement</b> the day-2 rule exits.")
         last_exit = max(t["exit_ts"] for t in trades)[:10]
         chartsub = (
             f"{len(trades)} trades, {days[0]} to {days[-1]}, "
@@ -2304,7 +2406,11 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                 .replace("__PANE_EQ__", pane_eq)
                 .replace("__PANE_DD__", pane_dd)
                 .replace("__NOTE__", note)
-                .replace("__CLASSES__", class_rows_html(trades))
+                .replace("__CLASS_NET__", "Net P&amp;L $" if contracts
+                         else "Net R")
+                .replace("__CLASS_AVG__", "Avg $" if contracts else "Avg R")
+                .replace("__CLASSES__", class_rows_html(
+                    trades, money_of if contracts else None))
                 .replace("__REFUSED__", refused_html(all_trades, refused_map,
                                                      links_full, route))
                 .replace("__OPEN__", open_html(payload.get("open_positions"),
@@ -2317,10 +2423,9 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                 # The "Not tested" list is the arsenal's job on a
                 # contracts page (Lode, 2026-09-03: confusing beside the
                 # arsenal).
-                .replace("__MARKETS__", markets_html(
-                    payload["markets"],
-                    [] if contracts else payload.get("excluded", []),
-                    links))
+                .replace("__MARKETS__", markets_money_html(
+                    trades, money_of, links) if contracts else markets_html(
+                    payload["markets"], payload.get("excluded", []), links))
                 .replace("__CALENDAR__", calendar_html(
                     days, eq, dd, openpos, trades, money_of)))
         series = dict(sfx=sfx,

@@ -32,11 +32,25 @@ figures run_1m wrote and warns on drift.
 with the one percent risk") builds the INTEGER-CONTRACT pages beside
 the fractional ones: the same trade list, the same page, but the money
 layer sizes every entry in whole contracts off data_center's validated
-contract spec table, at the $2,000,000 test account -- chosen so every
-market affords at least one contract inside the 1% budget. The sizing
+contract spec table, at the $250,000 deployment account. The sizing
 arithmetic is imported from research_1m_sizing (ONE code path), the R
 columns are untouched by construction, and the page states its own
 delta against the fractional ideal at the same account.
+
+THE CONTRACTS PAGES TRADE THE MICRO STACK SINCE 2026-09-03 (Lode: the
+pages were still refusing orders as if only full contracts existed,
+"yet we did the whole study of micro-contracts already"). The money
+layer is now `replay_micro` -- full contracts first, the routed micro
+(research_1m_micro.py's gates JSON) topping the position up toward
+the 1% budget, the measured entry drift priced per trade, the micro
+stop rounded away on its own grid -- the SAME function the capital
+ladder's $250k rung runs, so the two agree to the cent by
+construction. The full-contracts-only replay stays on the page as the
+thin gray reference curve and a comparison tile, exactly as on the
+ladder pages; without the gates JSON the page falls back to full-only
+and says so. The blotter shows each position's STACK (n full + k
+micro), the risk it ACTUALLY took as a percentage of equity at entry,
+and its execution cost split per leg.
 """
 
 import json
@@ -248,6 +262,171 @@ def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
                         (peak - equity) / peak * 100.0)
             eod[ts.date()] = (equity, peak, worst)
     return money_of, eod, equity, max_dd, refused
+
+
+# --------------------------------------------------------- the micro stack
+
+GATES_JSON = HERE / "output" / "quickfix1m1dc_micro_gates.json"
+
+
+# A micro top-up never takes more than this share of the entry
+# minute's printed volume -- drift pricing answers fidelity, this
+# answers liquidity, trade by trade.
+PARTICIPATION_CAP = 0.5
+
+
+def micro_route():
+    """market -> routed micro leg spec plus the per-entry drift map,
+    from the measured study (research_1m_micro.py). Since the
+    drift-pricing revision (Lode, 2026-09-02) every sourced candidate
+    routes; the measured drift is PRICED per trade instead of gating
+    the market, and a trade with no per-entry record gets no micro
+    leg."""
+    gates = json.loads(GATES_JSON.read_text(encoding="utf-8"))
+    route = {}
+    for key, root in gates["routing"].items():
+        if root is None:
+            continue
+        cand = next(c for c in gates["candidates"][key]
+                    if c["root"] == root)
+        route[key] = dict(root=root, fraction=cand["fraction"],
+                          tick=cand["tick"])
+    return route, gates
+
+
+def rounded_micro_stop(entry, stop, tick):
+    """The parent-space stop price on the MICRO's tick grid, rounded
+    AWAY from entry -- a micro stop may only be equal or wider, never
+    tighter, than the parent's (Lode: the stop placement on the micro
+    is the critical piece; conservatism is the rule).
+
+    Rounded on the EXCHANGE'S ABSOLUTE PRICE GRID (multiples of the
+    micro tick), never on an entry-anchored offset grid: the slipped
+    entry fill can sit off-grid, and an order book only accepts grid
+    prices. The epsilon absorbs float dust so a stop already on the
+    grid stays exactly where it is."""
+    import math as _m
+    steps = stop / tick
+    eps = 1e-9 * max(1.0, abs(steps))
+    if stop > entry:      # short: the stop sits above, round UP
+        return _m.ceil(steps - eps) * tick
+    return _m.floor(steps + eps) * tick
+
+
+def replay_micro(trades, risk_pct, start, route, specs, per_entry):
+    """The mixed-stack replay: full contracts first, then the routed
+    micro tops the remainder up toward the budget. Refused only when
+    even one micro does not fit (or the market has no routed micro and
+    one full contract does not fit).
+
+    Booking, precise by construction: the micro leg's RISK uses its
+    own rounded stop distance (>= the parent's); a STOP exit books the
+    micro leg at that wider distance (net_r scaled on its own risk
+    base), any other exit books the identical per-unit price move the
+    parent leg made (net_r x parent rpu x micro point value). Costs
+    are charged per leg per side from the sourced table and reported
+    split.
+
+    THE DRIFT IS PRICED, NOT GATED (Lode, 2026-09-02): the measured
+    signed basis of the micro's print against the parent's at THIS
+    trade's entry minute is booked into the curve at entry --
+    side_sign x basis x point value x contracts, a COST when the micro
+    sat on the wrong side of the parent for our direction and a CREDIT
+    when it sat on the right one. Per-trade liquidity rules: no micro
+    bar at the entry minute means no micro leg for that trade, and the
+    top-up never exceeds PARTICIPATION_CAP of the minute's printed
+    volume. Exits at settlement are treated as aligned (exchange
+    micro settlements track the parent's); stop exits book the micro
+    leg at its own grid-rounded stop distance."""
+    events = []
+    for i, t in enumerate(trades):
+        events.append((pd.Timestamp(t["entry_ts"]), 1, i))
+        events.append((pd.Timestamp(t["exit_ts"]), 0, i))
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    equity, peak, max_dd = start, start, 0.0
+    open_pos, money_of, eod, refused = {}, {}, {}, {}
+    for ts, kind, i in events:
+        t = trades[i]
+        if kind == 1:
+            spec = specs[t["market"]]
+            pv_full = sizing.usd_point_value(spec)
+            full_risk = t["rpu"] * pv_full
+            budget = equity * risk_pct / 100.0
+            n = int(budget // full_risk)
+            r = route.get(t["market"])
+            rec = per_entry.get(
+                f"{t['market']}|{t['contract']}|{t['entry_ts']}")
+            k, rpu_m, pv_m, root, basis = 0, None, None, None, 0.0
+            if r is not None and rec is not None and rec["volume"] > 0:
+                root = r["root"]
+                basis = rec["basis"]
+                # The SAME risk anchor as the parent's R: level to
+                # stop (entry_first), never the slipped fill -- the
+                # two legs must denominate one distance, the micro's
+                # merely rounded to its own grid.
+                anchor = t.get("entry_first") or t["entry"]
+                stop_m = rounded_micro_stop(anchor, t["stop"],
+                                            r["tick"])
+                rpu_m = abs(anchor - stop_m)
+                pv_m = pv_full * r["fraction"]
+                micro_risk = rpu_m * pv_m
+                k = min(int((budget - n * full_risk) // micro_risk),
+                        int(rec["volume"] * PARTICIPATION_CAP))
+                k = max(k, 0)
+            if n == 0 and k == 0:
+                refused[i] = dict(per_unit=full_risk, equity=equity,
+                                  budget=budget)
+                continue
+            side = execution_costs.cost_per_side(
+                t["market"], n, eurusd=sizing.EURUSD) if n else 0.0
+            side_m = execution_costs.cost_per_side(
+                root, k, eurusd=sizing.EURUSD) if k else 0.0
+            # the measured entry drift, signed against our side: a
+            # long pays a micro printing above the parent, a short is
+            # paid by it
+            side_sign = 1.0 if t["side"] == "long" else -1.0
+            drift = (side_sign * basis * pv_m * k) if k else 0.0
+            equity -= side + side_m + drift
+            risk_usd = n * full_risk + (k * rpu_m * pv_m if k else 0.0)
+            m = dict(n=n, k=k, root=root, rpu_m=rpu_m, pv_m=pv_m,
+                     full_risk=full_risk, risk_usd=risk_usd,
+                     risk_pct=risk_usd
+                     / (equity + side + side_m + drift) * 100.0,
+                     cost_full_rt=2.0 * side, cost_micro_rt=2.0 * side_m,
+                     drift_usd=drift)
+            open_pos[i] = m
+        else:
+            m = open_pos.pop(i, None)
+            if m is None:
+                continue
+            pnl_full = t["net_r"] * m["n"] * m["full_risk"]
+            if m["k"]:
+                if t["reason"] == "stop":
+                    # the micro leg is stopped at ITS OWN rounded stop:
+                    # the loss per unit is its wider distance
+                    pnl_micro = t["net_r"] * m["k"] * m["rpu_m"] * m["pv_m"]
+                else:
+                    # any other exit fills both legs at the same price,
+                    # so the per-unit move is the parent's
+                    pnl_micro = t["net_r"] * t["rpu"] * m["pv_m"] * m["k"]
+            else:
+                pnl_micro = 0.0
+            pnl = (pnl_full + pnl_micro
+                   - m["cost_full_rt"] / 2.0 - m["cost_micro_rt"] / 2.0)
+            equity += pnl
+            peak = max(peak, equity)
+            max_dd = max(max_dd, (peak - equity) / peak * 100.0)
+            money_of[i] = dict(
+                m, pnl_usd=pnl_full + pnl_micro
+                - m["cost_full_rt"] - m["cost_micro_rt"]
+                - m["drift_usd"],
+                balance=equity)
+            worst = max(eod.get(ts.date(), (0.0, 0.0, 0.0))[2],
+                        (peak - equity) / peak * 100.0)
+            eod[ts.date()] = (equity, peak, worst)
+    return money_of, eod, equity, max_dd, refused
+
 
 
 def solve_risk_pct(trades, target_dd):
@@ -525,28 +704,52 @@ def rules_html(p):
 </div>"""
 
 
-def refused_html(all_trades, refused_map, links_full):
+def refused_html(all_trades, refused_map, links_full, route=None):
     """The orders the sizing policy refused (Lode, 2026-09-01: never
     force a trade above the 1% budget; the same setup is released the
     moment grown capital affords one contract). They are rendered as
     their own table rather than dimmed blotter rows because they are
     not trades: nothing was entered, nothing is booked, no statistic
     above counts them. The R column shows what the blotter's trade went
-    on to do -- the release analysis a growing account wants to read."""
+    on to do -- the release analysis a growing account wants to read.
+
+    With `route` (the micro stack in force) a refusal means even ONE
+    MICRO did not fit -- or the market has no routed micro, or no
+    micro bar printed at that entry minute -- and the table says
+    which."""
     if not refused_map:
         return ""
     head = '<div class="section-h">Refused at order placement</div>'
-    note = (
-        '<p class="chartnote">Entries whose <b>single contract</b> risked '
-        'more than the 1% budget at that moment. The order is refused, '
-        'never forced, and nothing is booked; as the account grows, the '
-        'same market&rsquo;s later setups clear the bar on their own. '
-        '<b>R (not taken)</b> is what the blotter&rsquo;s trade did &mdash; '
-        'information about the release, not booked money.</p>')
+    if route is None:
+        note = (
+            '<p class="chartnote">Entries whose <b>single contract</b> '
+            'risked more than the 1% budget at that moment. The order is '
+            'refused, never forced, and nothing is booked; as the account '
+            'grows, the same market&rsquo;s later setups clear the bar on '
+            'their own. <b>R (not taken)</b> is what the blotter&rsquo;s '
+            'trade did &mdash; information about the release, not booked '
+            'money.</p>')
+    else:
+        note = (
+            '<p class="chartnote">Entries where <b>one full contract</b> '
+            'risked more than the 1% budget at that moment <b>and no '
+            'micro contract could stand in</b>: the market has no routed '
+            'micro (<b>Micro</b> shows a dash), no micro bar printed at '
+            'that entry minute, or even one micro risked more than the '
+            'budget. The order is refused, never forced, and nothing is '
+            'booked; as the account grows, the same market&rsquo;s later '
+            'setups clear the bar on their own. <b>R (not taken)</b> is '
+            'what the blotter&rsquo;s trade did &mdash; information about '
+            'the release, not booked money.</p>')
     cols = [("Market", "l", 11), ("Side", "l", 7), ("In (UTC)", "l", 15),
             ("1 contract $", "", 13), ("Budget $", "", 12),
             ("Equity $", "", 13), ("R (not taken)", "", 12),
             ("Reason", "l", 17)]
+    if route is not None:
+        cols = [("Market", "l", 10), ("Side", "l", 6), ("In (UTC)", "l", 14),
+                ("1 contract $", "", 12), ("Micro", "l", 8),
+                ("Budget $", "", 11), ("Equity $", "", 12),
+                ("R (not taken)", "", 11), ("Reason", "l", 16)]
     heads = "".join(f'<th class="{c}" style="width:{w}%">{lab}</th>'
                     for lab, c, w in cols)
     rows = []
@@ -557,12 +760,18 @@ def refused_html(all_trades, refused_map, links_full):
         if link:
             name = (f'<a href="{link[0]}&amp;t={link[1][i]}" '
                     f'target="_blank">{name}</a>')
+        micro_cell = ""
+        if route is not None:
+            m = route.get(t["market"])
+            micro_cell = (f'<td class="l mono">'
+                          f'{esc(m["root"]) if m else "&mdash;"}</td>')
         rows.append(
             f'<tr>'
             f'<td class="l">{name}</td>'
             f'<td class="l">{t["side"]}</td>'
             f'<td class="l mono">{stamp(t["entry_ts"])}</td>'
             f'<td class="mono neg">{money(r["per_unit"])}</td>'
+            f'{micro_cell}'
             f'<td class="mono">{money(r["budget"])}</td>'
             f'<td class="mono">{money(r["equity"])}</td>'
             f'<td class="mono {cls(t["net_r"])}">{signed(t["net_r"])}</td>'
@@ -624,8 +833,21 @@ def open_html(open_positions):
             f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
-def blotter_html(trades, money_of, links, contracts=False):
-    if contracts:
+def blotter_html(trades, money_of, links, contracts=False, micro=False):
+    """`contracts` adds the position-size column; `micro` (the combined
+    full+micro stack) renders it as the STACK with the risk the position
+    actually took and its costs, the columns Lode asked the contracts
+    pages to carry (2026-09-03)."""
+    if contracts and micro:
+        # Stack, actual risk % and costs are the subject of the page, so
+        # the price columns each give up a little width; sums to 100.
+        cols = [("Market", "l", 8), ("Side", "l", 4.5),
+                ("In (UTC)", "l", 10.5), ("Out (UTC)", "l", 10.5),
+                ("Held", "", 5), ("In", "", 6.5), ("Out", "", 6.5),
+                ("Stop", "", 6.5), ("R/24h", "", 5), ("Stack", "l", 8.5),
+                ("Risk %", "", 5), ("R", "", 5), ("Costs $", "", 5.5),
+                ("P&amp;L $", "", 6), ("Reason", "l", 7)]
+    elif contracts:
         # The extra column is the whole point of a contracts page, so the
         # others each give up a little width; still sums to 100.
         cols = [("Market", "l", 9), ("Side", "l", 5), ("In (UTC)", "l", 12),
@@ -658,7 +880,40 @@ def blotter_html(trades, money_of, links, contracts=False):
         cell = (f'<a href="{link[0]}&amp;t={link[1][t]}" target="_blank" '
                 f'title="{esc(link[2])}, trade {link[1][t]} in the 1m study">'
                 f'{name}</a>') if link else name
-        if contracts:
+        if contracts and micro:
+            # The STACK (n full + k micro), the risk the whole stack
+            # actually took of equity at entry, and the costs it rang up
+            # (both legs' round turns plus the measured entry drift,
+            # split in the tooltip). A refused order is not here at all.
+            stack = " + ".join(
+                ([f'{m["n"]} {tr["market"]}'] if m["n"] else [])
+                + ([f'{m["k"]} {m["root"]}'] if m["k"] else []))
+            drift = m.get("drift_usd", 0.0)
+            costs = m["cost_full_rt"] + m["cost_micro_rt"] + drift
+            stack_tip = (
+                f'risk ${m["risk_usd"]:,.0f} = {m["risk_pct"]:.2f}% of '
+                f'equity at entry; ${m["full_risk"]:,.0f} per full contract'
+                + (f'; micro stop rounded to {m["root"]}\'s grid: '
+                   f'{m["rpu_m"]:g}/unit against the parent\'s '
+                   f'{tr["rpu"]:g}' if m["k"] else '; no micro leg'))
+            cost_tip = (
+                f'full leg round turn ${m["cost_full_rt"]:,.2f}; micro leg '
+                f'round turn ${m["cost_micro_rt"]:,.2f}; measured entry '
+                f'drift '
+                + (f'{"paid" if drift > 0 else "received"} '
+                   f'${abs(drift):,.2f}' if drift else 'none'))
+            ctr_cell = (
+                f'<td class="l mono" data-s="{m["n"] * 1000 + m["k"]}" '
+                f'title="{stack_tip}">{esc(stack)}</td>'
+                f'<td class="mono" data-s="{m["risk_pct"]:.3f}">'
+                f'{m["risk_pct"]:.2f}%</td>')
+            # A received drift larger than the fees is a net CREDIT and
+            # prints green with its sign, never "$-9.05" in red.
+            cost_cell = (f'<td class="mono {cls(-costs)}" '
+                         f'data-s="{costs:.2f}" title="{cost_tip}">'
+                         f'{signed_money(-costs) if costs < 0 else money(costs)}'
+                         f'</td>')
+        elif contracts:
             # The cell says how many; the tooltip carries the money behind
             # it, plus the ETF's locked notional -- the number the
             # futures-only decision reads. (An entry the budget could not
@@ -673,8 +928,9 @@ def blotter_html(trades, money_of, links, contracts=False):
                         f'of the account')
             ctr_cell = (f'<td class="mono" data-s="{m["n"]}" '
                         f'title="{tip}">{m["n"]:,}</td>')
+            cost_cell = ""
         else:
-            ctr_cell = ""
+            ctr_cell = cost_cell = ""
         rows.append(
             f'<tr>'
             f'<td class="l" data-s="{name}">{cell}</td>'
@@ -692,6 +948,7 @@ def blotter_html(trades, money_of, links, contracts=False):
             f'{ctr_cell}'
             f'<td class="mono {cls(tr["net_r"])}" data-s="{tr["net_r"]}">'
             f'{signed(tr["net_r"])}</td>'
+            f'{cost_cell}'
             f'<td class="mono {cls(m["pnl_usd"])}" data-s="{m["pnl_usd"]:.2f}">'
             f'{signed_money(m["pnl_usd"])}</td>'
             f'<td class="l" data-s="{tr["reason"]}">'
@@ -845,11 +1102,26 @@ PAGE_JS = r"""<script>
   // sloped line between two exits eleven days apart draws eleven days of
   // gain that nothing booked.
   var STEP = LightweightCharts.LineType.WithSteps;
+  // The contracts pages carry a second sizing (full contracts only)
+  // as a thin gray reference behind the combined stack, like the
+  // capital ladder; the series are empty on every other page.
+  var EQF = __EQF__, DDF = __DDF__;
   mk('eq', __EQ__, function (c) {
+    if (EQF.length) {
+      c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
+        lineType: STEP, priceLineVisible: false,
+        lastValueVisible: false }).setData(EQF);
+    }
     return c.addLineSeries({ color: cssv('--accent-line'), lineWidth: 2,
       lineType: STEP });
   });
   mk('ddc', __DDC__, function (c) {
+    if (DDF.length) {
+      c.addLineSeries({ color: cssv('--ink3'), lineWidth: 1,
+        lineType: STEP, priceLineVisible: false,
+        lastValueVisible: false,
+        priceFormat: { type: 'custom', formatter: pct } }).setData(DDF);
+    }
     return c.addLineSeries({ color: cssv('--neg'), lineWidth: 1,
       lineType: STEP,
       priceFormat: { type: 'custom', formatter: pct } });
@@ -1011,8 +1283,8 @@ __RULES__
 <div class="card">
   <div class="charthead"><div class="t">One shared account</div>
   <div class="s">__CHARTSUB__</div></div>
-  <div class="panelbl">Equity</div><div id="eq"></div>
-  <div class="panelbl">Drawdown &middot; on daily closes</div>
+  <div class="panelbl">__PANE_EQ__</div><div id="eq"></div>
+  <div class="panelbl">__PANE_DD__</div>
   <div id="ddc"></div>
   <div class="panelbl">Open positions</div><div id="op"></div>
 </div>
@@ -1178,8 +1450,26 @@ def build(data=None, out=None, variant=None, contracts=False):
                          if o["market"] in sizing.LIVE_UNIVERSE]))
         start = SIZING_ACCOUNT
         risk = RISK_PCT  # the budget; what each trade REALIZES is below it
-        money_of, eod, final, max_dd, refused_map = replay_contracts(
-            trades, risk, start)
+        # THE MICRO STACK (Lode, 2026-09-03): full contracts first, the
+        # routed micro topping up toward the budget -- the capital
+        # ladder's own replay, at the ladder's $250k rung, so the two
+        # pages cannot disagree. Full-contracts-only stays on the page
+        # as the gray reference; without the gates JSON it is all
+        # there is, and the page says so.
+        micro = GATES_JSON.exists()
+        if micro:
+            route, gates = micro_route()
+            specs, _ = sizing.load_specs()
+            money_of, eod, final, max_dd, refused_map = replay_micro(
+                trades, risk, start, route, specs, gates["per_entry"])
+            r_full = replay_contracts(trades, risk, start)
+        else:
+            print("NOTE: no micro gates JSON -- building full-contracts-"
+                  "only (run research_1m_micro.py for the micro stack)")
+            route = None
+            money_of, eod, final, max_dd, refused_map = replay_contracts(
+                trades, risk, start)
+            r_full = None
         # The fractional replay at the SAME account is this page's
         # yardstick: the published figures live on the fractional pages
         # and are a different bet size, so comparing to them would only
@@ -1203,6 +1493,7 @@ def build(data=None, out=None, variant=None, contracts=False):
         money_of, eod, final, max_dd = replay(trades, risk, start)
         ideal_final = ideal_dd = None
         orig_idx = list(range(len(trades)))
+        micro, route, r_full = False, None, None
     calendar = data.get("calendar")
     if not calendar:
         calendar = run_1m.calendar_fallback(trades)
@@ -1210,6 +1501,15 @@ def build(data=None, out=None, variant=None, contracts=False):
               "panes are drawn on calendar days and stop at the last exit; "
               "re-run the runner that wrote it for the real grid.")
     days, eq, dd, ddc, openpos = daily_series(trades, eod, calendar, start)
+    # The full-contracts-only reference curves (equity and drawdown on
+    # closes), drawn thin gray behind the combined stack like the ladder
+    # pages do; empty when there is nothing to compare against.
+    eq_f, ddc_f = [], []
+    if r_full is not None:
+        taken_f = [all_trades[i] for i in sorted(r_full[0])]
+        days_f, eq_f, _, ddc_f, _ = daily_series(taken_f, r_full[1],
+                                                 calendar, start)
+        assert days_f == days
     if not contracts:
         # The self-check replays at the ENGINE BASE, because that is
         # the start run_1m published its figures at; the page itself
@@ -1312,23 +1612,53 @@ def build(data=None, out=None, variant=None, contracts=False):
         risks_pct = sorted(m["risk_pct"] for m in money_of.values())
         med_risk = risks_pct[len(risks_pct) // 2] if risks_pct else 0.0
         delta = 100 * (final / ideal_final - 1)
+        if micro:
+            fees = sum(m["cost_full_rt"] + m["cost_micro_rt"]
+                       for m in money_of.values())
+            drift = sum(m.get("drift_usd", 0.0) for m in money_of.values())
+            k_total = sum(m["k"] for m in money_of.values())
+            k_trades = sum(1 for m in money_of.values() if m["k"])
+        else:
+            fees = sum(m["cost_rt"] for m in money_of.values())
+            drift = k_total = k_trades = 0
         kpis += "".join([
             kpi("Against the fractional ideal",
                 signed(delta, 2) + "%",
                 f"ideal {money(ideal_final)} at {ideal_dd:.2f}% DD, same"
                 f" account, all {len(all_trades)} trades", cls(delta)),
             kpi("Realized risk (median)", f"{med_risk:.2f}%",
+                f"of the {risk:g}% budget; what the stack actually"
+                f" risked of equity at entry, never above it"
+                if micro else
                 f"of the {risk:g}% budget; floor sizing never exceeds"
                 f" it"),
             kpi("Refused at placement", f"{len(refused_map)}",
+                "one full contract risked more than the budget and no"
+                " micro could stand in; never forced, released as"
+                " capital grows" if micro else
                 "one contract risked more than the budget; never"
                 " forced, released as capital grows",
                 "neg" if refused_map else ""),
-            kpi("Execution costs",
-                money(sum(m["cost_rt"] for m in money_of.values())),
+            (kpi("Micro top-ups", f"{k_total:,} ctr",
+                 f"on {k_trades} of {len(trades)} taken trades; routed"
+                 f" {', '.join(f'{k}->{r['root']}' for k, r in sorted(route.items()))}")
+             if micro else ""),
+            kpi("Execution costs", money(fees),
+                "commission + exchange + NFA, both legs, both sides, in"
+                " the curve (sourced in execution_costs.py; taxes"
+                " excluded)" if micro else
                 "commission + exchange + NFA, both sides, in the curve"
                 " (sourced in execution_costs.py; taxes excluded)",
                 "neg"),
+            (kpi("Micro drift, net", signed_money(-drift),
+                 "measured micro-vs-parent entry prints, signed against"
+                 " the side; in the curve", cls(-drift))
+             if micro else ""),
+            (kpi("Full contracts only", money(r_full[2]),
+                 f"{r_full[3]:.2f}% DD, {len(r_full[0])} taken /"
+                 f" {len(r_full[4])} refused -- the gray curve",
+                 cls(r_full[2] - start))
+             if micro else ""),
         ])
 
     # Twelve tiles in three rows of four (Lode, 2026-09-02): the
@@ -1368,20 +1698,53 @@ def build(data=None, out=None, variant=None, contracts=False):
                           separators=(",", ":"))
 
     survivors = classes.get("close1", dict(n=0, wins=0, avg=0.0))
-    sizing_lede = (
-        f" <b>Money on this page is INTEGER CONTRACTS on the LIVE "
-        f"22-futures universe</b>: ETFs and non-updated markets are "
-        f"not traded and their blotter trades are dropped before the "
-        f"replay (exact &mdash; the engine runs markets "
-        f"independently). Each entry takes what a {risk:g}% budget "
-        f"affords in whole contracts (floor sizing), priced off "
-        f"data_center&rsquo;s validated contract spec table. <b>An "
-        f"order whose single contract risks more than the budget is "
-        f"refused at placement</b> &mdash; never forced &mdash; and "
-        f"released the moment grown capital affords it; refused "
-        f"entries have their own table below. A taken trade&rsquo;s R "
-        f"is identical to the fractional page by construction."
-        if contracts else "")
+    if contracts and micro:
+        sizing_lede = (
+            f" <b>Money on this page is the MICRO STACK in INTEGER "
+            f"CONTRACTS on the LIVE 22-futures universe</b>: ETFs and "
+            f"non-updated markets are not traded and their blotter "
+            f"trades are dropped before the replay (exact &mdash; the "
+            f"engine runs markets independently). Each entry takes what "
+            f"a {risk:g}% budget affords in <b>full contracts</b> first "
+            f"and tops the position up toward the budget with the "
+            f"routed <b>micro</b> ("
+            + esc(", ".join(f"{k}->{r['root']}"
+                            for k, r in sorted(route.items())))
+            + f"), priced off data_center&rsquo;s validated contract "
+            f"spec table; the micro leg&rsquo;s stop is the parent "
+            f"stop rounded away on the micro&rsquo;s own tick grid, "
+            f"the measured micro-vs-parent entry drift is priced into "
+            f"the curve per trade, a trade with no micro bar at its "
+            f"entry minute gets no micro leg, and a top-up never "
+            f"exceeds half the minute&rsquo;s printed volume. <b>An "
+            f"order that cannot fit even one micro inside the budget "
+            f"is refused at placement</b> &mdash; never forced &mdash; "
+            f"and released the moment grown capital affords it; "
+            f"refused entries have their own table below. The "
+            f"full-contracts-only sizing is the thin gray curve and "
+            f"its own tile, for comparison. A taken trade&rsquo;s R is "
+            f"identical to the fractional page by construction; the "
+            f"blotter&rsquo;s <b>Stack</b> and <b>Risk %</b> columns "
+            f"say what each position was and what it actually risked.")
+    elif contracts:
+        sizing_lede = (
+            f" <b>Money on this page is INTEGER CONTRACTS on the LIVE "
+            f"22-futures universe</b>: ETFs and non-updated markets are "
+            f"not traded and their blotter trades are dropped before the "
+            f"replay (exact &mdash; the engine runs markets "
+            f"independently). Each entry takes what a {risk:g}% budget "
+            f"affords in whole contracts (floor sizing), priced off "
+            f"data_center&rsquo;s validated contract spec table. <b>An "
+            f"order whose single contract risks more than the budget is "
+            f"refused at placement</b> &mdash; never forced &mdash; and "
+            f"released the moment grown capital affords it; refused "
+            f"entries have their own table below. A taken trade&rsquo;s R "
+            f"is identical to the fractional page by construction. "
+            f"<b>No micro gates JSON was found</b>, so this build is "
+            f"full contracts only; run research_1m_micro.py for the "
+            f"micro stack.")
+    else:
+        sizing_lede = ""
     lede = (
         f"One shared account of {money(start)} across "
         f"{len(data['markets'])} tested markets, {traded} of which traded, "
@@ -1428,7 +1791,18 @@ def build(data=None, out=None, variant=None, contracts=False):
         "trade, which needs charter's <b>serve.py</b> running "
         f"({STUDY_BASE.rsplit('/1m/', 1)[0]}). R is <b>net</b> of slippage; "
         "P&amp;L is this trade's share of the shared account."
-        + (" <b>Ctr</b> is the position in whole contracts; hover it for "
+        + (" <b>Stack</b> is the open position&rsquo;s composition, full "
+           "contracts of the parent plus the routed micro&rsquo;s top-up "
+           "(hover it for the dollar risk and the micro leg&rsquo;s "
+           "rounded stop distance); <b>Risk %</b> is what the whole stack "
+           "ACTUALLY risked of equity at entry, never above the 1% "
+           "budget; <b>Costs $</b> is both legs&rsquo; round turn of "
+           "commission + exchange + NFA plus the measured entry drift "
+           "(hover for the split), already inside P&amp;L. Entries the "
+           "sizing policy refused are not rows here -- see <b>Refused at "
+           "order placement</b> above."
+           if contracts and micro else
+           " <b>Ctr</b> is the position in whole contracts; hover it for "
            "the dollar risk it realized. Entries the sizing policy "
            "refused are not rows here -- see <b>Refused at order "
            "placement</b> above."
@@ -1445,7 +1819,11 @@ def build(data=None, out=None, variant=None, contracts=False):
         "the day-2 rule exits.")
     last_exit = max(t["exit_ts"] for t in trades)[:10]
     chartsub = (f"{len(trades)} trades, {days[0]} to {days[-1]}, "
-                + (f"a {risk:g}% risk budget in integer contracts"
+                + (f"a {risk:g}% risk budget in integer contracts, the "
+                   f"combined full + micro stack in the accent colour "
+                   f"against full contracts only in gray"
+                   if contracts and micro else
+                   f"a {risk:g}% risk budget in integer contracts"
                    if contracts else f"{risk}% risk per trade")
                 + ". One point per <b>market day</b> - "
                 f"a day some market in the universe was open - and the line "
@@ -1465,13 +1843,24 @@ def build(data=None, out=None, variant=None, contracts=False):
         f"registry, so it has no cap dial, no risk dial and no variant grid."
         + (f" Money on this page: integer contracts at the {money(start)} "
           f"deployment account with refusal at the {risk:g}% budget "
-          f"(Lode, 2026-09-01), specs from data_center/"
+          f"(Lode, 2026-09-01)"
+          + (", full contracts topped up with the routed micros (the "
+             "micro stack, Lode 2026-09-03; the same replay as the "
+             "capital ladder's $250k rung)" if micro else "")
+          + f", specs from data_center/"
           f"metadata/contract_specs.json; the fractional pages remain the "
           f"research currency." if contracts else ""))
 
     name = esc(data.get("strategy", "quickfix1m1dc"))
     if contracts:
-        name += " &mdash; integer contracts"
+        name += (" &mdash; integer contracts, full + micro stack" if micro
+                 else " &mdash; integer contracts")
+    pane_eq = ("Equity &middot; <span style=\"color:var(--accent-line)\">"
+               "combined full + micro</span> against <span style=\"color:"
+               "var(--ink3)\">full contracts only</span>"
+               if micro else "Equity")
+    pane_dd = ("Drawdown &middot; on daily closes, both sizings"
+               if micro else "Drawdown &middot; on daily closes")
     html = (PAGE
             .replace("__NAME__", name)
             .replace("__CSS__", CSS)
@@ -1482,12 +1871,14 @@ def build(data=None, out=None, variant=None, contracts=False):
             .replace("__NOTE__", note)
             .replace("__STATS__", stats)
             .replace("__CLASSES__", class_rows)
+            .replace("__PANE_EQ__", pane_eq)
+            .replace("__PANE_DD__", pane_dd)
             .replace("__REFUSED__", refused_html(all_trades, refused_map,
-                                                 links_full))
+                                                 links_full, route))
             .replace("__OPEN__", open_html(data.get("open_positions")))
             .replace("__BLOTNOTE__", blotnote)
             .replace("__BLOTTER__", blotter_html(trades, money_of, links,
-                                                 contracts))
+                                                 contracts, micro))
             .replace("__MKTNOTE__", mktnote)
             .replace("__MARKETS__", markets_html(data["markets"],
                                                  data.get("excluded", []),
@@ -1503,11 +1894,16 @@ def build(data=None, out=None, variant=None, contracts=False):
                      # (Lode, 2026-09-03: that is the correct
                      # visualisation of a drawdown).
                      .replace("__DDC__", ser([-v for v in ddc]))
+                     .replace("__EQF__", ser(eq_f))
+                     .replace("__DDF__", ser([-v for v in ddc_f]))
                      .replace("__OP__", ser(openpos))))
     out.write_text(html, encoding="utf-8")
     print(f"report: {len(trades)} trades, final ${final:,.2f}, max drawdown "
           f"{max_dd:.2f}%, {len(days)} days -> {out.name} "
-          f"({len(html) / 1024:.0f} KB)")
+          f"({len(html) / 1024:.0f} KB)"
+          + (f"; micro stack: {len(refused_map)} refused, full-only"
+             f" ${r_full[2]:,.2f} / {r_full[3]:.2f}% DD /"
+             f" {len(r_full[4])} refused" if micro else ""))
 
 
 if __name__ == "__main__":

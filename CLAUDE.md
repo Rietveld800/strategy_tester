@@ -296,6 +296,30 @@ conflate two questions. Refresh step `contracts1m` (in the full run,
 after `hybrid1m`; reads the JSONs, no backtest, seconds). The pages
 are gitignored like every other HTML view; the fractional pages
 remain the research currency.
+**THE CONTRACTS PAGES TRADE THE MICRO STACK SINCE 2026-09-03** (Lode:
+"Those reports are still showing 'refused at placement' so I guess
+these reports are still expecting to trade 'full' contracts? Yet, we
+did the whole study of micro-contracts already"). They had kept
+`replay_contracts` (full contracts, refuse at n=0) after the ladder
+gained the stack. Now `replay_micro` (full first, the routed micro
+topping up toward the 1% budget, drift priced, micro stop rounded
+away on its own grid, no bar = no micro leg, PARTICIPATION_CAP) lives
+in `build_1m_report.py` beside `replay_contracts`, the capital ladder
+imports it from there, and the contracts page IS the ladder's $250k
+rung -- one function, one input, agreement to the cent verified on
+build. Full-contracts-only stays on the page as the gray reference
+curve and a "Full contracts only" tile (like the ladder pages); the
+blotter's `Ctr` column became `Stack` (n full + k micro, hover for
+dollar risk and the micro's rounded stop), `Risk %` (what the stack
+ACTUALLY risked of equity at entry) and `Costs $` (both legs' round
+turns plus drift, split on hover); the refused table gains a `Micro`
+column and its note says a refusal means even one micro did not fit
+(or no route, or no micro bar that minute). The micro gates JSON is
+STATIC (bars bought to 2026-09-01), so trades entered after its
+window get no micro leg until `research_1m_micro.py` is re-run on
+newer micro bars -- the same limit the ladder pages have. Without the
+gates JSON the page falls back to full-only and says so in the lede.
+Pinned by `tests/test_micro_stack.py`.
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

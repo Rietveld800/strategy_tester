@@ -66,13 +66,15 @@ solved per cell by bisection, because at one bet size the tallest curve
 is partly just the deepest hole that cell was allowed to dig. Output:
 output/quickfix1m1dc_matrix.json + output/quickfix1m1dc_matrix.html.
 
-SINCE 2026-09-03 THE TWO REPORT CELLS EACH CARRY A NO-STOP COMPANION
-(Lode): the same dials with the engine's `stop_live` off - identical
-entries and sizing, no stop order resting, every position carried to
-the next settlement. They ride in this pass (cached and spliced like
-the cells, two extra engine passes per recomputed market) and land in
-the JSON under `nostop`, keyed by the cell they shadow. They are NOT
-cells: no number, no row on the page, no charter slug. See COMPANIONS.
+SINCE 2026-09-03 THE TWO REPORT CELLS EACH CARRY THREE COMPANIONS
+(Lode): `no-stop` (the same dials with the engine's `stop_live` off -
+identical entries and sizing, no stop order resting, every position
+carried to the next settlement), `no-mf` (the human market filter
+lifted: every eligible future joins) and `no-mf no-stop` (both). They
+ride in this pass (cached and spliced like the cells, four extra engine
+passes per recomputed market) and land in the JSON under `companions`,
+keyed by the cell they shadow and then by tag. They are NOT cells: no
+number, no row on the page, no charter slug. See COMPANIONS.
 
 Usage: python run_1m_matrix.py [KEY ...] (default: all eligible).
 `--no-reuse` ignores the per-market cache and recomputes everything (see
@@ -313,22 +315,48 @@ COLORS = {name: color_for(props) for name, _, _, props in VARIANTS}
 # reason every cell does: this is the pass holding every market's bars,
 # and the per-market cache and tail splice cover it for free - two more
 # engine passes on a market that recomputes, zero on one that is reused.
-# Named `<cell> no-stop`, which is what the cache stores it under.
-NOSTOP_OF = ["variant 1", "variant 4"]
+# Named `<cell> <tag>`, which is what the cache stores it under.
+#
+# THREE COMPANIONS PER REPORT CELL SINCE 2026-09-03 EVENING (Lode: "a lot
+# of markets are excluded from trading because of the human market
+# filter. Could we have additional reports where we say the human market
+# filter gives its release for all markets"):
+#   no-stop          the cell's dials, stop_live off            (as above)
+#   no-mf            the cell's dials on NO_FILTER, the human market
+#                    filter lifted: every market with 1-minute bars that
+#                    the live universe trades joins (ZC, ZN, ZB, SB, FGBL,
+#                    BTC); SR3 has no bars and cannot; the ETFs and JGB
+#                    stay outside the traded universe by decision
+#   no-mf no-stop    both
+# The `_without_mf` contracts pages read the last two. NO_FILTER is the
+# human-filter universe plus every eligible future, so the page's live
+# filter drops exactly what it drops today (ETFs, CC, KC) and nothing
+# else. Four extra engine passes per recomputed market for the three.
+COMPANION_OF = ["variant 1", "variant 4"]
+NO_FILTER = HUMAN_APPROVED | frozenset(run_1m.ELIGIBLE_FUTURES)
+COMPANION_SPECS = [
+    ("no-stop", dict(stop_live=False), None),
+    ("no-mf", {}, NO_FILTER),
+    ("no-mf no-stop", dict(stop_live=False), NO_FILTER),
+]
 
 
-def companion_name(name):
-    return f"{name} no-stop"
+def companion_name(name, tag):
+    return f"{name} {tag}"
 
 
 def build_companions():
     by_name = {name: (dials, markets, props)
                for name, dials, markets, props in VARIANTS}
     out = []
-    for name in NOSTOP_OF:
+    for name in COMPANION_OF:
         dials, markets, props = by_name[name]
-        out.append((companion_name(name), dict(dials, stop_live=False),
-                    markets, dict(props, stop_live=False, shadows=name)))
+        for tag, extra, universe in COMPANION_SPECS:
+            mk = universe if universe is not None else markets
+            out.append((companion_name(name, tag), dict(dials, **extra),
+                        mk, dict(props, shadows=name, tag=tag,
+                                 stop_live=extra.get("stop_live", True),
+                                 markets=str(len(mk)))))
     return out
 
 
@@ -392,8 +420,9 @@ def grid_sig():
         # and cells carry open_position - entries under 2 lack both and
         # miss window-end trades, so they may not answer.
         # 4 (2026-09-03): the no-stop companions join the cache; an
-        # entry without them cannot answer for a market.
-        cache_version=4)
+        # entry without them cannot answer for a market. 5 (same day):
+        # the no-market-filter companions join.
+        cache_version=5)
     return hashlib.sha256(json.dumps(
         payload, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
@@ -1033,19 +1062,22 @@ def main():
               f"-> at 6% DD: {report[name]['risk_6pct']}% risk, "
               f"${report[name]['final_6pct']:,.0f}", flush=True)
 
-    # The companions' block: keyed by the cell each one shadows, carrying
-    # the same shape a cell's slice of this file has (rows, trades, open
-    # positions) plus its own headline figures, so build_1m_report.py can
-    # render it beside the cell with no second derivation.
-    nostop = {}
-    for name, dials, _markets, props in COMPANIONS:
-        shadow = props["shadows"]
+    # The companions' block: keyed by the cell each one shadows and then
+    # by tag, carrying the same shape a cell's slice of this file has
+    # (rows, trades, open positions) plus its own headline figures, so
+    # build_1m_report.py can render it beside the cell with no second
+    # derivation.
+    companions = {}
+    for name, dials, markets, props in COMPANIONS:
+        shadow, tag = props["shadows"], props["tag"]
         trades = sorted(results[name]["trades"],
                         key=lambda t: t["entry_ts"])
         final, max_dd, curve = run_1m.portfolio_replay(trades)
         wins = sum(1 for t in trades if t["net_r"] > 0)
-        nostop[shadow] = dict(
-            name=name, dials=dials, props=props,
+        block = dict(
+            name=name, tag=tag, dials=dials, props=props,
+            markets=sorted(markets) if markets is not None else None,
+            markets_run=len(results[name]["rows"]),
             trades_n=len(trades),
             win_rate=round(100 * wins / len(trades), 1) if trades else None,
             net_r=round(sum(t["net_r"] for t in trades), 2),
@@ -1055,14 +1087,14 @@ def main():
             open_positions=sorted(results[name]["open"],
                                   key=lambda o: o["entry_ts"]),
             trades=trades)
+        companions.setdefault(shadow, {})[tag] = block
         stopped = report[shadow]
-        print(f"\n{name} [{shadow} with no stop order]: "
-              f"{len(trades)} trades, wr {nostop[shadow]['win_rate']}%, "
-              f"net {nostop[shadow]['net_r']}R, max DD {max_dd:.2f}%, "
-              f"${final:,.0f}  |  {shadow} stopped: "
-              f"{stopped['trades']} trades, wr {stopped['win_rate']}%, "
-              f"net {stopped['net_r']}R, max DD {stopped['max_dd_pct']}%, "
-              f"${stopped['final_cash']:,.0f}", flush=True)
+        print(f"\n{name}: {len(trades)} trades, wr {block['win_rate']}%, "
+              f"net {block['net_r']}R, max DD {max_dd:.2f}%, ${final:,.0f}"
+              f"  |  {shadow} itself: {stopped['trades']} trades, wr "
+              f"{stopped['win_rate']}%, net {stopped['net_r']}R, max DD "
+              f"{stopped['max_dd_pct']}%, ${stopped['final_cash']:,.0f}",
+              flush=True)
 
     OUT_JSON.parent.mkdir(exist_ok=True)
     OUT_JSON.write_text(json.dumps(dict(
@@ -1089,9 +1121,10 @@ def main():
         open_positions={n: sorted(results[n]["open"],
                                   key=lambda o: o["entry_ts"])
                         for n, _, _, _ in VARIANTS},
-        # The no-stop companions of the report cells (2026-09-03), keyed
-        # by the cell each shadows. Not cells: no number, no row, no slug.
-        nostop=nostop,
+        # The companions of the report cells (2026-09-03), keyed by the
+        # cell each shadows and then by tag (no-stop / no-mf / no-mf
+        # no-stop). Not cells: no number, no row, no slug.
+        companions=companions,
         excluded=skipped), indent=1) + "\n", encoding="utf-8")
 
     write_page(report, calendar)

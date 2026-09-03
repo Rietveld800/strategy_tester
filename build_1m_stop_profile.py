@@ -9,7 +9,7 @@ own no-stop run so the record reads as one argument.
 
 ONE-TIME BY DESIGN: not a refresh step. The five points are dated prose
 (records, not live claims); the measurement table is recomputed from the
-JSONs on disk at build time (the matrix's `nostop` block, the published
+JSONs on disk at build time (the matrix's `companions` block, the published
 blotter, the exit-profile JSON, the micro gates) through the SAME replay
 code path the contracts pages use, and the page stamps the data window it
 was built on. Rebuild by hand when the question is asked again:
@@ -119,8 +119,8 @@ def fmt_r(v):
 def build():
     m = json.loads(rep.MATRIX_JSON.read_text(encoding="utf-8"))
     blotter = json.loads(rep.IN_JSON.read_text(encoding="utf-8"))
-    if "nostop" not in m:
-        raise SystemExit("the matrix JSON carries no no-stop companions; "
+    if "companions" not in m:
+        raise SystemExit("the matrix JSON carries no companions; "
                          "run run_1m_matrix.py first")
     calendar = m.get("calendar") or blotter.get("calendar")
     window = (calendar[0], calendar[-1]) if calendar else ("?", "?")
@@ -129,7 +129,7 @@ def build():
     for cell in CELLS:
         v = m["variants"][cell]
         stopped = sorted(m["trades"][cell], key=lambda t: t["entry_ts"])
-        ns_block = m["nostop"][cell]
+        ns_block = m["companions"][cell]["no-stop"]
         nostop = sorted(ns_block["trades"], key=lambda t: t["entry_ts"])
         s_st, s_ns = stats(stopped), stats(nostop)
         rows_engine.append((cell, "with the stop", s_st, v["max_dd_pct"],
@@ -447,7 +447,7 @@ not decide anything: the stop stays because every measurement since
 pages now carry both accounts on every refresh so that stays measured.</p>
 
 <footer>quickfix1m1dc stop profile, one-time report built {date.today().isoformat()}
-from output/quickfix1m1dc_matrix.json (nostop block), output/quickfix1m1dc_all.json,
+from output/quickfix1m1dc_matrix.json (companions block), output/quickfix1m1dc_all.json,
 output/quickfix1m1dc_exit_profile.json and the micro gates. Decisions and history:
 docs/quickfix1m1dc_audit.md s.21. All times UTC.</footer>
 </div></body></html>"""

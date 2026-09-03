@@ -68,6 +68,17 @@ re-priced: a position that is no longer stopped is still open the next
 session, so the two lists differ in entries as well as exits. Its
 blotter rows link into charter's study through the STOPPED trade that
 shares the entry minute, since that is the list charter holds.
+
+THE `_without_mf` PAGES (Lode, 2026-09-03 evening: "a lot of markets are
+excluded from trading because of the human market filter ... additional
+reports where we say the human market filter gives its release for all
+markets"): the same two pages built from the matrix's `no-mf` and
+`no-mf no-stop` companions of the cell - the cell's dials run on every
+eligible future, so ZC, ZN, ZB, SB, FGBL and BTC join the account (SR3
+has no 1-minute bars yet and cannot); the ETFs and JGB stay outside the
+traded universe by decision. The contract arsenal derives its statuses
+from what the engine ran, so those six read Traded / In arsenal on
+these pages; the rules block and the money layer are unchanged.
 """
 
 import json
@@ -1656,8 +1667,8 @@ def build_baseline_contracts():
         "inspection (audit s.16); the contract arsenal below names the "
         "live-universe markets that filter left out.")
     build(data=data, contracts=True,
-          nostop=nostop_payload(run_1m_matrix.BASELINE_NAME,
-                                check_against=data["trades"]))
+          nostop=companion_payload(run_1m_matrix.BASELINE_NAME, "no-stop",
+                                   check_against=data["trades"]))
 
 
 def variant_payload(name):
@@ -1697,12 +1708,16 @@ def variant_payload(name):
         trades=trades)
 
 
-def nostop_payload(name, check_against=None):
-    """The NO-STOP companion of a cell, blotter-shaped, from the matrix
-    JSON's `nostop` block (run_1m_matrix.COMPANIONS, 2026-09-03): the
-    same dials with the engine's `stop_live` off, run in the matrix pass
-    beside the cell. None - with a printed NOTE, never a silent empty
-    section - when the matrix JSON predates the companions.
+COMPANION_TAGS = ("no-stop", "no-mf", "no-mf no-stop")
+
+
+def companion_payload(name, tag, check_against=None):
+    """A COMPANION of a cell, blotter-shaped, from the matrix JSON's
+    `companions` block (run_1m_matrix.COMPANIONS, 2026-09-03): the cell's
+    dials with `stop_live` off (`no-stop`), on the unfiltered universe
+    (`no-mf`), or both (`no-mf no-stop`), run in the matrix pass beside
+    the cell. None - with a printed NOTE, never a silent empty section -
+    when the matrix JSON predates the companions.
 
     `check_against` is the STOPPED trade list this page renders (the
     published blotter on the baseline page); it is crosschecked against
@@ -1710,11 +1725,10 @@ def nostop_payload(name, check_against=None):
     page can never quietly come from different data windows or dials.
     """
     m = json.loads(MATRIX_JSON.read_text(encoding="utf-8"))
-    block = m.get("nostop", {}).get(name)
+    block = m.get("companions", {}).get(name, {}).get(tag)
     if block is None:
-        print(f"NOTE: {MATRIX_JSON.name} carries no no-stop companion for "
-              f"{name} -- rebuild the matrix (run_1m_matrix.py) for the "
-              f"no-stop account")
+        print(f"NOTE: {MATRIX_JSON.name} carries no `{tag}` companion for "
+              f"{name} -- rebuild the matrix (run_1m_matrix.py) for it")
         return None
     if check_against is not None:
         mine = [run_1m_matrix.comparable(t) for t in
@@ -1730,11 +1744,18 @@ def nostop_payload(name, check_against=None):
                   f"account may come from a different data window; rerun "
                   f"run_1m.py and run_1m_matrix.py together")
     v = m["variants"][name]
+    label = {"no-stop": "no stop order",
+             "no-mf": "without market filter",
+             "no-mf no-stop": "without market filter, no stop order"}[tag]
     return dict(
-        strategy=f"quickfix1m1dc [{name}, no stop order]",
-        # the STOPPED cell's slug: charter holds that list, and the
-        # no-stop rows link through the stopped trade sharing their entry
+        strategy=f"quickfix1m1dc [{name}, {label}]",
+        # the CELL's slug: charter holds that list, and a companion's rows
+        # link through the cell's trade sharing their entry minute
         slug=v.get("slug") or run_1m_matrix.variant_slug(name),
+        # the cell's own trade list, which numbers charter's study
+        study_numbering=sorted(m["trades"][name],
+                               key=lambda t: t["entry_ts"]),
+        filter_lifted="no-mf" in tag,
         params=dict(m["params"], activation_utc="07:35",
                     stop="see stop_mode", **block["dials"]),
         portfolio=dict(final=block["final_cash"],
@@ -1751,17 +1772,28 @@ def entry_keys(trades):
     return {(t["market"], t["entry_ts"]) for t in trades}
 
 
-def build(data=None, out=None, variant=None, contracts=False, nostop=None):
+def build(data=None, out=None, variant=None, contracts=False, nostop=None,
+          without_mf=False):
     """The published baseline by default; one matrix cell when `variant`
     names one, written beside it under its own filename. `contracts`
     swaps the money layer for integer sizing at the test account and the
     page lands under the contracts stem instead - and carries the
     NO-STOP account above the stopped one (`nostop`, a payload from
-    nostop_payload; looked up for a variant when not given)."""
+    companion_payload; looked up for a variant when not given).
+    `without_mf` (contracts pages only) builds the cell's `_without_mf`
+    page from its no-market-filter companions instead of the cell."""
     if variant:
-        data = variant_payload(variant)
-        if contracts and nostop is None:
-            nostop = nostop_payload(variant)
+        if without_mf:
+            if not contracts:
+                raise SystemExit("without_mf is a contracts-page build")
+            data = companion_payload(variant, "no-mf")
+            if data is None:
+                raise SystemExit(f"no `no-mf` companion for {variant}")
+            nostop = companion_payload(variant, "no-mf no-stop")
+        else:
+            data = variant_payload(variant)
+            if contracts and nostop is None:
+                nostop = companion_payload(variant, "no-stop")
         # The matrix names its own cells, so it owns the filename form too
         # ("variant 5" -> quickfix1m1dc_report_variant_05.html). A page
         # built here can then never land under a name the matrix does not
@@ -1771,7 +1803,8 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None):
         # `..._variant_02_variant_05.html`.
         stem = CONTRACTS_STEM if contracts else REPORT_STEM
         out = OUT_HTML.with_name(
-            f"{stem}_{run_1m_matrix.variant_slug(variant)}.html")
+            f"{stem}_{run_1m_matrix.variant_slug(variant)}"
+            f"{'_without_mf' if without_mf else ''}.html")
     data = data or json.loads(IN_JSON.read_text(encoding="utf-8"))
     if out is None and contracts:
         out = OUT_HTML.with_name(
@@ -1783,6 +1816,10 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None):
     p = data["params"]
     published = data["portfolio"]
     vslug = data.get("slug")
+    filter_lifted = bool(data.get("filter_lifted"))
+    # The list that numbers charter's study: a companion payload names
+    # the cell's own list, every other page is that list itself.
+    study_numbering = data.get("study_numbering")
     calendar = data.get("calendar")
     if not calendar:
         calendar = run_1m.calendar_fallback(data["trades"])
@@ -2270,13 +2307,15 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None):
 
     # The stopped account (the published list) numbers charter's study;
     # the no-stop rows link through the stopped trade sharing their entry.
-    links_stopped = study_links(data["trades"], vslug)
+    numbering = (sizing.live_trades(study_numbering) if contracts
+                 else study_numbering) if study_numbering else None
+    links_stopped = study_links(data["trades"], vslug, numbering=numbering)
     html_s, series_s, s_info = account(data, True, "", links_stopped)
     blocks, sections = [html_s], [series_s]
     n_info = None
     if nostop:
         links_ns = study_links(nostop["trades"], vslug,
-                               numbering=data["trades"])
+                               numbering=numbering or data["trades"])
         html_n, series_n, n_info = account(nostop, False, "ns", links_ns)
         # The no-stop account FIRST (Lode: "above the equity curve we
         # currently see"), the stopped one under it.
@@ -2358,7 +2397,13 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None):
             count_note=(" Counts are the <b>stopped</b> account&rsquo;s, "
                         "the published model; the no-stop account takes "
                         "the same entries less those a still-open "
-                        "position blocked." if n_info else ""))
+                        "position blocked." if n_info else "")
+            + (" <b>The human market filter is lifted on this page</b>: "
+               "every live-universe market with 1-minute bars was "
+               "backtested, so the six the filter rejects (ZC, ZN, ZB, "
+               "SB, FGBL, BTC) read as traded or in arsenal here; SR3 "
+               "still has no bars, and the ETFs and JGB stay outside the "
+               "traded universe by decision." if filter_lifted else ""))
         universe_lede = (
             f"on the {len(sizing.LIVE_UNIVERSE)}-market live universe, "
             f"{len(s_info['taken_by_market'])} of which traded on this "
@@ -2378,7 +2423,15 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None):
         f"order and marked out at the settlement of the day after entry. "
         f"This page is the blotter: every one of the {len(trades)} trades is "
         f"listed, and each row opens that trade in charter's 1-minute study."
-        + accounts_lede + sizing_lede + data.get("universe_note", ""))
+        + accounts_lede + sizing_lede
+        + (" <b>The human market filter is LIFTED on this page</b> "
+           "(Lode, 2026-09-03): the engine ran the published dials on "
+           "every live-universe market with 1-minute bars, so ZC, ZN, "
+           "ZB, SB, FGBL and BTC trade here beside the filter's own "
+           "markets; SR3 has no bars yet, and the ETFs and JGB remain "
+           "outside the traded universe. The published pages keep the "
+           "filter; this page measures what it costs or saves."
+           if filter_lifted else data.get("universe_note", "")))
     footer = (
         f"quickfix1m1dc, built from output/{IN_JSON.name} at the published "
         f"baseline (tighten "
@@ -2408,6 +2461,8 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None):
                  else " &mdash; integer contracts")
         if n_info:
             name += ", without and with the stop"
+        if filter_lifted:
+            name += ", market filter lifted"
     html = (PAGE
             .replace("__NAME__", name)
             .replace("__CSS__", CSS)
@@ -2450,13 +2505,20 @@ if __name__ == "__main__":
     #                                           which is what the refresh
     #                                           chain's contracts1m step runs
     # python build_1m_report.py --contracts --variant "variant N"   one cell
+    # python build_1m_report.py --contracts --without-mf --variant "variant N"
+    #                                           that cell's _without_mf page
     args = sys.argv[1:]
     contracts = "--contracts" in args
-    args = [a for a in args if a != "--contracts"]
+    without_mf = "--without-mf" in args
+    args = [a for a in args if a not in ("--contracts", "--without-mf")]
     if args and args[0] == "--variant":
-        build(variant=args[1], contracts=contracts)
+        build(variant=args[1], contracts=contracts, without_mf=without_mf)
     elif contracts:
         build_baseline_contracts()
         build(variant="variant 4", contracts=True)
+        # The market filter lifted (Lode, 2026-09-03): the same two pages
+        # on every eligible future, from the matrix's no-mf companions.
+        for cell in (run_1m_matrix.BASELINE_NAME, "variant 4"):
+            build(variant=cell, contracts=True, without_mf=True)
     else:
         build_baseline()

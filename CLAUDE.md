@@ -405,6 +405,27 @@ stop to the ladder anchor (s.1.2/s.5), the stop-anchor grid (s.10,
 every mechanical protection loses), and the exit-timing pre-registration
 (2026-08-28: signal path vs trade path, same mean, twice the spread,
 "a held trade is variance the stop happens to cap").
+**THE `_without_mf` CONTRACTS PAGES** (Lode, 2026-09-03 evening: "a lot
+of markets are excluded from trading because of the human market
+filter ... additional reports where we say the human market filter
+gives its release for all markets"): `quickfix1m1dc_contracts_variant_01_without_mf.html`
+and `_04_without_mf.html`, built by `build_1m_report.py --contracts`
+(all four pages) or `--contracts --without-mf --variant "<cell>"`.
+The matrix now runs THREE companions per report cell
+(`run_1m_matrix.COMPANION_SPECS`: `no-stop`, `no-mf`, `no-mf no-stop`),
+JSON key `companions[cell][tag]` (the `nostop` key of the same
+morning is gone); `NO_FILTER = HUMAN_APPROVED | ELIGIBLE_FUTURES`, so
+ZC, ZN, ZB, SB, FGBL and BTC join the engine run and the page's live
+filter still drops exactly the ETFs, CC and KC. SR3 has no 1-minute
+bars and stays "Not backtested"; ETFs and JGB stay outside the traded
+universe by decision. The arsenal derives its statuses from what the
+engine ran, so the six read Traded / In arsenal on these pages and the
+note says the filter is lifted; blotter rows link to charter's study
+through the CELL's own trade sharing the entry minute (the study holds
+no list for the six extra markets, so those rows link to the market
+alone). cache_version 5 (one full rebuild); four extra engine passes
+per recomputed market. The published pages keep the filter; these
+measure what it costs or saves.
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

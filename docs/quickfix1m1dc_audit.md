@@ -410,6 +410,58 @@ The one-time record of all of it, with the current figures beside the dated
 ones, is `output/quickfix1m1dc_stop_profile.html`
 (`build_1m_stop_profile.py`, not in the refresh chain).
 
+## 22. The market filter lifted, on the contracts pages (Lode, 2026-09-03)
+
+Lode, reading the contracts pages: *"a lot of markets are excluded from
+trading because of the human market filter. Could we have additional
+reports where we say the human market filter gives its release for all
+markets ... Of course the ETFs and JGB stay outside of the scope of traded
+markets."*
+
+**What "all markets" is here.** Every market the live universe trades that
+has 1-minute bars: the human filter's own 22 plus the six it rejected on
+chart structure (s.16) - ZC, ZN, ZB, SB, FGBL, BTC. SR3 is in the live
+universe but has no bars yet, so it stays "Not backtested"; the ETFs, CC,
+KC and JGB stay outside the traded universe as before. In code:
+`run_1m_matrix.NO_FILTER = HUMAN_APPROVED | ELIGIBLE_FUTURES`, and the
+pages' live-universe filter drops exactly what it drops today.
+
+**Where it runs.** Two more companions per report cell in the matrix pass
+(`no-mf`, `no-mf no-stop`; `COMPANION_SPECS`), beside the no-stop one of
+s.21 - four extra engine passes per recomputed market, cached and spliced
+like everything else, JSON key `companions[cell][tag]`. Not cells; the
+grid stays the factorial.
+
+**Where it shows.** `quickfix1m1dc_contracts_variant_01_without_mf.html` and
+`_04_without_mf.html`: the same two-account page (no stop above, stop
+below), the same $250k micro-stack money layer, and the contract arsenal
+deriving its statuses from what the engine ran, so the six read Traded /
+In arsenal there and the note says the filter is lifted. Blotter rows on
+the six extra markets link to charter's study by market only - the study
+holds no list for them. Built by `build_1m_report.py --contracts` with the
+published pages, on every refresh. The published pages keep the filter:
+lifting it for real is the strategy-level decision s.16 left open, and
+these pages measure what it costs or saves rather than take it.
+
+**First reading (window to 2026-09-02).** Engine at 1% on the 28-market
+run ($100k base), then the contracts pages at $250k on the live universe:
+
+| | trades | wr | net R | max DD | final @1% | $250k taken | final | DD |
+|---|---|---|---|---|---|---|---|---|
+| variant 1, filter (published) | 108 | 40.7% | +72.80 | 6.17% | $197,784 | 90 | $417,110 | 6.03% |
+| variant 1, filter lifted | 138 | 37.0% | +61.08 | **13.93%** | $174,059 | 120 | $365,137 | 14.08% |
+| variant 1, lifted, no stop | 114 | 56.1% | +19.32 | 33.13% | $109,665 | 94 | $250,689 | 28.52% |
+| variant 4, filter | 101 | 46.5% | +68.87 | 6.43% | $192,247 | 83 | $407,011 | 5.60% |
+| variant 4, filter lifted | 129 | 41.9% | +56.04 | **12.44%** | $168,259 | 110 | $343,784 | 12.17% |
+| variant 4, lifted, no stop | 111 | 55.0% | +17.33 | 30.33% | $109,862 | 90 | $236,636 | 27.48% |
+
+The six rejected markets add ~30 trades and take ~12R off the total while
+doubling the drawdown, on both anchors - the same shape s.20 measured on
+the R-cut grid (the excluded markets "contribute -5.66R and deepen the
+drawdown 4.45% -> 6.32%"), now on the deployment money. The filter was
+never a backtest judgment (s.16); this is what it happens to be worth on
+this window, re-measured on every refresh.
+
 ## 20. The R-cut grid reports BOTH universes (Lode, 2026-08-20)
 
 Lode: *"the results don't match and it's not because of the difference in max

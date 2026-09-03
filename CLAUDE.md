@@ -442,6 +442,22 @@ row would read passed. THE DENSE CONTRACTS BLOTTER WRAPS ITS TEXT
 CELLS (`wrap` on In/Out/Reason): at 15-16 fixed-layout columns the
 timestamps overflowed into each other and the reason into MF; checked
 in Chrome, the date now sits over its time.
+**THE CONTRACTS PAGES COUNT EVERY STATISTIC IN THE ACCOUNT'S DOLLARS**
+(Lode, 2026-09-03 evening: "102.6R won against 95.7R lost ... while
+the return is -5.35%"; and: these pages are about scaling the position
+in contracts and must never refer to a flat 1%). Win rate, net P&L,
+expectancy, profit factor, average winner/loser, best/worst, the
+streaks, the exit-class table and the per-market table
+(`markets_money_html`: the market's own taken trades, dollars after
+costs, net R beside, costs) are all in what THIS account booked; R
+stays a column of the blotter. The fractional pages count in R as
+before. Why the two disagreed: a cheap contract fills the budget
+exactly while an expensive one is floored below it, so with won and
+lost R nearly balanced the sizing asymmetry alone flipped the sign
+(the wheat -17.8R trade sized at 1.00%, HG +8.2R at 0.84%); then
+compounding through a -17.8% hit, then fees. A "Net R at realized
+size" tile that stated this was added and REMOVED the same evening
+(Lode: overcomplicated; the Risk % column says it).
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

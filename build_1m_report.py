@@ -69,6 +69,23 @@ session, so the two lists differ in entries as well as exits. Its
 blotter rows link into charter's study through the STOPPED trade that
 shares the entry minute, since that is the list charter holds.
 
+FILLED R IS THE UNIT OF EVERY CONTRACTS-PAGE STATISTIC (Lode, 2026-09-03
+late: "if we can only fill 0.93% risk then that becomes 93% of R, not
+100% of R ... when we decide to increase the risk to 2% that doesn't
+impact R"). A trade's R is the price move over the stop distance - a
+fact about the trade, and on the fractional pages also its outcome,
+because every trade risks exactly one budget unit. In whole contracts a
+trade fills a FRACTION of the budget, so R no longer says what it
+earned. Filled R = the trade's P&L after costs (both legs' fees, the
+micro drift, the micro leg's rounded stop - all of it) over the risk
+BUDGETED at entry (equity at entry x the risk budget). A fill to 0.93%
+of a 1% budget earns 0.93 of its R, a refused trade earns nothing, and
+raising the budget to 2% moves the money but not filled R: the budget
+is the unit, which is what R was for. Filled R x the budget is the
+arithmetic return before compounding; the distance to the equity curve
+is the compounding, exactly as on the fractional pages. R stays a
+column of the blotter beside it, where it belongs to the trade.
+
 THE `_without_mf` PAGES (Lode, 2026-09-03 evening: "a lot of markets are
 excluded from trading because of the human market filter ... additional
 reports where we say the human market filter gives its release for all
@@ -269,6 +286,8 @@ def replay_contracts(trades, risk_pct=RISK_PCT, start=SIZING_ACCOUNT):
             m = dict(n=n, per_unit=per_unit,
                      risk_usd=n * per_unit,
                      risk_pct=n * per_unit / (equity + side) * 100.0,
+                     # the risk BUDGETED at entry, the unit of filled R
+                     budget_usd=(equity + side) * risk_pct / 100.0,
                      cost_rt=2.0 * side, etf=is_etf)
             if is_etf:
                 m["locked_usd"] = n * t["entry"]
@@ -419,6 +438,8 @@ def replay_micro(trades, risk_pct, start, route, specs, per_entry):
             risk_usd = n * full_risk + (k * rpu_m * pv_m if k else 0.0)
             m = dict(n=n, k=k, root=root, rpu_m=rpu_m, pv_m=pv_m,
                      full_risk=full_risk, risk_usd=risk_usd,
+                     # the risk BUDGETED at entry, the unit of filled R
+                     budget_usd=budget,
                      risk_pct=risk_usd
                      / (equity + side + side_m + drift) * 100.0,
                      cost_full_rt=2.0 * side, cost_micro_rt=2.0 * side_m,
@@ -580,20 +601,17 @@ CLASS_DEFS = [
 ]
 
 
-def class_rows_html(trades, money_of=None):
-    """`money_of` switches the two figure columns from R to the account's
-    dollars (the contracts pages, 2026-09-03 evening)."""
+def class_rows_html(trades, outcome=None):
+    """`outcome` (a value per trade, in the page's unit) switches the two
+    figure columns from R to FILLED R on the contracts pages."""
     rows = []
     for label, pick, note in CLASS_DEFS:
         idx = [i for i, t in enumerate(trades) if pick(t)]
         if not idx:
             continue
-        if money_of is not None:
-            r = sum(money_of[i]["pnl_usd"] for i in idx)
-            fmt = signed_money
-        else:
-            r = sum(trades[i]["net_r"] for i in idx)
-            fmt = signed
+        r = sum((outcome[i] if outcome else trades[i]["net_r"])
+                for i in idx)
+        fmt = signed
         avg = r / len(idx)
         # The % column is this class's share of ALL trades, not a win rate
         # within the class (user, 2026-08-09), tinted by which side of the
@@ -609,18 +627,17 @@ def class_rows_html(trades, money_of=None):
     return "".join(rows)
 
 
-def markets_money_html(trades, money_of, links):
+def markets_filled_html(trades, money_of, links):
     """The per-market table of a CONTRACTS account, from the trades it
-    took and the money they booked (2026-09-03 evening, Lode: these
-    pages are about the position in contracts and never a flat 1%).
-    The engine's per-market rows - each market a fresh $100k at 1% -
-    stay on the fractional pages."""
+    took, in FILLED R beside the trade's own R (2026-09-03 late). The
+    engine's per-market rows - each market a fresh $100k at 1% - stay
+    on the fractional pages."""
     by = {}
     for i, t in enumerate(trades):
         by.setdefault(t["market"], []).append(i)
     cols = [("Market", "l", 20), ("Trades", "", 9), ("Win %", "", 9),
-            ("Net P&amp;L $", "", 14), ("Net R", "", 10), ("Stops", "", 9),
-            ("Settlement", "", 12), ("Costs $", "", 17)]
+            ("Net R filled", "", 14), ("Net R", "", 10), ("Stops", "", 9),
+            ("Settlement", "", 12), ("Costs, R", "", 17)]
     head = "".join(
         f'<th class="{c} sortable" data-i="{i}" style="width:{w}%">{lab}'
         f'<span class="ar"></span></th>'
@@ -628,15 +645,19 @@ def markets_money_html(trades, money_of, links):
     body = []
     for key in sorted(by):
         idx = by[key]
-        pnl = sum(money_of[i]["pnl_usd"] for i in idx)
-        wins = sum(1 for i in idx if money_of[i]["pnl_usd"] > 0)
+        pnl = sum(filled_r(money_of[i]) for i in idx)
+        wins = sum(1 for i in idx if filled_r(money_of[i]) > 0)
         wr = 100.0 * wins / len(idx)
         r = sum(trades[i]["net_r"] for i in idx)
         stops = sum(1 for i in idx if trades[i]["reason"] == "stop")
         settle = sum(1 for i in idx if trades[i]["reason"] == "close1")
-        costs = sum(money_of[i].get("cost_full_rt", money_of[i].get("cost_rt", 0.0))
-                    + money_of[i].get("cost_micro_rt", 0.0)
-                    + money_of[i].get("drift_usd", 0.0) for i in idx)
+        # the market's costs in R of the budget: fees of both legs plus
+        # the micro drift, each over its own trade's budgeted risk
+        costs = sum((money_of[i].get("cost_full_rt",
+                                     money_of[i].get("cost_rt", 0.0))
+                     + money_of[i].get("cost_micro_rt", 0.0)
+                     + money_of[i].get("drift_usd", 0.0))
+                    / money_of[i]["budget_usd"] for i in idx)
         link = links.get(key)
         name = (f'<a href="{link[0]}" target="_blank" '
                 f'title="{esc(link[2])} in the 1m study">{esc(key)}</a>'
@@ -645,12 +666,12 @@ def markets_money_html(trades, money_of, links):
             f'<tr><td class="l" data-s="{esc(key)}">{name}</td>'
             f'<td class="mono" data-s="{len(idx)}">{len(idx)}</td>'
             f'<td class="mono" data-s="{wr:.1f}">{wr:.0f}%</td>'
-            f'<td class="mono {cls(pnl)}" data-s="{pnl:.2f}">'
-            f'{signed_money(pnl)}</td>'
+            f'<td class="mono {cls(pnl)}" data-s="{pnl:.4f}">'
+            f'{signed(pnl)}</td>'
             f'<td class="mono {cls(r)}" data-s="{r:.4f}">{signed(r)}</td>'
             f'<td class="mono" data-s="{stops}">{stops}</td>'
             f'<td class="mono" data-s="{settle}">{settle}</td>'
-            f'<td class="mono" data-s="{costs:.2f}">{money(costs)}</td>'
+            f'<td class="mono" data-s="{costs:.4f}">{costs:.2f}</td>'
             f'</tr>')
     return (f'<div class="tradecard"><div class="tradescroll">'
             f'<table class="trades" data-sort="3" data-dir="-1">'
@@ -932,6 +953,12 @@ def open_html(open_positions, stopped=True):
             f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
+def filled_r(m):
+    """A taken trade's FILLED R: its P&L after every cost over the risk
+    budgeted at entry (see the module docstring, 2026-09-03 late)."""
+    return m["pnl_usd"] / m["budget_usd"]
+
+
 def study_t(link, i):
     """The `&t=` part of a study link for trade i, or nothing when the
     study holds no row for it (a no-stop trade whose entry the stopped
@@ -1011,32 +1038,33 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False,
     (same evening): `passed` for a market of the human filter's
     universe, `no pass` for one trading only because the filter is
     lifted on that page."""
+    # R FILLED sits beside R on every contracts layout (2026-09-03 late):
+    # the trade's P&L after every cost over the risk budgeted at entry,
+    # so a fill to 0.93% of a 1% budget shows 0.93 of its R. The
+    # timestamps keep their width (the widest strings; they wrap date
+    # over time); every layout sums to 100.
     if contracts and micro and mf:
-        # Sixteen columns; the timestamps keep their width (they are the
-        # widest strings), the rest give up a little; sums to 100.
+        cols = [("Market", "l", 6.5), ("Side", "l", 4),
+                ("In (UTC)", "l", 10), ("Out (UTC)", "l", 10),
+                ("Held", "", 4), ("In", "", 5.5), ("Out", "", 5.5),
+                ("Stop", "", 5.5), ("R/24h", "", 4.5), ("Stack", "l", 6.5),
+                ("Risk %", "", 5), ("R", "", 4.5), ("R filled", "", 5.5),
+                ("Costs $", "", 5), ("P&amp;L $", "", 5.5),
+                ("Reason", "l", 7), ("MF", "l", 5.5)]
+    elif contracts and micro:
         cols = [("Market", "l", 7), ("Side", "l", 4.5),
                 ("In (UTC)", "l", 10.5), ("Out (UTC)", "l", 10.5),
-                ("Held", "", 4), ("In", "", 6), ("Out", "", 6),
-                ("Stop", "", 6), ("R/24h", "", 4.5), ("Stack", "l", 7),
-                ("Risk %", "", 5), ("R", "", 4.5), ("Costs $", "", 5),
-                ("P&amp;L $", "", 5.5), ("Reason", "l", 8), ("MF", "l", 5.5)]
-    elif contracts and micro:
-        # Stack, actual risk % and costs are the subject of the page, so
-        # the price columns each give up a little width; sums to 100.
-        cols = [("Market", "l", 8), ("Side", "l", 4.5),
-                ("In (UTC)", "l", 10.5), ("Out (UTC)", "l", 10.5),
-                ("Held", "", 4.5), ("In", "", 6.5), ("Out", "", 6.5),
-                ("Stop", "", 6.5), ("R/24h", "", 5), ("Stack", "l", 8),
-                ("Risk %", "", 5), ("R", "", 5), ("Costs $", "", 5.5),
-                ("P&amp;L $", "", 6), ("Reason", "l", 8)]
+                ("Held", "", 4.5), ("In", "", 6), ("Out", "", 6),
+                ("Stop", "", 6), ("R/24h", "", 4.5), ("Stack", "l", 7.5),
+                ("Risk %", "", 5), ("R", "", 4.5), ("R filled", "", 5.5),
+                ("Costs $", "", 5), ("P&amp;L $", "", 5.5),
+                ("Reason", "l", 7.5)]
     elif contracts:
-        # The extra column is the whole point of a contracts page, so the
-        # others each give up a little width; still sums to 100.
         cols = [("Market", "l", 9), ("Side", "l", 5), ("In (UTC)", "l", 12),
-                ("Out (UTC)", "l", 12), ("Held", "", 5.5), ("In", "", 7.5),
-                ("Out", "", 7.5), ("Stop", "", 7.5), ("R/24h", "", 6),
-                ("Ctr", "", 5), ("R", "", 5.5), ("P&amp;L $", "", 7.5),
-                ("Reason", "l", 10)]
+                ("Out (UTC)", "l", 12), ("Held", "", 5), ("In", "", 7),
+                ("Out", "", 7), ("Stop", "", 7), ("R/24h", "", 6),
+                ("Ctr", "", 5), ("R", "", 5), ("R filled", "", 5.5),
+                ("P&amp;L $", "", 7), ("Reason", "l", 7.5)]
     else:
         cols = [("Market", "l", 10), ("Side", "l", 5),
                 ("In (UTC)", "l", 12.5), ("Out (UTC)", "l", 12.5),
@@ -1139,7 +1167,12 @@ def blotter_html(trades, money_of, links, contracts=False, micro=False,
             f'{ctr_cell}'
             f'<td class="mono {cls(tr["net_r"])}" data-s="{tr["net_r"]}">'
             f'{signed(tr["net_r"])}</td>'
-            f'{cost_cell}'
+            + (f'<td class="mono {cls(filled_r(m))}" '
+               f'data-s="{filled_r(m):.4f}" title="P&amp;L after costs '
+               f'${m["pnl_usd"]:,.2f} over the ${m["budget_usd"]:,.0f} '
+               f'budgeted at entry">{signed(filled_r(m))}</td>'
+               if contracts else '')
+            + f'{cost_cell}'
             f'<td class="mono {cls(m["pnl_usd"])}" data-s="{m["pnl_usd"]:.2f}">'
             f'{signed_money(m["pnl_usd"])}</td>'
             f'<td class="l{wrap}" data-s="{tr["reason"]}">'
@@ -2052,26 +2085,25 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
             print(f"WARNING: daily worst series bottoms at {max(dd):.2f}% "
                   f"against the headline {max_dd:.2f}%")
 
-        # THE OUTCOME EVERY STATISTIC COUNTS (Lode, 2026-09-03 evening:
-        # "102.6R won against 95.7R lost while the return is -5.35%"). A
-        # contracts page books each trade in whole contracts, so its win
-        # rate, expectancy, profit factor, average winner and loser, best
-        # and worst and the streaks are counted in the DOLLARS this
-        # account booked, after costs - never one flat R per trade. R
-        # stays a column of the blotter, where it belongs to the trade.
-        # The fractional pages count in R as they always have.
+        # THE OUTCOME EVERY STATISTIC COUNTS (Lode, 2026-09-03: "102.6R
+        # won against 95.7R lost while the return is -5.35%", then: a
+        # 0.93% fill of a 1% budget is 93% of R). A contracts page books
+        # each trade in whole contracts, so its statistics count FILLED
+        # R - P&L after every cost over the risk budgeted at entry - and
+        # never one flat R per trade. R stays a column of the blotter,
+        # where it belongs to the trade. The fractional pages count in R
+        # as they always have; there the two are the same number.
         if contracts:
             def outcome(i):
-                return money_of[i]["pnl_usd"]
-            def fmt(v):
-                return signed_money(v)
-            unit_note = "in this account's dollars, after costs"
+                return filled_r(money_of[i])
+            unit_note = "in filled R"
         else:
             def outcome(i):
                 return trades[i]["net_r"]
-            def fmt(v):
-                return signed(v) + "R"
             unit_note = "in R"
+
+        def fmt(v):
+            return signed(v) + "R"
         vals = [outcome(i) for i in range(len(trades))]
         wins = [v for v in vals if v > 0]
         losses = [v for v in vals if v <= 0]
@@ -2106,8 +2138,11 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                  f"tested")),
             kpi("Win rate", f"{wr:.1f}%",
                 f"{len(wins)} won, {len(losses)} lost, {unit_note}"),
-            (kpi("Net P&amp;L", signed_money(net_out),
-                 "booked by this account, after costs", cls(net_out))
+            (kpi("Net R filled", signed(net_out, 2),
+                 f"{signed(net_r, 2)}R by the trades; filled R is P&amp;L"
+                 f" after costs over the risk budgeted at entry, so a"
+                 f" 0.93% fill of the 1% budget earns 0.93 of its R",
+                 cls(net_out))
              if contracts else
              kpi("Net R", signed(net_r, 2), "after slippage")),
             kpi("Final capital", money(final),
@@ -2193,10 +2228,8 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
             kpi("Expectancy", fmt(net_out / len(trades)),
                 f"per trade, {unit_note}", cls(net_out)),
             kpi("Profit factor", f"{pf:.2f}" if pf else "&mdash;",
-                f"{fmt(gross_win)[1:] if not contracts else money(gross_win)}"
-                f" won against "
-                f"{fmt(gross_loss)[1:] if not contracts else money(gross_loss)}"
-                f" lost, {unit_note}"),
+                f"{gross_win:.1f}R won against {gross_loss:.1f}R lost,"
+                f" {unit_note}"),
             kpi("Longest winning run", f"{run_w}",
                 "positions, in entry order"),
             kpi("Longest losing run", f"{run_l}",
@@ -2210,8 +2243,8 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
             kpi("Worst trade", fmt(worst),
                 ("a gapped or slipped stop can cost more than 1R" if stopped
                  else "no stop rests: a loss is the whole move to the"
-                      " settlement") + (", in this account's dollars"
-                                        if contracts else "")),
+                      " settlement") + (", in filled R" if contracts
+                                        else "")),
             kpi("Average hold", held(avg_hold), "entry to exit"),
             kpi("Max concurrent", f"{max_open}", "positions open at once"),
             # Currently-open count from the payload's open_positions --
@@ -2229,7 +2262,7 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
         if contracts:
             surv_idx = [i for i, t in enumerate(trades)
                         if t["reason"] == "close1"]
-            surv_vals = [money_of[i]["pnl_usd"] for i in surv_idx]
+            surv_vals = [filled_r(money_of[i]) for i in surv_idx]
             survivors = dict(
                 n=len(surv_idx),
                 wins=sum(1 for v in surv_vals if v > 0),
@@ -2306,6 +2339,13 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                "published universe, <b>no pass</b> markets trade on this "
                "page only because the filter is lifted."
                if mf_col else "")
+            + (" <b>R filled</b> is this trade&rsquo;s R at the size it "
+               "actually got: P&amp;L after every cost (both legs&rsquo; "
+               "fees, the micro drift, the micro leg&rsquo;s rounded stop) "
+               "over the risk budgeted at entry &mdash; a fill to 0.93% of "
+               "the 1% budget earns 0.93 of its R, and every statistic on "
+               "this page counts it; hover it for the dollars."
+               if contracts else "")
             + (" <b>Stack</b> is the open position&rsquo;s composition, full "
                "contracts of the parent plus the routed micro&rsquo;s "
                "top-up (hover it for the dollar risk and the micro "
@@ -2325,12 +2365,14 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
         if contracts:
             mktnote = (
                 "Each market's share of THIS account: the trades it took "
-                "here, the dollars they booked after costs (they add up to "
-                "the headline), their net R, and the exits. Win % counts "
-                "the dollar outcome. <b>Costs $</b> is the market's "
-                "commission + exchange + NFA plus micro drift. Only the "
-                "markets that traded on this page are listed; the contract "
-                "arsenal above accounts for every other Socrates market.")
+                "here, their <b>net R filled</b> (P&amp;L after costs over "
+                "the risk budgeted at entry, so a partial fill earns a "
+                "partial R) beside the trades' own <b>net R</b>, and the "
+                "exits. Win % counts filled R. <b>Costs, R</b> is the "
+                "market's commission + exchange + NFA plus micro drift, "
+                "in R of the budget. Only the markets that traded on this "
+                "page are listed; the contract arsenal above accounts for "
+                "every other Socrates market.")
         else:
             mktnote = (
                 "Each market's own figures at "
@@ -2406,11 +2448,12 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                 .replace("__PANE_EQ__", pane_eq)
                 .replace("__PANE_DD__", pane_dd)
                 .replace("__NOTE__", note)
-                .replace("__CLASS_NET__", "Net P&amp;L $" if contracts
+                .replace("__CLASS_NET__", "Net R filled" if contracts
                          else "Net R")
-                .replace("__CLASS_AVG__", "Avg $" if contracts else "Avg R")
+                .replace("__CLASS_AVG__", "Avg R filled" if contracts
+                         else "Avg R")
                 .replace("__CLASSES__", class_rows_html(
-                    trades, money_of if contracts else None))
+                    trades, vals if contracts else None))
                 .replace("__REFUSED__", refused_html(all_trades, refused_map,
                                                      links_full, route))
                 .replace("__OPEN__", open_html(payload.get("open_positions"),
@@ -2423,7 +2466,7 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                 # The "Not tested" list is the arsenal's job on a
                 # contracts page (Lode, 2026-09-03: confusing beside the
                 # arsenal).
-                .replace("__MARKETS__", markets_money_html(
+                .replace("__MARKETS__", markets_filled_html(
                     trades, money_of, links) if contracts else markets_html(
                     payload["markets"], payload.get("excluded", []), links))
                 .replace("__CALENDAR__", calendar_html(

@@ -442,22 +442,39 @@ row would read passed. THE DENSE CONTRACTS BLOTTER WRAPS ITS TEXT
 CELLS (`wrap` on In/Out/Reason): at 15-16 fixed-layout columns the
 timestamps overflowed into each other and the reason into MF; checked
 in Chrome, the date now sits over its time.
-**THE CONTRACTS PAGES COUNT EVERY STATISTIC IN THE ACCOUNT'S DOLLARS**
-(Lode, 2026-09-03 evening: "102.6R won against 95.7R lost ... while
-the return is -5.35%"; and: these pages are about scaling the position
-in contracts and must never refer to a flat 1%). Win rate, net P&L,
-expectancy, profit factor, average winner/loser, best/worst, the
-streaks, the exit-class table and the per-market table
-(`markets_money_html`: the market's own taken trades, dollars after
-costs, net R beside, costs) are all in what THIS account booked; R
-stays a column of the blotter. The fractional pages count in R as
-before. Why the two disagreed: a cheap contract fills the budget
-exactly while an expensive one is floored below it, so with won and
-lost R nearly balanced the sizing asymmetry alone flipped the sign
-(the wheat -17.8R trade sized at 1.00%, HG +8.2R at 0.84%); then
-compounding through a -17.8% hit, then fees. A "Net R at realized
-size" tile that stated this was added and REMOVED the same evening
-(Lode: overcomplicated; the Risk % column says it).
+**FILLED R IS THE UNIT OF EVERY CONTRACTS-PAGE STATISTIC** (Lode,
+2026-09-03 late: "102.6R won against 95.7R lost ... while the return is
+-5.35%" -- then: "if we can only fill 0.93% risk then that becomes 93%
+of R, not 100% of R ... when we decide to increase the risk to 2% that
+doesn't impact R"; "build it with filled R, keep the micro rounding
+in"). A trade's R is the price move over the stop distance, a fact
+about the trade; on the fractional pages it is also the outcome
+because every trade risks exactly one budget unit. In whole contracts a
+trade fills a FRACTION of the budget, so R no longer says what it
+earned. `build_1m_report.filled_r(m) = pnl_usd / budget_usd`: P&L
+after EVERY cost (both legs' fees, micro drift, the micro leg's rounded
+stop) over the risk BUDGETED at entry (`budget_usd`, written by both
+replays). A 0.93% fill of a 1% budget earns 0.93 of its R; a refused
+trade nothing; a 2% budget filled to 1.80% is 0.90 R -- the budget is
+the unit, so filled R compares across accounts and budgets, which is
+what R was for. On the contracts pages win rate, net R filled,
+expectancy, profit factor, average winner/loser, best/worst, streaks,
+the exit-class table and the per-market table (`markets_filled_html`,
+net R filled beside the trades' own net R, costs in R of the budget)
+all count filled R; the blotter carries `R filled` beside `R` (hover
+for the dollars); the fractional pages count in R as before, where
+the two are the same number. Filled R x the budget is the arithmetic
+return; the distance to the equity curve is compounding, as on every
+page. Why R and money disagreed: a cheap contract fills the budget
+exactly while an expensive one is floored below it (the wheat -17.8R
+trade at 1.00%, HG +8.2R at 0.84%), so with won and lost R nearly
+balanced the sizing asymmetry alone flipped the sign, then compounding
+through a -17.8% hit and fees. Two earlier attempts the same evening
+were REJECTED and are gone: a "Net R at realized size" tile referring
+to a flat 1% (Lode: the contracts pages never refer to a flat 1%; the
+Risk % column says it) and statistics in dollars (Lode: expectancy in
+$ makes no sense here). On the lifted hybrid no-stop account: +6.91R
+by the trades, +0.19 net R filled, PF 1.00, return -5.35%.
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

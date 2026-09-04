@@ -1596,8 +1596,19 @@ PAGE_JS = r"""<script>
   // stylesheet's forced light palette would not reach it. Re-read the
   // variables on both events; print resolves them against the print CSS.
   function retheme() { panes.forEach(function (p) { p.chart.applyOptions(opts()); }); }
-  window.addEventListener('beforeprint', retheme);
-  window.addEventListener('afterprint', retheme);
+  // On paper the panes must be laid out to the PAPER width (Chrome has
+  // applied the print stylesheet by the time beforeprint fires, so the
+  // containers already measure their print width) and fitted again, or
+  // the canvas keeps its screen pixels and is scaled or cut. Restored
+  // after printing the same way.
+  function reflow() {
+    resize();
+    panes.forEach(function (p) { p.chart.timeScale().fitContent(); });
+  }
+  window.addEventListener('beforeprint', function () { retheme(); reflow(); });
+  window.addEventListener('afterprint', function () { retheme(); reflow(); });
+  var pdf = document.getElementById('pdf');
+  if (pdf) pdf.addEventListener('click', function () { window.print(); });
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
     if (mq.addEventListener) mq.addEventListener('change', retheme);
@@ -1732,14 +1743,38 @@ table.trades td a:hover{text-decoration:underline}
    greyed so the traded rows stand out (Lode, 2026-09-03) */
 tr.arsenal-out td{color:var(--ink3)}
 table.trades td.pos b{color:var(--pos)}
-@media print{.pane-eq{height:300px}.pane-dd,.pane-op{height:120px}
-  .acct-h{break-before:page}}
+/* EXPORT PDF (Lode, 2026-09-04: "the pdf feature inside the report (as
+   a button) so it doesn't depend on the charter run"). The button calls
+   the browser's own print; no PDF library is bundled, deliberately, as
+   on every page of this project: Chrome's Save as PDF keeps the text
+   selectable and the file small. Landscape carries the 16-17 column
+   contracts blotter; the panes are re-laid out to the paper width on
+   beforeprint (see the script). */
+.pdfbar{display:flex;gap:14px;align-items:center;margin:14px 0 0}
+.pdfbar button{font:inherit;font-size:13px;font-weight:600;padding:6px 14px;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface);
+  color:var(--ink);cursor:pointer}
+.pdfbar button:hover{border-color:var(--accent);color:var(--accent)}
+.pdfbar .hint{font-size:11.5px;color:var(--ink3)}
+@page{size:A4 landscape;margin:10mm}
+@media print{.pdfbar{display:none!important}
+  .pane-eq{height:300px}.pane-dd,.pane-op{height:120px}
+  .acct-h{break-before:page}
+  .card,.kpis,.stats4,.rules,.note{break-inside:avoid}
+  table.trades tr{break-inside:avoid}
+  table.trades thead{display:table-header-group}
+  table.trades th{position:static}}
 </style></head><body>
 <div class="wrap">
 <header>
   <div class="eyebrow">1-minute workstream</div>
   <h1>__NAME__</h1>
   <p class="lede">__LEDE__</p>
+  <div class="pdfbar noprint"><button type="button" id="pdf">Export PDF</button>
+  <span class="hint">Opens the browser&rsquo;s print dialog: choose
+  <b>Save as PDF</b> there (Chrome&rsquo;s own, not &ldquo;Microsoft Print to
+  PDF&rdquo;, which rasterises the page). Landscape, every table opened out,
+  one page break per account.</span></div>
 </header>
 __RULES__
 __ARSENAL__

@@ -492,6 +492,28 @@ to a flat 1% (Lode: the contracts pages never refer to a flat 1%; the
 Risk % column says it) and statistics in dollars (Lode: expectancy in
 $ makes no sense here). On the lifted hybrid no-stop account: +6.91R
 by the trades, +0.19 net R filled, PF 1.00, return -5.35%.
+**EVERY REPORT PAGE HAS AN EXPORT PDF BUTTON SINCE 2026-09-04** (Lode:
+"is it hard to also see the reports in pdf? We don't need the pdf's
+each run ... the pdf feature inside the report (as a button) so it
+doesn't depend on the charter run"). `build_1m_report.py` pages (the
+fractional variant pages and all four contracts pages) carry a
+`.pdfbar` under the lede with an Export PDF button that calls
+`window.print()`; NO PDF LIBRARY IS BUNDLED, the project's standing
+choice (the daily pages and the R-cut grids print the same way):
+Chrome's own Save as PDF keeps the text selectable and the file small,
+"Microsoft Print to PDF" rasterises. Print styles: `@page A4
+landscape` (the 16-17 column contracts blotter needs it), the shared
+stylesheet's light palette and opened scroll boxes, a page break before
+each account heading, cards/tiles/rows kept whole, table headers
+repeated. THE PANES ARE RE-LAID OUT FOR PAPER on `beforeprint`
+(`reflow()`: resize to the container's print width + fitContent, and
+back on `afterprint`) -- a canvas keeps its screen pixels otherwise.
+Verified with Chrome headless `--print-to-pdf` (34 landscape pages for
+the lifted hybrid page, tables and breaks right); headless does NOT
+fire beforeprint before capture, so the pane re-layout is exercised
+only by the button in real Chrome. The capital ladder pages and the
+stop profile have no button (not asked; Ctrl+P works there with the
+shared print styles).
 **THE SIZING POLICY IS REFUSAL, NOT FORCE-1, SINCE 2026-09-01 EVENING**
 (Lode: "We're not going to force a trade above that 1% ... a trade is
 refused on the moment of placing the order because the 1 contract

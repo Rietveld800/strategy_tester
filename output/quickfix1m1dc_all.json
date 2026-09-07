@@ -735,7 +735,42 @@
       "reason": "human market filter: failed the chart-structure inspection (audit s.16)"
     }
   ],
-  "open_positions": [],
+  "open_positions": [
+    {
+      "side": "short",
+      "contract": "NGV26",
+      "entry_date": "2026-09-04",
+      "entry_ts": "2026-09-04 12:35:00+00:00",
+      "entry": 2.963,
+      "stop": 3.021,
+      "rpu": 0.05600000000000005,
+      "entry_first": 2.965,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.4667,
+      "risk_usd": 1019.74,
+      "mark_ts": "2026-09-04 18:30:41.105863981+00:00",
+      "mark": 2.975,
+      "unrealized_r": -0.2143,
+      "market": "NG"
+    },
+    {
+      "side": "short",
+      "contract": "6JU6",
+      "entry_date": "2026-09-04",
+      "entry_ts": "2026-09-04 12:51:00+00:00",
+      "entry": 0.006436,
+      "stop": 0.0064535,
+      "rpu": 1.650000000000002e-05,
+      "entry_first": 0.006437,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2727,
+      "risk_usd": 991.95,
+      "mark_ts": "2026-09-04 19:02:16.365374999+00:00",
+      "mark": 0.006405,
+      "unrealized_r": 1.8788,
+      "market": "6J"
+    }
+  ],
   "trades": [
     {
       "side": "short",

@@ -188,7 +188,11 @@ def load_bars(market_dir):
         bear = sorted(rev["bear_major"] | rev["bear_minor"])
         bars.append(Bar(date, ohlc, bull, bear))
     bars.sort(key=lambda b: b.date)
-    return bars
+    # The forward window's cap applies to the daily engine too (forward_window.py):
+    # it is unregistered today, and a page it could build must still stop the day
+    # before rung 6's window opens.
+    import forward_window
+    return forward_window.capped(bars)
 
 
 def infer_tick(bars):

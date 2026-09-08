@@ -40,6 +40,7 @@ from expand_process import (  # noqa: E402
 )
 
 import engine_1m  # noqa: E402
+import forward_window
 
 DC = HERE / ".." / "data_center"
 ARRAY_ROOT = HERE / ".." / "hyperliquid_bot" / "data" / "array"
@@ -348,7 +349,7 @@ def binance_days_and_match(key, socbars, window_end_entries=False):
     return days, rate
 
 
-def market_inputs(key, window_end_entries=False):
+def market_inputs(key, window_end_entries=False, uncapped=False):
     """(days, files, tick, note) for a market, or (None, exclusion dict).
     Loading is the slow part; run_1m_matrix.py calls this once per market
     and runs the engine dials on the same inputs. The default keeps the
@@ -378,6 +379,10 @@ def market_inputs(key, window_end_entries=False):
         tick = calendar[0]["tick_size"]
         days, _ = futures_days(m, window_end_entries)
         note = "futures, frozen calendar"
+    # THE FORWARD WINDOW'S CAP (forward_window.py): from the day rung 6's window
+    # opens, every strategy-performance output stops the day before it. The
+    # tripwire is the only caller that passes `uncapped=True`.
+    days = forward_window.capped(days, uncapped=uncapped)
     if not days:
         return None, {"market": key, "status": "EXCLUDED",
                       "reason": "no tradable days"}
@@ -391,7 +396,7 @@ def market_inputs(key, window_end_entries=False):
 OPEN_MAX_AGE_DAYS = 7
 
 
-def live_market_inputs(key):
+def live_market_inputs(key, uncapped=False):
     """(inputs, excluded, live) - market_inputs plus the LIVE verdict,
     shared by the published run and the matrix so the two passes cannot
     disagree about what "currently open" means. A live market's days
@@ -402,7 +407,7 @@ def live_market_inputs(key):
     what "currently open" means: a rerun on a stale archive rightly
     reports nothing open.
     """
-    inputs, excluded = market_inputs(key, window_end_entries=True)
+    inputs, excluded = market_inputs(key, window_end_entries=True, uncapped=uncapped)
     if inputs is None:
         return None, excluded, False
     live = (date.today() - inputs[0][-1].date).days <= OPEN_MAX_AGE_DAYS
@@ -410,11 +415,11 @@ def live_market_inputs(key):
         # Reload at the conservative default rather than patching the
         # flag back by hand: only the builders know whether the last day
         # was a window end, a blackout or a calendar overhang.
-        inputs, excluded = market_inputs(key)
+        inputs, excluded = market_inputs(key, uncapped=uncapped)
     return inputs, excluded, live
 
 
-def run_market(key, **dials):
+def run_market(key, uncapped=False, **dials):
     """One market at the given engine dials (see engine_1m.run_market).
 
     Returns the market's own trading DATES beside its trades: the curve
@@ -433,7 +438,7 @@ def run_market(key, **dials):
     run_1m_matrix.py shares since 2026-08-30 so its cells carry open
     positions the same way.
     """
-    inputs, excluded, live = live_market_inputs(key)
+    inputs, excluded, live = live_market_inputs(key, uncapped=uncapped)
     if inputs is None:
         return None, excluded, []
     days, files, tick, note = inputs

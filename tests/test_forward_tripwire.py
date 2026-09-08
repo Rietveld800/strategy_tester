@@ -86,7 +86,7 @@ def test_the_output_carries_exactly_the_allowed_keys_and_no_number(tmp_path):
     tw._write(record, path=out)
     written = json.loads(out.read_text())
     assert set(written) == set(tw.OUTPUT_KEYS)
-    forbidden = ("equity", "drawdown", "net_r", "trade_count", "day_count", "curve", "running")
+    forbidden = ("equity", "drawdown", "net_r", "trade_count", "day_count", "curve", "running", "max_dd")
     assert not any(f in json.dumps(written) for f in forbidden)
     assert [p.name for p in tmp_path.iterdir()] == ["forward_tripwire.json"], "nothing else written"
     with pytest.raises(AssertionError):
@@ -168,3 +168,34 @@ def test_the_real_file_agrees_with_the_module_and_names_the_selection_files_trad
     assert rows, "no markets parsed from the selection file"
     assert sorted(markets) == sorted(rows), "forward_window.json and MARKET_SELECTION.md disagree"
     assert len(markets) == 17
+
+
+# ---------------------------------------------------- freshness, and the cap
+def test_bars_freshness_wants_the_previous_trading_day():
+    from datetime import timedelta
+    today = date(2026, 9, 21)                                   # a Monday
+    cal = _calendar(date(2026, 9, 1), 18)                       # through 09-18, Friday
+    newest, fresh = tw.bars_freshness([cal], today)
+    assert newest == date(2026, 9, 18) and fresh is True
+    newest, fresh = tw.bars_freshness([cal[:-1]], today)
+    assert fresh is False
+    assert tw.bars_freshness([], today) == (None, False)
+
+
+def test_stale_bars_leave_the_bits_unchanged_and_exit_nonzero(tmp_path, monkeypatch):
+    monkeypatch.setattr(tw, "WINDOW_FILE", tmp_path / "forward_window.json")
+    monkeypatch.setattr(tw, "OUTPUT_FILE", tmp_path / "out" / "forward_tripwire.json")
+    (tmp_path / "forward_window.json").write_text(json.dumps(dict(opens_on="2026-09-15", markets=["GC"])))
+    import types
+    stale_engine = types.SimpleNamespace(
+        run_market=lambda key, **d: ([_trade("2026-09-16", "2026-09-17", -9.0)], {}, _calendar(OPENS, 2)),
+        portfolio_replay=lambda trades: (50_000.0, 50.0, []))
+    monkeypatch.setitem(sys.modules, "run_1m", stale_engine)
+    monkeypatch.setitem(sys.modules, "run_1m_matrix", types.SimpleNamespace(
+        VARIANTS=[("variant 4", {}, None, None)]))
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        assert tw.main([], now=datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc)) == 3
+    written = json.loads((tmp_path / "out" / "forward_tripwire.json").read_text())
+    assert written["bars_fresh"] is False and written["tripped"] is False, "a 50% drawdown on stale bars trips nothing"
+    assert "stale" in buf.getvalue() and "50" not in buf.getvalue()

@@ -95,6 +95,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import run_1m
+import forward_window
 
 HERE = Path(__file__).resolve().parent
 OUT_JSON = HERE / "output" / "quickfix1m1dc_matrix.json"
@@ -481,7 +482,22 @@ def load_matrix_cache(sig):
         print(f"cache: grid signature changed, discarding {CACHE_PATH.name}",
               flush=True)
         return {}
-    return raw.get("markets", {})
+    markets = raw.get("markets", {})
+    # THE FORWARD WINDOW'S CAP REACHES THE CACHE (forward_window.py): a cache
+    # written after forward bars landed but before the pre-registration file was
+    # dated could carry a trade past the cap into a page. Any such trade discards
+    # the whole cache, so every cell recomputes under capped inputs.
+    cap = forward_window.cap_day()
+    if cap is not None:
+        beyond = [key for key, ent in markets.items()
+                  if any(str(t.get("entry_date", ""))[:10] > cap.isoformat()
+                         for cells in ent.get("cells", {}).values()
+                         for t in cells.get("trades", []))]
+        if beyond:
+            print(f"cache: holds trades past the forward-window cap {cap} for "
+                  f"{', '.join(beyond)}; discarding {CACHE_PATH.name}", flush=True)
+            return {}
+    return markets
 
 
 def save_matrix_cache(sig, markets):

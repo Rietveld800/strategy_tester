@@ -34,7 +34,7 @@ The trip date and the reached date are the only dates that leave this job.
 
 import json
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -50,7 +50,7 @@ GRADING_TRADES = 30
 #: The only keys the output may carry. The test holds the file to this set.
 OUTPUT_KEYS = ("window_open", "opens_on", "tripped", "trip_date", "grading_reached",
                "reached_date", "computed_at", "variant", "ceiling_dd_pct",
-               "grading_days", "grading_trades")
+               "grading_days", "grading_trades", "bars_through", "bars_fresh")
 
 
 # ================================================================== the judges
@@ -109,8 +109,32 @@ def _reached_date(days, trades):
     return max(d for d in (day, trade) if d) if (day and trade) else None
 
 
-def output_record(state, *, opens_on, now):
+def previous_trading_day(day: date) -> date:
+    """The last weekday before `day`: the day whose bars the morning top-up brings."""
+    d = day - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def bars_freshness(calendars, today: date):
+    """(newest bar day across the markets, fresh?) - the precondition the chained
+    top-up must satisfy: the newest day is at least the previous trading day. A
+    date and a bit; neither says anything about performance."""
+    newest = None
+    for dates in calendars:
+        for d in dates:
+            d = d if isinstance(d, date) else date.fromisoformat(str(d)[:10])
+            if newest is None or d > newest:
+                newest = d
+    fresh = newest is not None and newest >= previous_trading_day(today)
+    return newest, fresh
+
+
+def output_record(state, *, opens_on, now, bars_through=None, bars_fresh=None):
     return dict(window_open=opens_on is not None,
+                bars_through=None if bars_through is None else str(bars_through),
+                bars_fresh=bars_fresh,
                 opens_on=None if opens_on is None else opens_on.isoformat(),
                 tripped=bool(state.get("tripped", False)), trip_date=state.get("trip_date"),
                 grading_reached=bool(state.get("grading_reached", False)),
@@ -160,7 +184,7 @@ def compute(opens_on: date, *, run_market, replay, markets, dials, today: date):
     that die with the caller's frame."""
     all_trades, calendars = [], []
     for key in markets:
-        result = run_market(key, **dials)
+        result = run_market(key, uncapped=True, **dials)      # the one caller past the cap
         if result is None or result[0] is None:
             continue
         trades, _summary, dates = result
@@ -169,13 +193,14 @@ def compute(opens_on: date, *, run_market, replay, markets, dials, today: date):
     fwd = forward_trades(all_trades, opens_on)
     days = forward_days(calendars, opens_on, today)
     _equity, max_dd, _curve = replay(fwd) if fwd else (None, 0.0, [])
+    bars_through, bars_fresh = bars_freshness(calendars, today)
     return dict(max_dd_pct=float(max_dd), day_count=len(days), trade_count=len(fwd),
-                days=days, trades=fwd)
+                days=days, trades=fwd, bars_through=bars_through, bars_fresh=bars_fresh)
 
 
-def main(argv=None) -> int:
+def main(argv=None, now=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)         # injectable, so tests own the clock
     opens_on, markets = read_window()
     if "--status" in argv:
         print(json.dumps(read_previous() | dict(window_open=opens_on is not None,
@@ -194,11 +219,23 @@ def main(argv=None) -> int:
     dials = next(d for name, d, _, _ in run_1m_matrix.VARIANTS if name == VARIANT)
     numbers = compute(opens_on, run_market=run_1m.run_market, replay=run_1m.portfolio_replay,
                       markets=markets, dials=dials, today=now.date())
+    bars_through, bars_fresh = numbers.pop("bars_through"), numbers.pop("bars_fresh")
+    if not bars_fresh:
+        # THE FRESHNESS PRECONDITION: without the previous trading day's bars the
+        # run would judge on a stale window. The bits are left as they were and
+        # the record says the bars are stale; the board alarms on that.
+        record = output_record(read_previous(), opens_on=opens_on, now=now,
+                               bars_through=bars_through, bars_fresh=False)
+        _write(record)
+        print(f"tripwire: bars stale (through {bars_through}); bits unchanged")
+        return 3
     state = judge(previous=read_previous(), **numbers)
     del numbers                                    # the series dies here, deliberately
-    record = output_record(state, opens_on=opens_on, now=now)
+    record = output_record(state, opens_on=opens_on, now=now,
+                           bars_through=bars_through, bars_fresh=True)
     _write(record)
-    print(f"tripwire: tripped={record['tripped']} grading_reached={record['grading_reached']}")
+    print(f"tripwire: tripped={record['tripped']} grading_reached={record['grading_reached']} "
+          f"bars_through={bars_through}")
     return 0
 
 

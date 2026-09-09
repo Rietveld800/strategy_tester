@@ -298,6 +298,60 @@ Candidate directions for the next research round (open, no decisions):
   the stop class's worst losses - the IB streaming entry path
   (ib_live_session_notes.md) is part of the strategy, not plumbing.
 
+## 23. The forward candidate is variant 4, decided today and not before (Lode, 2026-09-09)
+
+**The decision.** The cell rung 6's forward window grades is **variant 4: lockout 1,
+hybrid stop, band 0.00-0.60**, on the human-filter universe. Decided by Lode on
+2026-09-09 at about 12:30, in writing, on structural grounds: the lower band cut was
+never justified as a rule. The written trail for that ground, cited rather than
+recalled: s.15c (2026-08-10) found the 0.20 lower cut to be *a SLOT-ALLOCATION policy,
+not a quality filter*, *a RIDGE, not an optimum*, carried by five trades, existing
+*only BECAUSE of the session lockout*; s.15e (2026-08-10) adopted lower 0.00 for
+exactly those reasons and parked the sub-0.20 region for its own investigation; s.17
+(2026-08-11) raised the cut to 0.20 while stating *the caution that drove s.15e is not
+withdrawn*; s.19k (2026-08-18) found that *on the 4th/5th anchor the LOWER cut stops
+earning its place entirely*; and the uniform band axis of 2026-09-02/03 (commit
+99a4288, Lode's instruction) put both report cells at 000-060 *so anchors compare at
+the same band*. **What is not in writing before today:** a sentence naming the hybrid
+cell at 000-060 as the pre-registered forward candidate. The renumbering made it the
+report cell; the pre-registration documents of 2026-08-20 in live_engine (the
+dossier, the signals record, the restated benchmark) named the hybrid cell at
+020-060, then called variant 5, and were never revisited. So the decision dates
+today, and it reads against today.
+
+**What Lode saw when he confirmed it, stated so the reader sees the same.** The
+in-sample comparison of the two cells on the seventeen surviving markets to
+2026-08-18, by the tripwire's own replay (`run_1m.portfolio_replay`, 1% risk), was in
+view: variant 5, 65 trades, +51.48R, max drawdown 4.45%; variant 4, 71 trades,
++59.71R, max drawdown 5.60%. The eleven trades variant 4 takes and variant 5 refuses
+are the sub-0.20 setups; their net R was on the screen. The decision is recorded
+as taken on the structural ground above, with that comparison visible, and the
+record does not pretend otherwise. The window has not opened, no forward number
+exists, and the pre-registration file (`forward_window.json`) still carries no date,
+so the decision is admissible as a pre-registration; it is not a clean one, and this
+paragraph is the cost of that, paid in the open.
+
+**The near miss, its own finding, not cured by the decision.** `forward_tripwire.py`
+and `forward_window.json` were written on 2026-09-08 (commit 75b1c11) with
+`VARIANT = "variant 4"` and `ceiling_dd_pct 8.9`. No decision produced that
+constant: the session took the report grid's hybrid cell for the pre-registered one,
+and the ceiling it wrote is twice **variant 5's** drawdown (4.45%), applied to a
+variant 4 run. Found on 2026-09-09 by archaeology (the 19a addendum's URA question
+led to the cell question). Today's decision confirms the same cell by a different
+road; it does not retroactively supply the decision the constant lacked, and the
+ceiling was inconsistent regardless of which cell was right. The rule that follows:
+a pre-registration constant carries a citation to the decision that set it, in the
+file that holds it, or it is a guess with a number.
+
+**What changes, and in what order.** The re-derivation cascade is listed in
+live_engine's handover of 2026-09-09 for Lode's confirmation and executes only on
+it: the ceiling becomes twice variant 4's own drawdown on the seventeen (5.60%, so
+11.2%), the signals record is regenerated for variant 4 to 2026-08-18, the restated
+benchmark and the dossier gain their variant 4 figures as dated additions, the
+engine block's band default moves from 0.20 to 0.00, and 10a names the cell in
+words. Nothing in `MARKET_SELECTION.md` is dated before that has landed and Lode
+has done his sitting.
+
 ## 21. The no-stop account beside the stopped one (Lode, 2026-09-03)
 
 Lode: *"what we also want to see in the report is another equity curve

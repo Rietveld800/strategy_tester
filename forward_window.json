@@ -1,7 +1,7 @@
 {
- "_": "The pre-registration of rung 6's forward window as forward_tripwire.py reads it (live_engine, ENGINE_ARCHITECTURE.md, Phase 2). opens_on is null until MARKET_SELECTION.md carries its rationale and date; that date goes here the same day, and from then on this file is not edited.",
+ "_": "The pre-registration of rung 6's forward window as forward_tripwire.py reads it (live_engine, ENGINE_ARCHITECTURE.md, Phase 2). opens_on carries MARKET_SELECTION.md's date (2026-09-09); the market set is that file's fifteen-market traded set (URA and VIXY excluded at the sitting, both zero-trade so the graded window is unchanged); from the opening day this file is not edited.",
  "_decision": "variant 4 (lockout 1, hybrid, band 0.00-0.60) decided by Lode 2026-09-09, audit s.23; ceiling 11.2 = twice variant 4's max drawdown on the seventeen to 2026-08-18 (5.60%) under run_1m.portfolio_replay, computed 2026-09-09. The 8.9 of 2026-09-08 was variant 5's figure doubled: the near miss in s.23.",
- "opens_on": null,
+ "opens_on": "2026-09-09",
  "markets": [
   "6E",
   "6J",
@@ -16,8 +16,6 @@
   "PA",
   "PL",
   "SI",
-  "URA",
-  "VIXY",
   "YM",
   "ZW"
  ],

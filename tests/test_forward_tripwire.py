@@ -169,7 +169,7 @@ def test_the_real_file_agrees_with_the_module_and_names_the_selection_files_trad
             if line.startswith("| ") and not line.startswith("| Market") and "---" not in line]
     assert rows, "no markets parsed from the selection file"
     assert sorted(markets) == sorted(rows), "forward_window.json and MARKET_SELECTION.md disagree"
-    assert len(markets) == 17
+    assert len(markets) == 15   # URA, VIXY excluded at the sitting 2026-09-09
 
 
 # ---------------------------------------------------- freshness, and the cap

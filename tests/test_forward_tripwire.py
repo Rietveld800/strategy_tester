@@ -55,7 +55,7 @@ def test_the_bits_flip_at_the_right_moment_and_latch():
     s = tw.judge(previous={}, **quiet)
     assert s == dict(tripped=False, trip_date=None, grading_reached=False, reached_date=None)
     trades = [_trade("2026-09-15", "2026-09-16", -1.0)]
-    s = tw.judge(previous=s, max_dd_pct=9.0, day_count=10, trade_count=1, days=[], trades=trades)
+    s = tw.judge(previous=s, max_dd_pct=12.0, day_count=10, trade_count=1, days=[], trades=trades)
     assert s["tripped"] is True and s["trip_date"] == "2026-09-16"
     s = tw.judge(previous=s, max_dd_pct=1.0, day_count=10, trade_count=1, days=[], trades=[])
     assert s["tripped"] is True and s["trip_date"] == "2026-09-16", "latched"
@@ -71,7 +71,7 @@ def test_the_bits_flip_at_the_right_moment_and_latch():
 
 
 def test_the_ceiling_is_strict_and_the_numbers_do_not_leave_the_judge():
-    s = tw.judge(previous={}, max_dd_pct=8.9, day_count=0, trade_count=0, days=[], trades=[])
+    s = tw.judge(previous={}, max_dd_pct=11.2, day_count=0, trade_count=0, days=[], trades=[])
     assert s["tripped"] is False
     for key in s:
         assert key in ("tripped", "trip_date", "grading_reached", "reached_date")
@@ -146,7 +146,7 @@ def test_main_prints_only_the_bits_and_a_closed_window_computes_nothing(tmp_path
 # ------------------------------------------------ the pre-registration file
 def test_a_drift_between_the_file_and_the_module_refuses(tmp_path):
     path = tmp_path / "forward_window.json"
-    path.write_text(json.dumps(dict(opens_on=None, markets=["GC"], ceiling_dd_pct=8.9,
+    path.write_text(json.dumps(dict(opens_on=None, markets=["GC"], ceiling_dd_pct=11.2,
                                     grading_days=60, grading_trades=30, variant="variant 4")))
     assert tw.read_window(path) == (None, ["GC"])
     path.write_text(json.dumps(dict(opens_on=None, markets=["GC"], ceiling_dd_pct=10.0)))
@@ -162,7 +162,9 @@ def test_the_real_file_agrees_with_the_module_and_names_the_selection_files_trad
     if not selection.exists():
         pytest.skip("live_engine's MARKET_SELECTION.md is not on this machine")
     text = selection.read_text(encoding="utf-8")
-    table = text.split("## The set", 1)[1].split("### Excluded", 1)[0]
+    # the pre-registration table only: the structural facts table added under the same
+    # heading on 2026-09-08 names every market a second time (found 2026-09-09)
+    table = text.split("## The set", 1)[1].split("### Structural facts", 1)[0]
     rows = [line.split("|")[1].strip() for line in table.splitlines()
             if line.startswith("| ") and not line.startswith("| Market") and "---" not in line]
     assert rows, "no markets parsed from the selection file"

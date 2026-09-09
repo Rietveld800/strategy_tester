@@ -43,8 +43,15 @@ OUTPUT_FILE = HERE / "output" / "forward_tripwire.json"
 
 #: The pre-registration this job serves (Phase 2). Editable only until the window
 #: opens; the window file records the values in force on its opening day.
+#: THE DECISION BEHIND EACH CONSTANT, cited (audit s.23, 2026-09-09): the cell is
+#: variant 4 (lockout 1, hybrid stop, band 0.00-0.60), decided by Lode on 2026-09-09;
+#: the ceiling is twice that cell's own max drawdown on the seventeen surviving
+#: markets to 2026-08-18 under this module's replay (5.60%, run_1m.portfolio_replay,
+#: computed 2026-09-09). The 8.9 written on 2026-09-08 was variant 5's drawdown
+#: doubled and applied to a variant 4 run: a constant without a decision, the
+#: near miss s.23 records. A constant here carries its decision or it is a guess.
 VARIANT = "variant 4"
-CEILING_DD_PCT = 8.9
+CEILING_DD_PCT = 11.2
 GRADING_DAYS = 60
 GRADING_TRADES = 30
 #: The only keys the output may carry. The test holds the file to this set.

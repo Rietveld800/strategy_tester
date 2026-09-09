@@ -787,6 +787,47 @@ adopted band never voted on, and Lode's read that "these trades are not
 uncommon" is right: they are a distinct population (the GC one is the
 case he remembered). Open, not decided.
 
+**Addendum, 2026-09-09: the URA discrepancy, resolved from the record.**
+`live_engine/MARKET_SELECTION.md` (2026-09-08) found that this table lists a URA
+trade on 2026-05-18 that the variant 05 signals record
+(`live_engine/strategies/expected/quickfix1m1dc_variant05_signals.json`, 79
+signals, produced 2026-08-20 from the matrix, window to 2026-08-18) does not
+contain. Both were right on their dates, and the table is the one that went stale.
+This table was written on 2026-08-17 (commit 6dfce5d) under the flat 24-hour range
+window, when these eight session-open trades carried `R/24h n/a` and the band
+ABSTAINED, which is the whole point of the section. The next day, commit 5464050
+(`range_mode="trading_day"`, the ratio measured over the market's own previous
+trading date), every one of them got a ratio and the band voted on this population
+for the first time. Read on 2026-09-09 from the current matrix, under variant 5's
+anchor (hybrid) with the band switched off (variant 6: lockout 1, hybrid, band
+full, otherwise variant 5):
+
+| market | entry (UTC) | ratio under the hybrid anchor | band 0.20-0.60 says | in variant 5 today | in the signals record |
+|---|---|---|---|---|---|
+| GC | 2026-03-01 23:00 | 0.8183 | refused, above | no | no |
+| HG | 2026-03-22 22:30 | 0.5865 | inside, kept | yes | yes |
+| PA | 2026-08-09 22:00 | absent from variant 6 too | not the band | no | no |
+| SI | 2026-08-09 22:02 | 0.7192 | refused, above | no | no |
+| ZW | 2026-04-27 00:05 | 0.1491 | refused, below | no | no |
+| CC | 2026-02-17 10:04 | 0.7022 | refused, above | no | no |
+| CC | 2026-03-02 10:01 | 0.1852 | refused, below | no | no |
+| **URA** | **2026-05-18 13:51** | **0.9419** | **refused, above** | **no** | **no** |
+
+URA's opening-minute long on 2026-05-18 measures 0.94 of the previous trading
+day's range and is refused by the upper cut; it survives only in the band-free
+cells and the wick cells (variants 3, 6, 7, 8, 9, 12, 15 to 18, 21, 24 to 27), which
+is where the matrix still shows it. Six of the eight were refused once judged, one
+was kept, and PA's Sunday open disappeared even with the band off, so something
+variant-independent removed it after 08-17 (the 08-16 changes to what the line is
+drawn from, 19c/19d, and rule 2, 19h, are the candidates); that one is not this
+question's and is left open here. **Conclusion:** the signals record is right for
+variant 05 as adopted and nothing in it changes; this table was right on 2026-08-17
+and was never re-read after 5464050 changed what it measured. The blind spot this
+section names was largely closed by that commit (blind minutes 1.01% to 0.14%, per
+its message), not by a decision here. For `MARKET_SELECTION.md`: URA carries no
+trade under variant 05, and its removal leaves the restated benchmark unchanged, as
+that file already states.
+
 ### 19b. The pane
 
 `engine_1m.ratio_series()` walks the same bars and computes the same

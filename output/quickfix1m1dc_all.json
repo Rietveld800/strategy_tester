@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 199408.97,
+    "final": 197191.41,
     "max_dd_pct": 6.17,
-    "trades": 109,
-    "win_rate": 41.3,
-    "net_r": 73.62
+    "trades": 110,
+    "win_rate": 40.9,
+    "net_r": 72.5
   },
   "calendar": [
     "2026-01-02",
@@ -269,15 +269,15 @@
       "tick": 5e-05
     },
     {
-      "trades": 5,
+      "trades": 6,
       "wins": 1,
-      "win_rate": 20.0,
-      "net_r_total": -0.72,
-      "final_cash": 99194.76,
-      "return_pct": -0.81,
+      "win_rate": 16.7,
+      "net_r_total": -1.84,
+      "final_cash": 98082.58,
+      "return_pct": -1.92,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 4,
+        "stop": 5,
         "no_confirm": 0,
         "close1": 1,
         "data_end": 0
@@ -737,25 +737,7 @@
       "reason": "human market filter: failed the chart-structure inspection (audit s.16)"
     }
   ],
-  "open_positions": [
-    {
-      "side": "short",
-      "contract": "6JU6",
-      "entry_date": "2026-09-04",
-      "entry_ts": "2026-09-04 12:51:00+00:00",
-      "entry": 0.006436,
-      "stop": 0.0064535,
-      "rpu": 1.650000000000002e-05,
-      "entry_first": 0.006437,
-      "stop_tightened": null,
-      "rpu_range_ratio": 0.2727,
-      "risk_usd": 991.95,
-      "mark_ts": "2026-09-04 19:02:16.365374999+00:00",
-      "mark": 0.006405,
-      "unrealized_r": 1.8788,
-      "market": "6J"
-    }
-  ],
+  "open_positions": [],
   "trades": [
     {
       "side": "short",
@@ -3263,6 +3245,29 @@
       "pnl_usd": 837.64,
       "cash_after": 102811.6,
       "market": "NG"
+    },
+    {
+      "side": "short",
+      "contract": "6JU6",
+      "entry_date": "2026-09-04",
+      "entry_ts": "2026-09-04 12:51:00+00:00",
+      "entry": 0.006436,
+      "stop": 0.0064535,
+      "rpu": 1.650000000000002e-05,
+      "entry_first": 0.006437,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2727,
+      "exit_date": "2026-09-08",
+      "exit_ts": "2026-09-07 22:00:00+00:00",
+      "exit": 0.0064535,
+      "reason": "stop",
+      "gross_r": -1.0606,
+      "cost_r": 0.0606,
+      "net_r": -1.1212,
+      "risk_usd": 991.95,
+      "pnl_usd": -1112.18,
+      "cash_after": 98082.58,
+      "market": "6J"
     }
   ]
 }

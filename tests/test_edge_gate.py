@@ -45,7 +45,31 @@ def test_edge_reproduces_the_published_values(filename):
             f"{filename}: {name} ours={ours!r} published={want[name]!r}"
 
 
-def test_the_first_observation_enters_no_expectation():
+#: The fixture must separate the two candidate rules by at least this much, and the
+#: assertion below states it as a floor rather than reusing the 1e-6 of a
+#: `pytest.approx` comparison. Measured 2026-09-12 across the five seeds below with
+#: `FIRST_BAR_WIDEN = 20`: 2.78e-04 at the weakest seed and 5.60e-02 at the
+#: strongest, so the floor carries a margin of ~28x at worst.
+#:
+#: WHY THE FLOOR IS STATED AND THE FIXTURE IS SEED-ROBUST. The first version of this
+#: guard used one seed and a first bar left at its natural width. It DID fire when
+#: perturbed - removing the discriminating bar produced separation 4.07e-07 and the
+#: assertion failed with its own message, so it could not pass silently - but its
+#: separation on the committed seed was 4.62e-06 against a 1e-6 threshold, a margin
+#: of 4.6x, and that seed was the weakest of six tested by an order of magnitude. A
+#: guard whose whole job is discrimination should not sit that close to its own
+#: threshold; a margin is not a pass condition until it is written down.
+MIN_RULE_SEPARATION = 1e-5
+
+#: How much wider than its natural span the first bar is made. The point is to put a
+#: large `r1[0] = m[0] - o[0]` into the series - a first observation whose open sits
+#: at the low of a deliberately wide bar - so the two rules part company by a margin
+#: that does not depend on the luck of a seed.
+FIRST_BAR_WIDEN = 20.0
+
+
+@pytest.mark.parametrize("seed", [20260912, 1, 2, 7, 12345])
+def test_the_first_observation_enters_no_expectation(seed):
     """The defect the control caught, pinned by a fixture that DISCRIMINATES.
 
     The two published files pin the rule between them, but only as a pair and only
@@ -55,21 +79,28 @@ def test_the_first_observation_enters_no_expectation():
     t=0 and must NOT match the one that includes it.
 
     The fixture has to make the two differ, or it proves nothing (TESTING.md, "it
-    cannot discriminate"). A first bar far from the rest does that: it moves
-    `mean(r1)` measurably while contributing no transition of its own.
+    cannot discriminate", and the blind-fixture rule the EDGE control produced). It
+    is run over five seeds and asserts its own separation floor first, so a future
+    change that quietly stops it discriminating fails here rather than passing.
     """
     import numpy as np
 
-    rng = np.random.default_rng(20260912)
+    rng = np.random.default_rng(seed)
     n = 400
     mid = 100.0 + np.cumsum(rng.normal(0.0, 0.05, n))
     o_p = mid + rng.normal(0.0, 0.02, n)
     c_p = mid + rng.normal(0.0, 0.02, n)
     h_p = np.maximum(o_p, c_p) + np.abs(rng.normal(0.0, 0.03, n))
     l_p = np.minimum(o_p, c_p) - np.abs(rng.normal(0.0, 0.03, n))
-    # The discriminating bar: a first observation whose open sits far below its
-    # own midpoint, so r1[0] is large and the two rules part company.
+    # The discriminating bar, built rather than hoped for: a deliberately wide first
+    # bar whose open sits at its low, so r1[0] is large while t=0 still contributes
+    # no transition of its own. Close is clamped back inside the bar so the fixture
+    # stays valid OHLC.
+    span = h_p[0] - l_p[0]
+    h_p[0] += FIRST_BAR_WIDEN * span
+    l_p[0] -= FIRST_BAR_WIDEN * span
     o_p[0] = l_p[0]
+    c_p[0] = min(max(c_p[0], l_p[0]), h_p[0])
 
     def candidate(include_first: bool) -> float:
         o, h, l, c = np.log(o_p), np.log(h_p), np.log(l_p), np.log(c_p)
@@ -105,13 +136,15 @@ def test_the_first_observation_enters_no_expectation():
         return float(np.sqrt(abs(s2)))
 
     including, excluding = candidate(True), candidate(False)
-    assert including != pytest.approx(excluding, rel=1e-6), \
-        "the fixture does not discriminate between the two rules; it proves nothing"
+    separation = abs(including - excluding) / abs(excluding)
+    assert separation >= MIN_RULE_SEPARATION, (
+        f"seed {seed}: the fixture separates the two rules by only {separation:.2e}, "
+        f"below the stated floor {MIN_RULE_SEPARATION:.0e}; it proves nothing")
 
     got = edge(o_p, h_p, l_p, c_p)
     assert got is not None
     assert got.spread == pytest.approx(excluding, rel=PROPOSED_RTOL)
-    assert got.spread != pytest.approx(including, rel=1e-6)
+    assert got.spread != pytest.approx(including, rel=MIN_RULE_SEPARATION / 10)
 
 
 def test_too_short_a_series_is_missing_not_zero():

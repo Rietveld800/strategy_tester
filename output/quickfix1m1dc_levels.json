@@ -2508,7 +2508,7 @@
    "stop": 6.755599999999999,
    "run_files": 23,
    "run_start": "2026-08-06 07:35:00+00:00",
-   "tests_in_run": 64,
+   "tests_in_run": 77,
    "tests_today": 2,
    "attempt": 3,
    "prior_losses": 0,
@@ -2766,7 +2766,7 @@
    "days": 3,
    "run_files": 23,
    "tests_first": 31,
-   "tests_last": 64
+   "tests_last": 77
   },
   {
    "episode": "ZW|short|784.0|89",

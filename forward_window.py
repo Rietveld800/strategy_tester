@@ -11,6 +11,14 @@ charts read bars directly and show no strategy); the tripwire is the ONLY consum
 allowed past the cap, and it says so by name when it asks.
 
 While the window is closed (no opening date) there is no cap and nothing changes.
+
+THE CAP WAS LIFTED BY RULING (Lode, 2026-09-16; ENGINE_ARCHITECTURE.md Phase 2,
+"LATER RULING, 2026-09-16", commit b5a44d4; the code step pre-registered in 3e77331).
+The lift is one dated field in the same file, `cap_lifted_on`: while it is set,
+`cap_day` is None and every consumer shows every day. The mechanism stays, so a
+future pre-registered window can cap again by removing the field or writing a new
+file. `uncapped=True` keeps its meaning as the name of the one consumer that must
+never be capped, whatever the file says.
 """
 
 import json
@@ -30,8 +38,22 @@ def opens_on(path=None):
     return None if raw in (None, "") else date.fromisoformat(raw)
 
 
+def cap_lifted_on(path=None):
+    """The date the display cap was lifted by ruling, or None while it holds."""
+    path = path or WINDOW_FILE
+    if not path.exists():
+        return None
+    raw = json.loads(path.read_text(encoding="utf-8")).get("cap_lifted_on")
+    return None if raw in (None, "") else date.fromisoformat(raw)
+
+
 def cap_day(path=None):
-    """The last day a strategy-performance output may include, or None for no cap."""
+    """The last day a strategy-performance output may include, or None for no cap.
+
+    None while the window is closed, and None once the cap is lifted by ruling
+    (`cap_lifted_on` set); otherwise the day before the window opens."""
+    if cap_lifted_on(path) is not None:
+        return None
     day = opens_on(path)
     return None if day is None else day - timedelta(days=1)
 

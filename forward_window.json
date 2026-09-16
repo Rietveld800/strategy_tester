@@ -1,6 +1,8 @@
 {
- "_": "The pre-registration of rung 6's forward window as forward_tripwire.py reads it (live_engine, ENGINE_ARCHITECTURE.md, Phase 2). opens_on carries MARKET_SELECTION.md's date (2026-09-09); the market set is that file's fifteen-market traded set (URA and VIXY excluded at the sitting, both zero-trade so the graded window is unchanged); from the opening day this file is not edited.",
+ "_": "The pre-registration of rung 6's forward window as forward_tripwire.py reads it (live_engine, ENGINE_ARCHITECTURE.md, Phase 2). opens_on carries MARKET_SELECTION.md's date (2026-09-09); the market set is that file's fifteen-market traded set (URA and VIXY excluded at the sitting, both zero-trade so the graded window is unchanged); from the opening day this file is not edited. Amended 2026-09-16 by Lode's ruling: one field, cap_lifted_on, written once on that day; nothing else in this file changes.",
  "_decision": "variant 4 (lockout 1, hybrid, band 0.00-0.60) decided by Lode 2026-09-09, audit s.23; ceiling 11.2 = twice variant 4's max drawdown on the seventeen to 2026-08-18 (5.60%) under run_1m.portfolio_replay, computed 2026-09-09. The 8.9 of 2026-09-08 was variant 5's figure doubled: the near miss in s.23.",
+ "_cap_lifted": "The display cap lifted by Lode's ruling of 2026-09-16 (live_engine ENGINE_ARCHITECTURE.md Phase 2, LATER RULING 2026-09-16, commit b5a44d4; code step pre-registered in 3e77331). While cap_lifted_on is set, forward_window.cap_day is None and every strategy-performance output shows every day. The window, its opening date, the ceiling, the cadence and the tripwire are unchanged by this field.",
+ "cap_lifted_on": "2026-09-16",
  "opens_on": "2026-09-09",
  "markets": [
   "6E",

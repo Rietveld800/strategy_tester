@@ -204,7 +204,8 @@
     "2026-09-10",
     "2026-09-11",
     "2026-09-14",
-    "2026-09-15"
+    "2026-09-15",
+    "2026-09-16"
   ],
   "markets": [
     {
@@ -742,7 +743,25 @@
       "reason": "human market filter: failed the chart-structure inspection (audit s.16)"
     }
   ],
-  "open_positions": [],
+  "open_positions": [
+    {
+      "side": "long",
+      "contract": "YMZ6",
+      "entry_date": "2026-09-16",
+      "entry_ts": "2026-09-16 19:49:00+00:00",
+      "entry": 51847.0,
+      "stop": 51689.0,
+      "rpu": 156.0,
+      "entry_first": 51845.0,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.1418,
+      "risk_usd": 1022.63,
+      "mark_ts": "2026-09-16 20:00:36.199034667+00:00",
+      "mark": 51915.0,
+      "unrealized_r": 0.4359,
+      "market": "YM"
+    }
+  ],
   "trades": [
     {
       "side": "short",

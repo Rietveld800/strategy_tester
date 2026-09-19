@@ -291,7 +291,8 @@ realized %, an ETF's locked notional), and the KPI row
 states the delta against the fractional ideal AT THE SAME ACCOUNT --
 never against the published fractional figures, which are a different
 bet size. The baseline contracts page takes the RAW blotter at the 1%
-budget, NOT the fractional page's solved 6% sizing: the contracts
+budget, NOT the fractional page's solved 6% sizing (which that page
+carried until 2026-09-19): the contracts
 layer defines its own money, and solving a drawdown on top would
 conflate two questions. Refresh step `contracts1m` (in the full run,
 after `hybrid1m`; reads the JSONs, no backtest, seconds). The pages
@@ -822,10 +823,15 @@ carried by five trades; the sub-0.20 wider-stop investigation stays
 PARKED, s.15d). The published universe is the **HUMAN MARKET FILTER**
 (`run_1m.HUMAN_APPROVED`, 22 markets, s.16): Lode's eye inspection of
 chart structure, never a market's backtest result; explicit CLI keys
-bypass it for debug runs. The published report page is **sized to the 6%
-drawdown budget** (s.17): `build_baseline()` solves risk per trade by
-bisection to a 6.0% worst-reached drawdown and states the number - the
-JSON and matrix stay at 1%, since R is risk-independent. A refused entry
+bypass it for debug runs. **THE PUBLISHED REPORT PAGE RENDERS AT THE
+ENGINE'S FIXED 1% RISK PER TRADE AND THE DRAWDOWN IS THE MEASURED OUTPUT
+SINCE 2026-09-19** (Lode: "keep the risk per trade at 1% and unfix the
+max DD"). From 2026-08-11 (s.17) to 2026-09-19 it was sized to the 6%
+drawdown budget instead: `build_baseline()` solved risk per trade by
+bisection to a 6.0% worst-reached drawdown and stated the number, while
+the JSON and matrix stayed at 1%. Now the page's money columns ARE the
+JSON's (at PAGE_START), the same reading every variant page gives;
+`solve_risk_pct` stays in the module, unused. A refused entry
 does not spend the lockout allowance, so a band SHIFTS the trade list
 rather than slicing it; that is why every band in
 `build_1m_rcut_report.py` is its own engine run (that grid stays
@@ -1032,7 +1038,8 @@ no data_end exits). The daily refresh has carried the window on to
 0.20/0.50 + 6% sizing, s.17) the live baseline is **59 trades, 49.2% wr,
 +57.88R, streak 4, 4.68% max DD, $173,846 at 1%**; the published page shows
 the 6%-solved sizing (**1.289% risk per trade, $202,126, 6.00% DD** on this
-window). The whole-universe and previous-band states stay visible as the
+window; that solved sizing left the page on 2026-09-19, see above). The
+whole-universe and previous-band states stay visible as the
 matrix's `no market filter`, `band 0.00-0.50` and `no geometry cut` cells.
 Figures quoted from before 2026-08-07 are pre-correction; the shape of the
 arguments survived, the numbers did not. Expect the live line to move with

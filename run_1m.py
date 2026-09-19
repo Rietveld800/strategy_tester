@@ -739,8 +739,9 @@ def main():
         trades=all_trades),
         indent=2) + "\n", encoding="utf-8")
     import build_1m_report
-    # The published page is sized to the 6% drawdown budget (Lode,
-    # 2026-08-11): risk per trade solved on every refresh, page states it.
+    # The published page renders at RISK_PCT with the drawdown as the
+    # measured output (Lode, 2026-09-19); from 2026-08-11 to 2026-09-19
+    # it was sized to a 6% drawdown budget, risk solved on every refresh.
     build_1m_report.build_baseline()
     # Two active-list builds rode along here (quickfix1m1dc25 and its 6%
     # sizing) until 2026-08-12, when both pages were retired (user).

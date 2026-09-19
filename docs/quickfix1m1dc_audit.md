@@ -642,6 +642,12 @@ Three decisions in one move, taken off the matrix of s.16:
    bisection so the worst drawdown reached intraday is 6.0% - the same
    TARGET_DD the daily project publishes at - and states the number. The
    trade list is untouched; risk moves only the money columns.
+   **REVERSED 2026-09-19** (Lode: "keep the risk per trade at 1% and
+   unfix the max DD"): the published page renders at the engine's fixed
+   1% and the drawdown is the measured output, as on every variant page.
+   The solver stays in `build_1m_report.solve_risk_pct`, unused (the
+   matrix and the R-cut grids lever with their own); nothing else changed - same trades, same R, the money
+   columns now equal the JSON's.
 
 The matrix rebased to match (every cell now inherits the band and the
 filter), and each adopted rule keeps its off/previous state as a

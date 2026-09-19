@@ -1787,34 +1787,39 @@ __JS__
 
 
 def build_baseline():
-    """The published baseline page, sized to a drawdown budget (Lode,
-    2026-08-11, audit s.17): risk per trade is SOLVED by bisection so the
-    worst drawdown reached at any trade close is 6%, the TARGET_DD the daily
-    project publishes at. Re-solved on every build; the page states the
-    number. The trade list itself is untouched - risk moves only the
-    money columns, never the R columns."""
+    """The published baseline page at the engine's own risk per trade
+    (Lode, 2026-09-19: "keep the risk per trade at 1% and unfix the max
+    DD"). From 2026-08-11 (audit s.17) to 2026-09-19 this page was sized
+    to a 6% drawdown budget - risk per trade SOLVED by bisection so the
+    worst drawdown reached at any trade close was exactly 6%, and the
+    page stated the solved number. Now the risk is the fixed input
+    (run_1m's RISK_PCT, the 1% the JSON and the matrix publish at) and
+    the drawdown is the measured OUTPUT, like on every variant page, so
+    the page's money columns are the JSON's money columns and the
+    self-check in build() compares like with like. solve_risk_pct() is
+    now unused here (the matrix and the R-cut grids lever with their own
+    solvers) and stays for anyone who wants the budget reading back."""
     data = json.loads(IN_JSON.read_text(encoding="utf-8"))
-    risk = solve_risk_pct(data["trades"], 6.0)
-    _, _, final, max_dd = replay(data["trades"], risk)
+    risk = data["params"].get("risk_pct", RISK_PCT)
     data["risk_pct"] = risk
-    data["params"] = dict(data["params"], risk_pct=risk)
-    data["portfolio"].update(final=round(final, 2),
-                             max_dd_pct=round(max_dd, 2))
     data["universe_note"] = (
         " <b>This baseline trades the human market filter</b>: the "
         "markets that passed the chart-structure inspection (audit s.16); "
-        "the rejected ones are under Not tested with that reason. <b>And "
-        "it is sized to a drawdown budget</b>: risk per trade is solved "
-        f"to <b>{risk:g}%</b> so the worst drawdown reached at any "
-        "trade close is 6%, the daily project's target.")
+        "the rejected ones are under Not tested with that reason. <b>Risk "
+        f"per trade is a fixed {risk:g}%</b> of equity at entry and the "
+        "drawdown is what that produced, not a budget it was solved to "
+        "(the page was sized to a 6% drawdown budget from 2026-08-11 to "
+        "2026-09-19).")
     build(data=data)
 
 
 def build_baseline_contracts():
     """The published baseline's trade list in integer contracts. The raw
-    blotter at the 1% budget, NOT the fractional page's solved 6%
-    sizing: the contracts layer defines its own money and solving a
-    drawdown on top of it would conflate two questions. Its no-stop
+    blotter at the 1% budget (which the fractional page renders at too
+    since 2026-09-19; until then that page carried a solved 6%-drawdown
+    sizing, and this one deliberately never did: the contracts layer
+    defines its own money and solving a drawdown on top of it would
+    conflate two questions). Its no-stop
     account is the matrix's companion of the baseline cell, crosschecked
     against this blotter so the two accounts cannot come from different
     data windows."""
@@ -2722,7 +2727,9 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
 
 if __name__ == "__main__":
     # python build_1m_report.py                     the published baseline
-    #                                               (at the solved 6% risk)
+    #                                               (at the engine's 1% risk;
+    #                                                solved to a 6% drawdown
+    #                                                2026-08-11 .. 2026-09-19)
     # python build_1m_report.py --variant "variant 5"    one matrix cell
     #
     # There were two more builds until 2026-08-12, --active25 and

@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 199686.94,
+    "final": 198255.76,
     "max_dd_pct": 6.17,
-    "trades": 112,
-    "win_rate": 41.1,
-    "net_r": 73.79
+    "trades": 113,
+    "win_rate": 40.7,
+    "net_r": 73.06
   },
   "calendar": [
     "2026-01-02",
@@ -206,7 +206,8 @@
     "2026-09-14",
     "2026-09-15",
     "2026-09-16",
-    "2026-09-17"
+    "2026-09-17",
+    "2026-09-18"
   ],
   "markets": [
     {
@@ -408,17 +409,17 @@
       "tick": 0.5
     },
     {
-      "trades": 3,
+      "trades": 4,
       "wins": 1,
-      "win_rate": 33.3,
-      "net_r_total": 3.42,
-      "final_cash": 103370.31,
-      "return_pct": 3.37,
+      "win_rate": 25.0,
+      "net_r_total": 2.68,
+      "final_cash": 102611.77,
+      "return_pct": 2.61,
       "zero_dist_entries": 0,
       "reasons": {
         "stop": 1,
         "no_confirm": 0,
-        "close1": 2,
+        "close1": 3,
         "data_end": 0
       },
       "refused_wide": 73,
@@ -744,25 +745,7 @@
       "reason": "human market filter: failed the chart-structure inspection (audit s.16)"
     }
   ],
-  "open_positions": [
-    {
-      "side": "short",
-      "contract": "NQZ6",
-      "entry_date": "2026-09-17",
-      "entry_ts": "2026-09-17 13:31:00+00:00",
-      "entry": 29685.8,
-      "stop": 30002.05,
-      "rpu": 315.75,
-      "entry_first": 29686.3,
-      "stop_tightened": null,
-      "rpu_range_ratio": 0.4509,
-      "risk_usd": 1033.7,
-      "mark_ts": "2026-09-17 20:00:24.313451207+00:00",
-      "mark": 29743.000000000004,
-      "unrealized_r": -0.1812,
-      "market": "NQ"
-    }
-  ],
+  "open_positions": [],
   "trades": [
     {
       "side": "short",
@@ -3339,6 +3322,29 @@
       "pnl_usd": 2438.59,
       "cash_after": 104701.83,
       "market": "YM"
+    },
+    {
+      "side": "short",
+      "contract": "NQZ6",
+      "entry_date": "2026-09-17",
+      "entry_ts": "2026-09-17 13:31:00+00:00",
+      "entry": 29685.8,
+      "stop": 30002.05,
+      "rpu": 315.75,
+      "entry_first": 29686.3,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.4509,
+      "exit_date": "2026-09-18",
+      "exit_ts": "2026-09-18 20:00:23.617308905+00:00",
+      "exit": 29917.250000000004,
+      "reason": "close1",
+      "gross_r": -0.733,
+      "cost_r": 0.0008,
+      "net_r": -0.7338,
+      "risk_usd": 1033.7,
+      "pnl_usd": -758.54,
+      "cash_after": 102611.77,
+      "market": "NQ"
     }
   ]
 }

@@ -9,7 +9,7 @@
   "starting_capital": 100000.0,
   "risk_pct": 1.0,
   "n_markets": 18,
-  "n_trades": 112
+  "n_trades": 113
  },
  "markets": {
   "United_States_Oil_Fund_LP": {
@@ -626,6 +626,18 @@
      "target": null,
      "reason": "close1",
      "r": 4.499,
+     "bars": null
+    },
+    {
+     "side": "short",
+     "entry_date": "2026-09-17",
+     "entry": 29685.8,
+     "exit_date": "2026-09-18",
+     "exit": 29917.250000000004,
+     "stop": 30002.05,
+     "target": null,
+     "reason": "close1",
+     "r": -0.734,
      "bars": null
     }
    ]

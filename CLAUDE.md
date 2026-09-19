@@ -99,7 +99,8 @@ profit caps and "every overlay shares rules 1 to 3", which is now false.
 
 **WHAT THE UPDATE BUTTON BUILDS** (`../trading_system/refresh.py`, and charter's
 rail button runs that file): `data` -> `bars` -> `specs` ->
-`strategy1m` -> `matrix1m` ->
+`strategy1m` -> `matrix1m` -> `micro1m` (added 2026-09-19: the per-entry
+micro records, seconds) ->
 `hybrid1m` -> `contracts1m` -> `capitals1m` -> `levels1m` ->
 `charts`, ~8-17 min on a normal day (`specs`, added 2026-09-02,
 rebuilds data_center's contract spec table from the just-refreshed

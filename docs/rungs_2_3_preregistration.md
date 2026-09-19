@@ -174,3 +174,7 @@ statistic.
    (section 6).
 
 Until these are ruled, nothing is built and nothing is run.
+
+**Ruled 2026-09-19 (Lode): not built now.** "We're not going to build that. That's not on
+what we should focus on now." The document stands as the pre-registration to take up when
+the rungs are scheduled; the six decisions remain open; nothing was built or run.

@@ -953,6 +953,90 @@ def open_html(open_positions, stopped=True):
             f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
+def period_returns(days, eq, start, period):
+    """The shared account's percentage change per calendar period, from the
+    daily equity series (`days` as ISO dates, `eq` the balance at each market
+    day's close, `start` the balance before the first day). `period` is
+    "month", "week" (ISO week) or "day". A period's figure is its LAST balance
+    against the last balance before it, so the figures compound exactly as the
+    equity pane does; a period that holds market days but booked nothing reads
+    0.0 and stays visible as flat. Returns [(label, sublabel, pct)], oldest
+    first. Pure (Lode, 2026-09-24: monthly, weekly, daily performance bars)."""
+    import datetime as _dt
+    groups = []                      # [(key, label, sub, last_eq)] in order
+    for d, v in zip(days, eq):
+        day = _dt.date.fromisoformat(d)
+        if period == "month":
+            key, label, sub = (day.year, day.month), day.strftime("%b %Y"), ""
+        elif period == "week":
+            y, w, _ = day.isocalendar()
+            monday = day - _dt.timedelta(days=day.weekday())
+            key, label, sub = (y, w), f"W{w:02d}", monday.strftime("%d %b")
+        elif period == "day":
+            key, label, sub = day, day.strftime("%d %b"), day.strftime("%a")
+        else:
+            raise ValueError(f"unknown period {period!r}")
+        if groups and groups[-1][0] == key:
+            groups[-1][3] = v
+        else:
+            groups.append([key, label, sub, v])
+    out, prev = [], start
+    for _, label, sub, last in groups:
+        pct = (last - prev) / prev * 100.0 if prev else 0.0
+        out.append((label, sub, round(pct, 4)))
+        prev = last
+    return out
+
+
+def periods_html(days, eq, start):
+    """Three sections, "Monthly performance", "Weekly performance", "Daily
+    performance": one column per period around a zero baseline, green up
+    for a gain and red down for a loss, the signed percentage on every bar.
+    The tallest bar of a section sets that section's scale. Pure HTML and
+    CSS, no script, so the sections print and export like the tables do."""
+    sections = []
+    for title, period, note in (
+            ("Monthly performance", "month",
+             "The shared account&#39;s change per calendar month: the last "
+             "balance of the month against the last balance before it. A "
+             "month that opened and booked nothing is a flat bar, not a "
+             "missing one."),
+            ("Weekly performance", "week",
+             "The same per ISO week, the week&#39;s Monday under the bar."),
+            ("Daily performance", "day",
+             "The same per market day, closed trades only; the strip scrolls "
+             "sideways when the window is long.")):
+        rows = period_returns(days, eq, start, period)
+        if not rows:
+            continue
+        scale = max((abs(pct) for _, _, pct in rows), default=0.0) or 1.0
+        decimals = 1 if period == "month" else 2
+        cols = []
+        for label, sub, pct in rows:
+            h = min(abs(pct) / scale * 100.0, 100.0)
+            tone = "pos" if pct > 0 else "neg" if pct < 0 else "flat"
+            val = f"{pct:+.{decimals}f}%"
+            up = (f'<div class="pv">{val}</div>'
+                  f'<div class="pb" style="height:{h:.1f}%"></div>'
+                  if pct >= 0 else "")
+            down = (f'<div class="pb" style="height:{h:.1f}%"></div>'
+                    f'<div class="pv">{val}</div>'
+                    if pct < 0 else "")
+            cols.append(
+                f'<div class="pcol {tone}">'
+                f'<div class="pup">{up}</div>'
+                f'<div class="pdown">{down}</div>'
+                f'<div class="plab">{esc(label)}'
+                f'{f"<span>{esc(sub)}</span>" if sub else ""}</div>'
+                f'</div>')
+        sections.append(
+            f'<div class="section-h">{title}</div>'
+            f'<p class="chartnote">{note}</p>'
+            f'<div class="tradecard perf {period}"><div class="pchart">'
+            f'{"".join(cols)}</div></div>')
+    return "".join(sections)
+
+
 def filled_r(m):
     """A taken trade's FILLED R: its P&L after every cost over the risk
     budgeted at entry (see the module docstring, 2026-09-03 late)."""
@@ -1687,6 +1771,7 @@ __HEAD__
 </tr></thead><tbody>__CLASSES__</tbody></table></div>
 __REFUSED__
 __OPEN__
+__PERIODS__
 <div class="section-h">All trades</div>
 <p class="chartnote">__BLOTNOTE__</p>
 __BLOTTER__
@@ -1743,6 +1828,33 @@ table.trades td a:hover{text-decoration:underline}
    greyed so the traded rows stand out (Lode, 2026-09-03) */
 tr.arsenal-out td{color:var(--ink3)}
 table.trades td.pos b{color:var(--pos)}
+/* Monthly / weekly / daily performance (Lode, 2026-09-24): columns around
+   a zero baseline, green up, red down, the percentage on every bar. Pure
+   CSS so the sections print with the tables. */
+.perf .pchart{display:flex;align-items:stretch;gap:6px;padding:14px 10px 6px;
+  height:260px;overflow-x:auto}
+.perf.day .pchart{gap:3px}
+.perf .pcol{display:flex;flex-direction:column;flex:1 0 44px;min-width:44px;
+  height:100%}
+.perf .plab{flex:0 0 auto}
+.perf.day .pcol{flex:1 0 34px;min-width:34px}
+.perf .pup,.perf .pdown{flex:1 1 0;display:flex;flex-direction:column;
+  justify-content:flex-end;position:relative}
+.perf .pdown{justify-content:flex-start;border-top:1px solid var(--border)}
+.perf .pb{width:70%;margin:0 auto;border-radius:3px 3px 0 0;min-height:1px}
+.perf .pdown .pb{border-radius:0 0 3px 3px}
+.perf .pos .pb{background:var(--pos)}
+.perf .neg .pb{background:var(--neg)}
+.perf .flat .pb{background:var(--ink3);height:1px!important}
+.perf .pv{font-size:10px;font-weight:600;text-align:center;
+  font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 0 3px}
+.perf .pdown .pv{padding:3px 0 0}
+.perf .pos .pv{color:var(--pos)}
+.perf .neg .pv{color:var(--neg)}
+.perf .flat .pv{color:var(--ink3)}
+.perf .plab{font-size:10px;color:var(--ink3);text-align:center;
+  padding-top:6px;white-space:nowrap;line-height:1.25}
+.perf .plab span{display:block;font-size:9.5px}
 /* EXPORT PDF (Lode, 2026-09-04: "the pdf feature inside the report (as
    a button) so it doesn't depend on the charter run"). The button calls
    the browser's own print; no PDF library is bundled, deliberately, as
@@ -2498,6 +2610,10 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
                                                      links_full, route))
                 .replace("__OPEN__", open_html(payload.get("open_positions"),
                                                stopped))
+                # Monthly / weekly / daily bars (Lode, 2026-09-24), the
+                # contracts pages only, each account on its own equity.
+                .replace("__PERIODS__", periods_html(days, eq, start)
+                         if contracts else "")
                 .replace("__BLOTNOTE__", blotnote)
                 .replace("__BLOTTER__", blotter_html(trades, money_of, links,
                                                      contracts, micro,

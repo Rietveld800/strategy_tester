@@ -344,6 +344,32 @@ only confused beside the arsenal); the fractional pages keep it.
 Lifting the filter for the six rejected markets and buying SR3 bars
 is the open strategy-level decision that would take the pages to 22
 tested.
+**THE CONTRACTS PAGES CARRY MONTHLY, WEEKLY AND DAILY PERFORMANCE BARS
+(Lode, 2026-09-24, verbatim, written before the code):** "I would like
+to add a section for the quickfix1m1dc_contracts_variant_01 and
+quickfix1m1dc_contracts_variant_04.html reports. After section
+'Currently open' but before section 'All trades' we want to see a
+section 'Monthly performance'. In this section show a bar of each
+month of trading. The bar shows the percentage profit/loss for that
+specific month. Negative months show a red negative bar. Positive
+months show a green positive bar. And put the monthly percentage with
+the corresponding bar. This will create an immediate impression of the
+profitability on a monthly base. Then follow up with a section 'Weekly
+performance' and 'Daily performance' doing exactly the same for the
+weekly and daily." Built as `period_returns` (pure: the shared
+account's daily equity series, one point per market day, grouped by
+calendar month / ISO week / market day; a period's figure is its last
+balance against the last balance before it, the sizing account before
+the first; a period with market days but nothing booked reads 0.0 and
+stays visible as flat) and `periods_html` (three sections, pure HTML
+and CSS columns around a zero baseline, green `--pos` up, red `--neg`
+down, the signed percentage on every bar, the tallest bar of a section
+setting its scale; the daily strip scrolls sideways when long). Rendered
+on the contracts pages only, in BOTH account blocks (no-stop and
+stopped, each on its own equity), between "Currently open" and "All
+trades"; the fractional pages are unchanged. Pinned by
+`tests/test_period_returns.py`.
+
 **THE CONTRACTS PAGES CARRY TWO ACCOUNTS SINCE 2026-09-03: NO STOP
 ABOVE, STOP BELOW** (Lode: "another equity curve (above the equity
 curve we currently see in the report) also with the drawdown and open

@@ -18,11 +18,11 @@
     "activation_utc": "07:35"
   },
   "portfolio": {
-    "final": 205260.73,
+    "final": 203155.58,
     "max_dd_pct": 6.17,
-    "trades": 115,
-    "win_rate": 40.9,
-    "net_r": 76.59
+    "trades": 116,
+    "win_rate": 40.5,
+    "net_r": 75.57
   },
   "calendar": [
     "2026-01-02",
@@ -210,7 +210,8 @@
     "2026-09-18",
     "2026-09-21",
     "2026-09-22",
-    "2026-09-23"
+    "2026-09-23",
+    "2026-09-24"
   ],
   "markets": [
     {
@@ -236,15 +237,15 @@
       "tick": 0.1
     },
     {
-      "trades": 8,
+      "trades": 9,
       "wins": 3,
-      "win_rate": 37.5,
-      "net_r_total": 4.83,
-      "final_cash": 104701.83,
-      "return_pct": 4.7,
+      "win_rate": 33.3,
+      "net_r_total": 3.81,
+      "final_cash": 103627.96,
+      "return_pct": 3.63,
       "zero_dist_entries": 0,
       "reasons": {
-        "stop": 5,
+        "stop": 6,
         "no_confirm": 0,
         "close1": 3,
         "data_end": 0
@@ -3394,6 +3395,29 @@
       "pnl_usd": 4449.15,
       "cash_after": 102458.52,
       "market": "ES"
+    },
+    {
+      "side": "long",
+      "contract": "YMZ6",
+      "entry_date": "2026-09-24",
+      "entry_ts": "2026-09-24 13:33:00+00:00",
+      "entry": 51847.0,
+      "stop": 51689.0,
+      "rpu": 156.0,
+      "entry_first": 51845.0,
+      "stop_tightened": null,
+      "rpu_range_ratio": 0.2484,
+      "exit_date": "2026-09-24",
+      "exit_ts": "2026-09-24 13:37:00+00:00",
+      "exit": 51689.0,
+      "reason": "stop",
+      "gross_r": -1.0128,
+      "cost_r": 0.0128,
+      "net_r": -1.0256,
+      "risk_usd": 1047.02,
+      "pnl_usd": -1073.86,
+      "cash_after": 103627.96,
+      "market": "YM"
     }
   ]
 }

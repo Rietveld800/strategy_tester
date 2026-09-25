@@ -338,7 +338,21 @@ priced but no entry measured in the micro study / yield-quoted, not
 comparable) and a STATUS with its reason -- Traded (green, count), In
 arsenal no trade, Not backtested (failed the human filter / no bars),
 Not tradable (ETF lock / JGB data gap; rows greyed). EVERY REASON IS
-DERIVED from the lists in code, never typed per market. The "Not
+DERIVED from the lists in code, never typed per market -- with ONE
+exception since 2026-09-25 (Lode: "the reason why certain markets are
+not traded could be further specified in the traded arsenal so we
+still could see the reason lateron"): `ARSENAL_DATA_NOTES`, a fact
+about a market's DATA that no list carries, dated and cited, appended
+to the derived reason and never replacing the derived status. Two
+today: SR3 (Socrates' OHLC fits neither Databento's nor IB's session
+bars, match 0.50 and 0.52 in live_engine's IB experiment of
+2026-09-25; calendar held) and JGB (no Databento coverage; IB serves
+it and the station charts it on IB alone since 2026-09-25, no
+cross-check possible, Lode's ruling). THE TITLE CARRIES THE VARIANT ON
+EVERY PAGE since the same day: the browser names an exported PDF after
+the <title>, and the baseline's read "quickfix1m1dc" alone, so the
+variant 1 PDF carried no variant; `build` adds "[variant 1]" where
+the payload's strategy name has no tag. The "Not
 tested" list under By market is dropped on the contracts pages (it
 only confused beside the arsenal); the fractional pages keep it.
 Lifting the filter for the six rejected markets and buying SR3 bars

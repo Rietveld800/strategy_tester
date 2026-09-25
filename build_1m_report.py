@@ -1295,6 +1295,21 @@ def tick_cell(v):
     return f"{v:.7f}".rstrip("0").rstrip(".") if v < 0.001 else f"{v:g}"
 
 
+#: THE ONE EXCEPTION TO "NEVER TYPED PER MARKET" (Lode, 2026-09-25): a fact about
+#: a market's DATA that no list in code carries, so a reader of the arsenal sees
+#: later why the market is where it is. Dated and cited; appended to the derived
+#: reason, never replacing the derived status.
+ARSENAL_DATA_NOTES = {
+    "SR3": ("data: Socrates' daily OHLC fits neither Databento's session bars nor "
+            "IB's (fingerprint match 0.50 and 0.52 over 2026-06-27 to 09-24, the IB "
+            "experiment of 2026-09-25); its roll calendar is held pending review, so "
+            "no contract can be trusted for it yet"),
+    "JGB": ("IB serves the December contract and the station charts it on IB alone "
+            "since 2026-09-25 (no Databento cross-check is possible, Lode's ruling); "
+            "observed, not traded"),
+}
+
+
 def arsenal_status_html(taken_by_market, refused_by_market, tested,
                         route, count_note=""):
     """THE CONTRACT ARSENAL ON THE CONTRACTS PAGES (Lode, 2026-09-03):
@@ -1369,8 +1384,7 @@ def arsenal_status_html(taken_by_market, refused_by_market, tested,
                                "ETF trades, at any account size)")
             else:
                 status, why = ("Not tradable",
-                               "outside our data: no Databento OSE coverage "
-                               "(the known gap; IBKR backfill later)")
+                               "outside Databento's data (the known OSE gap)")
             micro, micro_why = "&mdash;", ""
         else:
             live = True
@@ -1397,6 +1411,9 @@ def arsenal_status_html(taken_by_market, refused_by_market, tested,
                                "decision")
             else:
                 status, why = "Not backtested", "not in this run"
+        note = ARSENAL_DATA_NOTES.get(key)
+        if note:
+            why = f"{why}; {note}" if why else note
         tone = ("pos" if n_taken else "" if live else "neg")
         rows.append(
             f'<tr class="{"arsenal-out" if not live else ""}">'
@@ -2808,6 +2825,13 @@ def build(data=None, out=None, variant=None, contracts=False, nostop=None,
            f"2026-09-03)." if n_info else ""))
 
     name = esc(data.get("strategy", "quickfix1m1dc"))
+    # THE VARIANT IS IN THE NAME ON EVERY PAGE (Lode, 2026-09-25): the browser
+    # names the exported PDF after the <title>, and the baseline's pages read
+    # "quickfix1m1dc" alone while variant 4's read "quickfix1m1dc [variant 4]",
+    # so the variant 1 PDF carried no variant. The matrix tags a cell's strategy
+    # name itself; the baseline payload does not, so the tag is added here.
+    if "[" not in name:
+        name += f" [{esc(run_1m_matrix.BASELINE_NAME)}]"
     if contracts:
         name += (" &mdash; integer contracts, full + micro stack" if micro
                  else " &mdash; integer contracts")
